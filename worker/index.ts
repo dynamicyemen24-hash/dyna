@@ -260,13 +260,14 @@ export function randomHex(bytes: number): string {
   return bytesToHex(out);
 }
 
-const json = (data: unknown, status = 200) =>
+const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
     status,
     headers: {
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'no-store',
       'x-content-type-options': 'nosniff',
+      ...headers,
     },
   });
 
@@ -295,13 +296,21 @@ function getSql(env: Env) {
   return sqlFn;
 }
 
-const tenantOf = (req: Request, url: URL, body?: any) =>
-  req.headers.get('x-tenant-id') ||
-  url.searchParams.get('tenantId') ||
-  body?.tenantId ||
-  env_default ||
-  'royal-global-hq';
-
+/*
+ * `tenantOf` was removed. It was dead code AND it encoded a dangerous idea.
+ *
+ * It read the tenant from `x-tenant-id`, then `?tenantId=`, then the request
+ * body, and only then fell back to the default — so a caller could name ANY
+ * tenant and the query would run against it. It happened to be unreachable
+ * because every protected route derives its scope from `principal.tenantId`,
+ * which comes from the signed session token. But leaving it in the file is
+ * leaving a loaded gun: the next person who wires a route through it opens
+ * cross-tenant access, and the existing tests would not catch it because none
+ * of them call it.
+ *
+ * The invariant it should have encoded is now stated instead: the ONLY source
+ * of a tenant for a protected route is the verified token.
+ */
 let env_default: string | undefined;
 
 export default {
@@ -349,7 +358,19 @@ export default {
       // The sign-in form needs the branch list before anyone has a token.
       // Names and cities only — no financial or personal data.
       if (path === '/branches' && method === 'GET') {
-        const tenant = env.DEFAULT_TENANT || 'royal-global-hq';
+        // The sign-in form needs a branch list before anyone holds a token, so
+        // this is one of the few routes with no principal to scope by. It is
+        // therefore pinned to the deployment's OWN tenant via `wrangler.toml`,
+        // which is an operator-controlled setting rather than a value compiled
+        // into the bundle.
+        //
+        // That distinction is the point: the previous literal meant every
+        // deployment served the same merchant's branches, and a second customer
+        // could not be given their own without editing source and redeploying.
+        const tenant = env_default;
+        if (!tenant) {
+          return fail(500, 'DEFAULT_TENANT is not set on this deployment.');
+        }
         return json({
           // dypos.branches has no `manager` column (columns: id, tenant_id,
           // name, location, city, phone, is_active, created_at). Selecting it
@@ -442,7 +463,19 @@ async function audit(
 async function authRoute(
   method: string, path: string, env: Env, body: any, req: Request,
 ): Promise<Response> {
-  const tenant = env.DEFAULT_TENANT || 'royal-global-hq';
+  /*
+ * Audit scope for a login attempt.
+ *
+ * There is no token yet, so the tenant cannot come from a principal. It comes
+ * from the deployment's own `DEFAULT_TENANT`, and if that is unset the attempt
+ * is refused rather than attributed to a hard-coded tenant: writing a failed
+ * login into some other merchant's audit log is both useless and a small leak
+ * of one customer's event data into another's record.
+ */
+const tenant = env_default;
+if (!tenant) {
+  return fail(500, 'DEFAULT_TENANT is not set on this deployment.');
+}
 
   // Safe to expose: it reveals nothing about the stored credential.
   if (path === '/auth/password-policy' && method === 'POST') {
@@ -1178,6 +1211,26 @@ async function route(
       case path === '/health':
         return health(sql);
 
+      /*
+       * Settlement accounts — the merchant's own bank destination.
+       *
+       * Present because the till's bank-transfer QR is read from here. When the
+       * compiled-in IBAN was removed, this route became the ONLY source of an
+       * account, so without it the till would have shown no bank transfer at all
+       * rather than the wrong one. Scope comes from the token like every other
+       * protected route, so one merchant can never see another's account.
+       */
+      case path === '/settlement/accounts':
+        return json({
+          items: await sql`SELECT id, branch_id AS "branchId", iban,
+                  bank_name AS "bankName", holder_name AS "holderName",
+                  swift_bic AS "swiftBic", country_code AS "countryCode",
+                  payment_method AS "paymentMethod", is_default AS "isDefault"
+            FROM dypos.bank_settlement_accounts
+           WHERE tenant_id = ${tenant} AND is_active
+           ORDER BY is_default DESC, bank_name NULLS LAST, created_at`,
+        });
+
       case path === '/products':
         return json({ products: await sql`SELECT *, unit_price AS price
           FROM dypos.products WHERE tenant_id = ${tenant} ORDER BY name ASC` });
@@ -1308,6 +1361,38 @@ async function route(
   const id = path.split('/')[2] || '';
 
   switch (true) {
+    /*
+     * ---- settlement accounts ----
+     *
+     * The tenant is the token's, never the body's. Accepting a `tenantId` from
+     * the request is the cross-tenant write that `tenantOf` would have enabled,
+     * and this route must not become the next one to do it.
+     *
+     * The IBAN is normalised here exactly as the Express route does — spaces
+     * stripped, upper-cased — so the two paths cannot disagree about what the
+     * same account looks like.
+     */
+    case method === 'POST' && path === '/settlement/accounts': {
+      const iban = String(body.iban || '').trim().replace(/\s+/g, '').toUpperCase();
+      if (!iban) return fail(400, 'IBAN is required');
+      return json({ item: (await sql`INSERT INTO dypos.bank_settlement_accounts
+          (id, tenant_id, branch_id, iban, bank_name, holder_name,
+           country_code, payment_method, is_active, is_default)
+        VALUES (${body.id || makeId('bank')}, ${tenant}, ${body.branchId || null},
+          ${iban}, ${body.bankName || null}, ${body.holderName || null},
+          ${body.countryCode || null}, ${body.paymentMethod || 'bank_transfer'},
+          ${body.isActive === false ? false : true}, ${body.isDefault === true})
+        ON CONFLICT (id) DO UPDATE SET
+          iban = EXCLUDED.iban, bank_name = EXCLUDED.bank_name,
+          holder_name = EXCLUDED.holder_name, country_code = EXCLUDED.country_code,
+          is_active = EXCLUDED.is_active, is_default = EXCLUDED.is_default,
+          updated_at = NOW()
+        RETURNING id, iban, bank_name AS "bankName", holder_name AS "holderName",
+                  is_active AS "isActive", is_default AS "isDefault"`)[0] },
+        201,
+      );
+    }
+
     // ---- services ----
     case method === 'POST' && seg === 'services':
       return json({ item: (await sql`INSERT INTO dypos.services
