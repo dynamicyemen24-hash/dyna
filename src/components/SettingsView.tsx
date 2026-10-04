@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, ShieldCheck, CheckCircle, RefreshCw, DollarSign, Globe2, Palette, Moon, Sun, Eye, Sparkles } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Settings, ShieldCheck, CheckCircle, RefreshCw, DollarSign, Globe2, Palette, Moon, Sun, Eye, Sparkles, Building2, Plus, Trash2, Star } from 'lucide-react';
 import { Currency } from '../types';
 import { DEFAULT_CURRENCIES, loadTenantCurrencies, saveTenantCurrencies } from '../services/currencyService';
 import { themeService, ThemeMode, THEME_CONFIGS } from '../services/themeService';
 import { useEntitlement } from '../contexts/EntitlementContext';
+import { SettlementAccounts } from './SettlementAccounts';
 
 export const SettingsView: React.FC = () => {
   /*
@@ -95,6 +96,19 @@ export const SettingsView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-6xl">
+        {/*
+         * The settlement screen lives here because it is the one place an
+         * operator can tell the system where their money should go. Until this
+         * existed, the till's bank-transfer QR was hard-coded — removing that
+         * left the product with no way to configure the account at all, which is
+         * not a fix, it is a missing feature.
+         */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+            <SettlementAccounts />
+          </div>
+        </div>
+
         {/* General Settings */}
         <div className="lg:col-span-1 space-y-6">
           {/* Official Company Identity Board & System Icon */}

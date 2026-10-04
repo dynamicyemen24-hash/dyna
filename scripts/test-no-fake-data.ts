@@ -261,6 +261,47 @@ check(
 );
 check('neonDb contains no Neon password', !/npg_[A-Za-z0-9]{10,}/.test(neonDb));
 
+console.log('\n6. the merchant can actually CONFIGURE an account from the app');
+
+{
+  const route = fs.readFileSync(path.join(ROOT, 'server/settlementRoutes.ts'), 'utf8');
+  check('a create route exists and is permission-checked',
+    /app\.post\(\s*'\/api\/db\/settlement\/accounts',\s*attachPrincipal,\s*requirePermission\('settings\.manage'\)/.test(route));
+  check('a read route exists behind the session gate',
+    /app\.get\(\s*'\/api\/db\/settlement\/accounts',\s*attachPrincipal/.test(route));
+
+  const ui = fs.readFileSync(path.join(ROOT, 'src/components/SettlementAccounts.tsx'), 'utf8');
+  check('a settings screen writes to that route',
+    /apiPost<void>\('\/api\/db\/settlement\/accounts'/.test(ui));
+  check('the settings screen is mounted, not orphaned',
+    /import \{ SettlementAccounts \}/.test(
+      fs.readFileSync(path.join(ROOT, 'src/components/SettingsView.tsx'), 'utf8'),
+    ) && /<SettlementAccounts \/>/.test(
+      fs.readFileSync(path.join(ROOT, 'src/components/SettingsView.tsx'), 'utf8'),
+    ));
+
+  /*
+   * The screen must not claim to validate an IBAN it has not verified. A green
+   * "valid" that never consulted the issuing bank is the same defect as the
+   * invented exchange rates: a control reporting a fact it did not establish.
+   */
+  check('the screen does not claim to verify IBAN check digits',
+    /THIS IS NOT AN IBAN VALIDATOR/.test(ui));
+  /*
+   * An empty list must read as a normal state with no sample account in it.
+   *
+   * The placeholder attribute is exempt, and deliberately: `SA00 0000 …` is
+   * all zeros, so it cannot be mistaken for a real account and it shows the
+   * grouping. What must not appear is a VALUE that looks payable.
+   */
+  const body = ui.replace(/placeholder="[^"]*"/g, '');
+  check('an empty list is rendered as a normal state, never a sample account',
+    /No settlement accounts configured/.test(body)
+      && !/SA\d{2}[\s]?\d{4}[\s]?\d{4}[\s]?\d{2}/.test(body));
+  check('deactivation is used rather than deletion',
+    /isActive: false/.test(ui) && !/apiDelete/.test(ui));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 
 /*
