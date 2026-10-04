@@ -116,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
      * the session the server actually issued, rather than with whatever the
      * operator typed — which may not exist, or may be spelled differently.
      */
-    rememberTenant(tenantId || 'royal-global-hq');
+    rememberTenant(tenantId);
 
     setSession(res.session);
     localStorage.setItem(SESSION_KEY, JSON.stringify(res.session));

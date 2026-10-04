@@ -29,6 +29,9 @@ import { Currency } from '../types';
 import { DEFAULT_CURRENCIES, formatDualCurrency, loadTenantCurrencies, convertFromSAR } from '../services/currencyService';
 import { deviceGateway, ScaleReading } from '../services/deviceGateway';
 import { paymentGatewayService, PaymentGatewayProvider } from '../services/paymentGatewayService';
+import { useEntitlement } from '../contexts/EntitlementContext';
+import { branchLine, UNRESOLVED_LABEL } from '../services/tenantIdentity';
+import { apiGet } from '../services/dyposApi';
 
 interface POSViewProps {
   products: Product[];
@@ -62,6 +65,50 @@ export const POSView: React.FC<POSViewProps> = ({
   onCompleteCheckout,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState('الكل');
+  /*
+   * Company, branch and VAT number, resolved from the server by the entitlement
+   * context. Reading them from here rather than from literals is what stops this
+   * screen from becoming a single-customer product — see the receipt header for
+   * why a compiled-in tax number is a legal problem and not a cosmetic one.
+   */
+  const { identity } = useEntitlement();
+
+  /*
+   * The settlement account is read from the server, never carried in the bundle.
+   *
+   * This panel used to render a real IBAN from a string literal, and the QR
+   * generator held the same value as a default argument — so a merchant who
+   * configured nothing was still shown a QR for someone else's bank account, and
+   * had no way to override it.
+   *
+   * `settlementAccount === null` therefore means "this merchant has not
+   * configured one", and the panel is not rendered at all. It is not replaced by
+   * a sample value: a QR that looks real and pays the wrong party is the most
+   * expensive thing this screen can display.
+   */
+  const [settlementAccount, setSettlementAccount] = useState<{
+    iban: string; bankName: string | null; holderName: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await apiGet<{ items: Array<{ iban: string; bankName: string | null; holderName: string | null }> }>(
+          '/api/db/settlement/accounts?paymentMethod=bank_transfer',
+        );
+        if (!alive) return;
+        // The route orders the default first, so the head IS the account to show.
+        const first = Array.isArray(res.items) ? res.items[0] : undefined;
+        setSettlementAccount(first ?? null);
+      } catch {
+        // A till must keep selling when the settlement list is unreachable, so
+        // this degrades to "no bank transfer offered" rather than blocking.
+        if (alive) setSettlementAccount(null);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer>(customers[0]);
@@ -854,22 +901,42 @@ export const POSView: React.FC<POSViewProps> = ({
                 </div>
               </div>
 
-              {/* Instant Bank Transfer QR Code Panel */}
-              {paymentMethod === ('bank_transfer' as any) && (
-                <div className="bg-slate-950 p-4 rounded-xl border border-brand-500/30 text-center space-y-2.5 animate-in fade-in duration-150">
-                  <p className="text-xs font-bold text-white">امسح كود QR عبر تطبيق بنكك للتحويل السريع (SARIE Instant Transfer):</p>
-                  <div className="bg-white p-2.5 rounded-2xl inline-block shadow-lg mx-auto">
-                    <img 
-                      src={paymentGatewayService.generateSarieIbanQr(total)} 
-                      alt="SARIE Instant Bank Transfer QR" 
-                      className="w-36 h-36 mx-auto object-contain"
-                    />
+              {/* Instant Bank Transfer QR — only when THIS tenant configured an account. */}
+              {paymentMethod === ('bank_transfer' as any) && settlementAccount && (
+                (() => {
+                  const qr = paymentGatewayService.generateSarieIbanQr(total, settlementAccount.iban);
+                  if (!qr) return null;
+                  return (
+                  <div className="bg-slate-950 p-4 rounded-xl border border-brand-500/30 text-center space-y-2.5 animate-in fade-in duration-150">
+                   <p className="text-xs font-bold text-white">امسح كود QR عبر تطبيق بنكك للتحويل السريع (SARIE Instant Transfer):</p>
+                   <div className="bg-white p-2.5 rounded-2xl inline-block shadow-lg mx-auto">
+                     <img
+                       src={qr}
+                       alt="SARIE Instant Bank Transfer QR"
+                       className="w-36 h-36 mx-auto object-contain"
+                     />
+                   </div>
+                   <div className="text-[11px] font-mono text-slate-300 bg-slate-900 p-2 rounded-lg border border-slate-800 space-y-1">
+                     <p className="text-brand-400 font-bold break-all">{settlementAccount.iban}</p>
+                     {/* Bank and holder names come from the merchant's own record.
+                         Showing the bank we happen to be looking at is what makes the
+                         payer able to confirm the destination is the right one. */}
+                     <p className="text-slate-400">
+                       {[settlementAccount.bankName, settlementAccount.holderName]
+                         .filter(Boolean).join(' — ') || identity.ownerCompany}
+                     </p>
+                   </div>
+                   {/*
+                     A bank transfer is NOT proof of payment. The money moves by IBAN
+                     and nothing here confirms it arrived, so the sale must be recorded
+                     as awaiting reconciliation rather than paid.
+                   */}
+                   <p className="text-[10px] text-amber-400 font-semibold">
+                     لم يتم تأكيد الدفع — سيُسوّى المبلغ عند تأكيد التحويل
+                   </p>
                   </div>
-                  <div className="text-[11px] font-mono text-slate-300 bg-slate-900 p-2 rounded-lg border border-slate-800 space-y-1">
-                    <p className="text-brand-400 font-bold">IBAN: SA03 8000 0000 6080 1016 7519</p>
-                    <p className="text-slate-400">بنك الراجحي - حساب شركة رويال العالمية</p>
-                  </div>
-                </div>
+                  );
+                })()
               )}
 
               {paymentMethod === 'cash' && (
@@ -925,10 +992,34 @@ export const POSView: React.FC<POSViewProps> = ({
       {isReceiptModalOpen && lastCompletedTx && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div id="thermal-receipt-printable" className="bg-white text-slate-900 rounded-2xl w-full max-w-sm p-6 shadow-2xl font-mono text-xs relative animate-in zoom-in-95 duration-200">
+            {/*
+             * The fiscal header comes from `dypos.tenants` and `dypos.branches`,
+             * not from a literal in this file.
+             *
+             * It used to read "شركة رويال العالمية - DyPOS / فرع الرياض الرئيسي /
+             * 300123456700003" as three JSX text nodes. On a VAT invoice the tax
+             * number is a legal assertion, so a compiled-in one means this build
+             * cannot be issued to a second customer — it would print that
+             * customer's receipts under this company's registration, and every
+             * value on the receipt would still look self-consistent.
+             *
+             * `identity.source === 'unresolved'` is rendered as a visible warning
+             * rather than a blank, because a receipt issued without a VAT number
+             * must never be indistinguishable from a complete one.
+             */}
             <div className="text-center pb-4 border-b border-dashed border-slate-300">
-              <h2 className="text-base font-black">شركة رويال العالمية - DyPOS</h2>
-              <p className="text-[10px] text-slate-600 mt-0.5">فرع الرياض الرئيسي - المملكة العربية السعودية</p>
-              <p className="text-[10px] text-slate-600">الرقم الضريبي: 300123456700003</p>
+              <h2 className="text-base font-black">{identity.ownerCompany}</h2>
+              <p className="text-[10px] text-slate-600 mt-0.5">{branchLine(identity)}</p>
+              <p className="text-[10px] text-slate-600">
+                {identity.taxNumber
+                  ? `الرقم الضريبي: ${identity.taxNumber}`
+                  : `الرقم الضريبي: ${UNRESOLVED_LABEL}`}
+              </p>
+              {identity.source === 'unresolved' && (
+                <p className="text-[9px] text-red-600 mt-1 font-bold">
+                  بيانات المؤسسة غير مكتملة — الإيصال غير صالح ضريبياً ({identity.missing.join('، ')})
+                </p>
+              )}
             </div>
 
             <div className="py-3 space-y-1 text-[11px] border-b border-dashed border-slate-300">
@@ -985,7 +1076,7 @@ export const POSView: React.FC<POSViewProps> = ({
             </div>
 
             <div className="text-center pt-4 space-y-2">
-              <p className="text-[10px] text-slate-500">شكراً لتعاملكم مع شركة رويال العالمية</p>
+              <p className="text-[10px] text-slate-500">شكراً لتعاملكم مع {identity.ownerCompany}</p>
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => window.print()}
@@ -995,7 +1086,7 @@ export const POSView: React.FC<POSViewProps> = ({
                   طباعة حرارية
                 </button>
                 <button
-                  onClick={() => generateInvoicePDF(lastCompletedTx)}
+                  onClick={() => generateInvoicePDF(lastCompletedTx, identity)}
                   className="flex-1 bg-brand-700 hover:bg-brand-600 text-white py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />

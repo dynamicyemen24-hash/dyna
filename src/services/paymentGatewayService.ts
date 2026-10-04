@@ -131,14 +131,33 @@ class PaymentGatewayService {
   }
 
   /**
-   * SARIE bank-transfer QR.
+   * SARIE bank-transfer QR for a settlement account the SERVER supplied.
    *
-   * A bank transfer needs no gateway response: the money moves by the IBAN, so
-   * generating the QR is honest. What the caller must still do is mark the sale
-   * as *awaiting reconciliation*, not paid — this method returns no proof.
+   * ══ WHY THE IBAN IS A REQUIRED ARGUMENT ═══════════════════════════════════
+   * This used to be:
+   *
+   *   generateSarieIbanQr(amountSAR, iban = 'SA0380000000608010167519')
+   *
+   * A default argument carrying a real bank account is the worst shape this could
+   * take. The signature read as if the IBAN were supplied by the caller, so every
+   * call site looked correct, and any call site that omitted it silently produced
+   * a QR instructing the customer to pay a specific organisation's account. The
+   * defect was invisible to review *because* the parameter existed.
+   *
+   * It is now required and typed `string | null`. There is no default to fall
+   * back to, so "which account" can only ever be answered by the caller — which
+   * reads it from `/api/db/settlement/accounts`, scoped to the signed-in tenant.
+   *
+   * Returns `null` when no account is configured. The till then does not offer
+   * bank transfer at all, which is the correct behaviour for a merchant who has
+   * not configured one: showing a QR to an unknown destination is worse than
+   * showing nothing.
    */
-  public generateSarieIbanQr(amountSAR: number, iban = 'SA0380000000608010167519'): string {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=SA-PAY-IBAN:${iban};AMT:${amountSAR}`;
+  public generateSarieIbanQr(amountSAR: number, iban: string | null): string | null {
+    if (!iban) return null;
+    const normalised = iban.replace(/\s+/g, '').toUpperCase();
+    if (!normalised) return null;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=SA-PAY-IBAN:${normalised};AMT:${amountSAR}`;
   }
 }
 

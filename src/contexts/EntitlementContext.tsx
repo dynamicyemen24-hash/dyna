@@ -8,6 +8,7 @@ import {
   ALL_SCREEN_IDS, capabilitiesForProfile, getProfileById,
   resolveScreenEntitlement, type ScreenDenial,
 } from '../config/industryProfiles';
+import { resolveIdentity, type ResolvedIdentity } from '../services/tenantIdentity';
 
 /**
  * What the signed-in user, in this organisation, on this branch, is allowed to
@@ -74,6 +75,16 @@ interface EntitlementContextType {
   blocked: ScreenDenial[];
   branches: EntitlementBranch[];
 
+  /**
+   * The printable company / branch / VAT identity, resolved from the server.
+   *
+   * Screens MUST NOT hard-code any of these. `source === 'unresolved'` means a
+   * required legal field is missing, and the screen must say so rather than
+   * substitute a default — a blank tax number is a support ticket, a wrong one
+   * is a regulatory finding.
+   */
+  identity: ResolvedIdentity;
+
   allowsScreen: (id: string) => boolean;
   can: (...permissions: string[]) => boolean;
 
@@ -84,6 +95,28 @@ interface EntitlementContextType {
 
 const EntitlementContext = createContext<EntitlementContextType | undefined>(undefined);
 
+/*
+ * ══ THE ONE FETCH PER SESSION ══════════════════════════════════════════════
+ * `GET /api/erp/entitlements` already returns the tenant row, the branch list,
+ * the sector and the capability set in a single round trip. This context is the
+ * only thing that calls it, and everything else reads the answer from here.
+ *
+ * That matters for correctness, not just for tidiness. The alternative — each
+ * screen calling `/api/db/tenant/profile` or `/api/db/branches` itself — is what
+ * produced the disagreement this product shipped with: one screen resolved the
+ * tenant, another resolved the branch, and a third used a constant, so a receipt
+ * could name a VAT number the settings screen could not display and a branch
+ * picker could offer a shop that the invoice never mentioned.
+ *
+ * One fetch also means one moment of truth. When the operator switches sector or
+ * the licence is narrowed, `refresh()` re-reads once and every consumer changes
+ * together; there is no window in which two screens disagree about the same
+ * tenant.
+ *
+ * The request is fired ONCE per session identity (keyed on the principal), so
+ * navigation between screens does not refetch — the answer is already correct
+ * for the signed-in user.
+ */
 const SECTOR_KEY = 'dypos_industry_profile';
 
 /** Sector defaults read before any request returns, so the nav is never blank. */
@@ -134,6 +167,23 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [branches, setBranches] = useState<EntitlementBranch[]>([]);
   const [switchingSector, setSwitchingSector] = useState(false);
   const [nonce, setNonce] = useState(0);
+
+  /*
+   * The branch the current session is operating at.
+   *
+   * This is the ONE legitimate remaining use of a default: an app with no stored
+   * branch must still boot, and "no branch selected" is a real state. It is NOT
+   * a company name, a tax number or any other legal identity — those come from
+   * the server or they are unresolved. An unknown stored id resolves to no
+   * branch rather than to a named one.
+   */
+  const [branchId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('dypos_branch') ?? null;
+    } catch {
+      return null;
+    }
+  });
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
 
@@ -266,6 +316,27 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const screenSet = useMemo(() => new Set(screens), [screens]);
 
+  /*
+   * ══ THE ONE IDENTITY THE UI MAY PRINT ═════════════════════════════════════
+   * Screens used to hard-code the company name, the branch and the VAT number.
+   * A tax number on a fiscal document is a legal assertion, so a compiled-in one
+   * means this build cannot lawfully be issued to a second customer: it would
+   * print that customer's receipts under this company's registration.
+   *
+   * The tenant row and the branch list are already loaded above. Resolving the
+   * printable identity here — once, from the server's own answer — means a
+   * screen cannot invent a legal identity even by accident, and a second branch
+   * reading the same context gets the same answer rather than its own literal.
+   *
+   * `branchId` is looked up against the branches this tenant may actually use, so
+   * the receipt names the branch the sale was recorded at. An unknown id yields
+   * `null` (honest) rather than falling back to "main branch" (a lie).
+   */
+  const identity = useMemo(() => {
+    const row = branches.find((b) => b.id === branchId) ?? null;
+    return resolveIdentity(tenant, row);
+  }, [tenant, branches, branchId]);
+
   const allowsScreen = useCallback(
     (id: string) => screenSet.has(id),
     [screenSet],
@@ -296,6 +367,7 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
     licensedScreens,
     blocked,
     branches,
+    identity,
     allowsScreen,
     can,
     switchingSector,
@@ -304,7 +376,7 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
   }), [
     status, authority, error, verificationFailed, sector, plan, tenant,
     capabilities, grantsFromDatabase, screens, licensedScreens, blocked,
-    branches, allowsScreen, can, switchingSector, setSector, refresh,
+    branches, identity, allowsScreen, can, switchingSector, setSector, refresh,
   ]);
 
   return <EntitlementContext.Provider value={value}>{children}</EntitlementContext.Provider>;

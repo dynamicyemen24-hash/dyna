@@ -15,6 +15,7 @@ import {
   Download
 } from 'lucide-react';
 import { generateSummaryReportPDF, generateInvoicePDF } from '../utils/pdfGenerator';
+import { useEntitlement } from '../contexts/EntitlementContext';
 import {
   AreaChart,
   Area,
@@ -54,6 +55,10 @@ interface DailySales {
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({ transactions }) => {
+  // The seller identity on a re-issued invoice comes from the server, like every
+  // other invoice. A report screen is a legal surface too: it hands the customer
+  // a document naming who sold to them.
+  const { identity } = useEntitlement();
   const [filterMethod, setFilterMethod] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [dailySales, setDailySales] = useState<DailySales[]>([]);
@@ -372,7 +377,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ transactions }) => {
                         <Printer className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => generateInvoicePDF(tx)}
+                        onClick={() => generateInvoicePDF(tx, identity)}
                         className="p-1.5 rounded-lg bg-brand-600/20 hover:bg-brand-600/40 text-brand-400 border border-brand-500/30 transition-colors"
                         title="تحميل فاتورة PDF"
                       >

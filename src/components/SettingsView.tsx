@@ -3,11 +3,30 @@ import { Settings, ShieldCheck, CheckCircle, RefreshCw, DollarSign, Globe2, Pale
 import { Currency } from '../types';
 import { DEFAULT_CURRENCIES, loadTenantCurrencies, saveTenantCurrencies } from '../services/currencyService';
 import { themeService, ThemeMode, THEME_CONFIGS } from '../services/themeService';
+import { useEntitlement } from '../contexts/EntitlementContext';
 
 export const SettingsView: React.FC = () => {
-  const [storeName, setStoreName] = useState('مجموعة رويال العالمية للتجارة والتوزيع - DyPOS Cloud');
-  const [taxNumber, setTaxNumber] = useState('302194857200003');
-  const [baseCurrency, setBaseCurrency] = useState('SAR (ر.س)');
+  /*
+   * The merchant's own identity, read from the server.
+   *
+   * These two fields used to be `useState` seeds — a store name and a tax number
+   * — which is the worst possible home for a legal identity: they looked editable
+   * but no edit was ever persisted, so changing them on screen appeared to work
+   * and was lost on reload. Worse, they were seeded with real-looking numbers for
+   * one specific company, so every installation of this product opened its
+   * settings showing another merchant's VAT registration.
+   *
+   * They are now derived state from `useEntitlement()`, which reads the tenant
+   * row. The fields remain editable on screen because the operator expects to
+   * type there, but a change is only meaningful once the server accepts it — so
+   * the screen says so rather than pretending to save a value it discarded.
+   */
+  const { identity } = useEntitlement();
+  const [storeName, setStoreName] = useState(identity.ownerCompany);
+  const [taxNumber, setTaxNumber] = useState(identity.taxNumber ?? '');
+  const [baseCurrency, setBaseCurrency] = useState(
+    identity.baseCurrency ? `${identity.baseCurrency}` : '',
+  );
   const [currencies, setCurrencies] = useState<Currency[]>(DEFAULT_CURRENCIES);
   const [saved, setSaved] = useState(false);
   const [isUpdatingRates, setIsUpdatingRates] = useState(false);
@@ -24,26 +43,38 @@ export const SettingsView: React.FC = () => {
     );
   };
 
-  const handleAutoUpdateRates = () => {
+  /*
+   * ══ WHY THERE IS NO "AUTO UPDATE" BUTTON ANY MORE ═════════════════════════
+   * This used to be a `setTimeout(1000)` that replaced every rate with a literal
+   * — USD 3.75, EUR 4.08, AED 1.02, KWD 12.28, BHD 9.95, GBP 4.88 — and then
+   * wrote them to the server through `saveTenantCurrencies`.
+   *
+   * So a button labelled "تحديث تلقائي" (automatic update) produced hard-coded
+   * numbers that looked fetched, and persisted them as though they had been
+   * observed. The values were plausible, which is what made it dangerous: a
+   * merchant converting at AED 1.02 would be within a rounding error of correct
+   * in most months, so the invoice totals looked reasonable, and the KWD rate
+   * 100 days stale would quietly misprice every Kuwaiti invoice.
+   *
+   * There is no central-bank feed wired up, so the honest move is to remove the
+   * claim rather than keep a button that lies. A rate is an INPUT to a fiscal
+   * document; it is set by the operator, recorded with an effective date, and
+   * fetched from a real source when one exists — never invented by a timer.
+   *
+   * To restore this properly: add a server-side rate provider, expose it through
+   * `/api/erp/currency/rate`, and record the result with `rateType: 'provider'`
+   * so it is distinguishable from an operator's manual entry.
+   */
+  const handleRefreshFromServer = async () => {
     setIsUpdatingRates(true);
-    // Simulate real daily central bank exchange rate fetching
-    setTimeout(() => {
-      const refreshed: Currency[] = currencies.map((c) => {
-        if (c.code === 'SAR') return c;
-        if (c.code === 'USD') return { ...c, rateToSAR: 3.75 };
-        if (c.code === 'EUR') return { ...c, rateToSAR: 4.08 };
-        if (c.code === 'AED') return { ...c, rateToSAR: 1.02 };
-        if (c.code === 'KWD') return { ...c, rateToSAR: 12.28 };
-        if (c.code === 'BHD') return { ...c, rateToSAR: 9.95 };
-        if (c.code === 'GBP') return { ...c, rateToSAR: 4.88 };
-        return c;
-      });
-      setCurrencies(refreshed);
-      saveTenantCurrencies(refreshed);
-      setIsUpdatingRates(false);
+    try {
+      const fresh = await loadTenantCurrencies();
+      setCurrencies(fresh);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    }, 1000);
+    } finally {
+      setIsUpdatingRates(false);
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -228,12 +259,14 @@ export const SettingsView: React.FC = () => {
 
             <button
               type="button"
-              onClick={handleAutoUpdateRates}
+              onClick={handleRefreshFromServer}
               disabled={isUpdatingRates}
               className="bg-slate-800 hover:bg-slate-700 text-brand-400 border border-brand-500/30 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shrink-0"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isUpdatingRates ? 'animate-spin' : ''}`} />
-              تحديث الأسعار اليومية
+              {/* Not "تحديث تلقائي": this re-reads what the server holds. It does
+                  not invent a rate, and the label says which one it is. */}
+              إعادة القراءة من الخادم
             </button>
           </div>
 

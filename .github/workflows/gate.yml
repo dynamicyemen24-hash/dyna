@@ -1,0 +1,238 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# The gate. Nothing reaches production without passing here.
+#
+# WHY THIS EXISTS
+# --------------
+# `deploy:api` was `wrangler deploy`, invoked by hand, straight onto the Worker
+# that serves https://dyposcloud.smartportssoft.com. There was no step before it:
+# no type-check, no build, no test. Whatever was in the working directory at the
+# moment someone remembered to run it became production.
+#
+# That makes the deployed artefact a function of a developer's uncommitted state
+# rather than of a reviewed commit, and it means the honest question "what is
+# live, and which commit is it?" has no answer — there is no commit to name.
+#
+# WHAT IS AND IS NOT GATED
+# ------------------------
+# Gated on every push: type-check, the constitution scan, the encoding and
+# arithmetic suites, the theme contract, and a production build. These need no
+# database and no credentials, so they finish in under a minute.
+#
+# NOT gated on push: the suites that drive real PostgreSQL and real routes
+# (`test:mfa`, `test:tenant`, `test:kpi`, …). They are a separate manual job
+# because they need `DATABASE_URL`, and putting a production credential in a
+# pull-request-triggered workflow is how test databases get dropped by a fork.
+#
+# Deploy is deliberately NOT automatic. It is a manual `workflow_dispatch`, so
+# publishing to a paying customer stays a human decision — the gate proves the
+# build is sound, it does not decide to ship it.
+# ═══════════════════════════════════════════════════════════════════════════
+name: gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # One gate at a time. Overlapping runs would race to publish `dist/`, and the
+  # loser would leave the Worker serving a half-written asset directory.
+  group: gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: type-check · constitution · unit · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # `npm run lint` is `tsc --noEmit` with `strict` on, over an explicit
+      # `include`. The explicit list is load-bearing: without it the compiler
+      # swept `dist/` into its own program, so whether the check passed depended
+      # on whether an earlier step had produced a build — non-deterministic in
+      # the one place determinism matters most.
+      - name: Type-check (strict)
+        run: npm run lint
+
+      # The constitution. For a SaaS product this is the one that matters most:
+      # a merchant's VAT number or settlement IBAN compiled into the bundle is
+      # invisible to the type-checker and to human review, because the code
+      # around it is perfectly correct.
+      - name: Constitution — no tenant data in shipped code
+        run: npm run test:no-fake-data
+
+      - name: Arabic text survives the round trip
+        run: npm run test:encoding
+
+      # Both had shipped defects that produced no error at all: an incorrect
+      # discount and rounding ladder, and a theme switcher that changed no
+      # pixels because it set a class where the stylesheet listened for an
+      # attribute.
+      - name: Money, tax and quantity primitives
+        run: npm run test:primitives
+
+      - name: Theme activation contract
+        run: npm run test:theme
+
+      - name: Production build
+        run: npm run build
+
+      # A successful build is not proof the bundle is servable. This asserts the
+      # artefact actually exists rather than trusting the exit code.
+      - name: The built bundle exists
+        run: |
+          test -f dist/index.html || { echo "dist/index.html missing"; exit 1; }
+          echo "dist size: $(du -sh dist | cut -f1)"
+
+      - name: Upload the verified bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-verified
+          path: dist
+          retention-days: 7
+
+database:
+    name: integration suites (needs DATABASE_URL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Manual only. These drive a REAL database. Granting a fork's pull request
+    # a production `DATABASE_URL` would let anyone who can open a PR run
+    # migrations against paying customers' data.
+    if: github.event_name == 'workflow_dispatch'
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Refuse to run against nothing
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is not configured — refusing to run against nothing."
+            exit 1
+          fi
+          npx tsx scripts/migrate.ts --status
+
+      # Each asserts something a unit test with a mocked pool would happily pass
+      # while the real wiring was broken. That is the point of driving the real
+      # database: the previous client-side "2FA" survived review precisely
+      # because every test around it was mocked.
+      - name: Session gate — no anonymous caller reaches a data route
+        run: npm run test:gate
+
+      - name: Tenant isolation
+        run: npm run test:tenant
+
+      - name: Server-enforced MFA
+        run: npm run test:mfa
+
+      - name: Biometric unlock is not a bypass
+        run: npm run test:unlock
+
+      - name: Price and tax authority
+        run: npm run test:price
+
+      - name: KPI engine
+        run: npm run test:kpi
+
+      - name: Yemen accounting
+        run: npm run test:yemen
+
+      # Two merchants, two countries, two currencies, two settlement accounts —
+      # against this same real database. This is the test that a hard-coded tax
+      # number or a bundled IBAN could never pass, because isolation is the one
+      # property a literal cannot have.
+      - name: SaaS end-to-end — multi-tenant, multi-country
+        run: npm run test:saas-e2e
+
+      - name: Offline-first queue semantics
+        run: npm run test:offline
+
+  deploy:
+    name: deploy (manual, confirmed)
+    runs-on: ubuntu-latest
+    needs: [verify]
+    # Publishing to paying customers is a human decision. The gate proves the
+    # build is sound; it does not decide to ship it.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-verified
+
+      # The `verify` job built this exact `dist/`. Rebuilding it here would
+      # defeat the purpose: the bytes that passed the gate would not be the bytes
+      # that ship, and any non-determinism in the bundler would quietly
+      # reintroduce exactly the class of bug the gate exists to catch.
+      - name: Confirm the artifact is the verified one
+        run: |
+          if [ ! -f dist/index.html ]; then
+            echo "verified artifact missing — refusing to deploy an unverified build"
+            exit 1
+          fi
+
+      - name: Publish to Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DYPOS_SESSION_SECRET: ${{ secrets.DYPOS_SESSION_SECRET }}
+          DEFAULT_TENANT: ${{ vars.DEFAULT_TENANT }}
+        run: npx wrangler deploy
+
+      # A successful deploy proves the upload returned 200. It does not prove the
+      # Worker serves the SPA, that a deep link falls back to index.html, or that
+      # the session gate still refuses an anonymous caller. Those are checked
+      # against the LIVE url, because "deployed" and "working" have been
+      # different claims more than once in this project.
+      - name: Verify the live deployment
+        run: |
+          BASE="https://dyposcloud.smartportssoft.com"
+          fail=0
+
+          check() {
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$1" || echo 000)
+            printf '%-56s %s\n' "$1" "$code"
+            [ "$code" = "$2" ] || fail=1
+          }
+
+          check "$BASE/" 200
+          check "$BASE/branches" 200          # SPA deep link must not 404
+          check "$BASE/api/db/branches" 200
+          # The bypass must stay closed on the PUBLIC url, not just in a test.
+          check "$BASE/api/auth/unlock" 401
+          # Settlement accounts must never be readable anonymously.
+          check "$BASE/api/db/settlement/accounts" 401
+
+          exit $fail

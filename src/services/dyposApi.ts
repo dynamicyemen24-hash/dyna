@@ -57,10 +57,23 @@ export function tenantId(): string {
  */
 export const TENANT_ID: string = tenantId();
 
-/** Records the tenant an operator signed in to, for subsequent requests. */
-export function rememberTenant(id: string): void {
+/**
+ * Records the tenant an operator signed in to, for subsequent requests.
+ *
+ * An empty or blank id CLEARS the stored value rather than writing it. The
+ * callers used to guard this with `|| 'royal-global-hq'`, which meant an
+ * operator who cleared the field silently had a specific organisation's id
+ * written into their browser and sent with every subsequent request — including
+ * requests made after they had signed in somewhere else entirely.
+ *
+ * Storing nothing is the honest state for "no tenant was chosen", and
+ * `tenantId()` already documents its own precedence for that case.
+ */
+export function rememberTenant(id: string | null | undefined): void {
+  const value = (id ?? '').trim();
   try {
-    localStorage.setItem(TENANT_STORAGE_KEY, id);
+    if (value) localStorage.setItem(TENANT_STORAGE_KEY, value);
+    else localStorage.removeItem(TENANT_STORAGE_KEY);
   } catch {
     // A browser with storage disabled still works: the token carries the tenant,
     // so this is a convenience rather than a dependency.

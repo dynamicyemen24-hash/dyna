@@ -6,17 +6,72 @@ const { Pool } = pg;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const NEON_CONNECTION_STRING =
-  process.env.DATABASE_URL ||
-  'postgresql://neondb_owner:npg_AThWFSv1VPj7@ep-shiny-wind-ai4w5o0l-pooler.c-4.us-east-1.aws.neon.tech/dyposdb?sslmode=require';
+/*
+ * ══ ENVIRONMENT IS LOADED HERE, NOT AT THE CALL SITE ══════════════════════
+ * `dotenv.config()` used to be called in `server.ts` — but that runs *after*
+ * this module's top-level code, because ES module imports are evaluated before
+ * the importing module's body. So `DATABASE_URL` was already read as
+ * `undefined` by the time the pool below was constructed.
+ *
+ * The fallback credential hid this completely: the pool got the bundled string
+ * and every test passed. Remove the fallback and the ordering bug surfaces
+ * immediately as `ECONNREFUSED 127.0.0.1:5432` — `pg` falling back to a local
+ * default when `connectionString` is absent, which looks exactly like "no
+ * database running" and sends the investigation to the wrong machine.
+ *
+ * The module that READS an environment variable must be the module that LOADS
+ * the environment. Anything else makes the read order an accident of the
+ * import graph.
+ */
+import dotenv from 'dotenv';
 
-if (!process.env.DATABASE_URL && NEON_CONNECTION_STRING) {
-  console.warn(
-    '[neonDb] DATABASE_URL is not set — falling back to the bundled default connection string. Set DATABASE_URL before running in production.',
+dotenv.config();
+
+/*
+ * ══ WHY THERE IS NO DEFAULT CONNECTION STRING ═════════════════════════════
+ * This used to be:
+ *
+ *   const NEON_CONNECTION_STRING =
+ *     process.env.DATABASE_URL ||
+ *     'postgresql://neondb_owner:<password>@ep-shiny-wind-ai4w5o0l-pooler…';
+ *
+ * A live Neon **owner** credential — password included — was committed to the
+ * repository and shipped inside `dist-server/server.mjs`. The `||` made it
+ * invisible: with `DATABASE_URL` set, the fallback was dead text nobody read.
+ * It was also the *dangerous* direction. `DATABASE_URL` missing is the one
+ * condition under which the system must refuse to start, and this line turned
+ * that refusal into silent success against production data — the operator sees
+ * a running app and no hard signal, because the only warning was a
+ * `console.warn` scrolling past.
+ *
+ * "It is only a fallback" is the reasoning that keeps credentials alive. The
+ * credential is real, it is in git history, and it is in any bundle that
+ * `npm run build:server` produced. Treat it as compromised and rotate it.
+ *
+ * Failing closed is the correct behaviour and is what this now does: no
+ * `DATABASE_URL`, no default. Every route that touches data reports a
+ * configuration fault with an actionable message instead of quietly reading and
+ * writing the one database that matters.
+ */
+const NEON_CONNECTION_STRING = process.env.DATABASE_URL;
+
+if (!NEON_CONNECTION_STRING) {
+  console.error(
+    '[neonDb] FATAL: DATABASE_URL is not set.\n' +
+      '        Refusing to fall back — this system has no built-in database credential,\n' +
+      '        because a fallback credential in source is a credential in every build\n' +
+      '        artefact and in git history.\n' +
+      '        Set DATABASE_URL in the environment (see .env.example) and restart.',
   );
 }
 
 export const pool = new Pool({
+  /*
+   * `undefined` leaves the pool unconnected rather than pointing it at a
+   * default. With no `DATABASE_URL` every query rejects, `pool.on('error')`
+   * consumes the resulting idle-client events, and the process stays up so an
+   * operator can read the message above and fix the environment.
+   */
   connectionString: NEON_CONNECTION_STRING,
   ssl: {
     rejectUnauthorized: false,
@@ -941,27 +996,50 @@ export async function initDatabaseSchema() {
     // startup on the foreign key. Live identities come from
     // scripts/release-credentials.ts instead.
 
-    await client.query(`
-      INSERT INTO dypos.tenants (id, name, owner_company, brand_name, commercial_reg, tax_number, country_code, base_currency, plan)
-      VALUES (
-        'royal-global-hq',
-        'مجموعة رويال العالمية للتجارة والتوزيع',
-        'شركة المنافذ الذكية للبرمجيات (Smart Ports Software)',
-        'DyPOS Enterprise Cloud & Edge',
-        '1010892741',
-        '302194857200003',
-        'SA',
-        'SAR',
-        'enterprise_saas'
-      )
-      ON CONFLICT (id) DO NOTHING;
-    `);
-
-    await client.query(`
-      INSERT INTO dypos.branches (id, tenant_id, name, city, location)
-      VALUES ('rg-branch-hq', 'royal-global-hq', 'الفرع الرئيسي (المقر العام)', 'صنعاء', 'المقر العام')
-      ON CONFLICT (id) DO NOTHING;
-    `);
+    /*
+     * ══ WHY NO INVENTED TENANT IS SEEDED HERE ══════════════════════════════
+     * This used to INSERT a tenant carrying:
+     *
+     *   owner_company : 'شركة المنافذ الذكية للبرمجيات (Smart Ports Software)'
+     *   commercial_reg: '1010892741'
+     *   tax_number    : '302194857200003'
+     *   country       : 'SA',  base_currency: 'SAR'
+     *
+     * and a branch named 'الفرع الرئيسي (المقر العام)' in 'صنعاء' — a Sana'a
+     * address on a tenant registered as Saudi with a Saudi VAT number.
+     *
+     * A bootstrap that runs on every start is a bootstrap that decides who the
+     * business is. Those three numbers are fabricated, so every fresh
+     * installation opened with a legal identity belonging to nobody: a tax number
+     * that matches no registration, a commercial registration that matches no
+     * entity, and a company name that is the software vendor rather than the
+     * merchant. Because they landed in `dypos.tenants`, they were read back by
+     * `/api/erp/entitlements` and printed on real receipts — so the defect was
+     * not confined to a seed row, it propagated to fiscal documents.
+     *
+     * `ON CONFLICT DO NOTHING` made it worse in one specific way: the wrong
+     * values persisted silently. Correcting the merchant's details afterwards
+     * was possible, but nothing distinguished "the operator never entered a tax
+     * number" from "the system made one up", and the made-up one looked valid.
+     *
+     * A tenant is created through `scripts/provision-tenant.ts`, which takes the
+     * values from the operator. If the schema has no tenant yet, the system
+     * starts with NO tenants and every screen reports that there is none — which
+     * is a state an operator can fix in a minute, and far better than a
+     * fabricated registration they must notice and correct.
+     */
+    const tenantCount = await client.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM dypos.tenants`,
+    );
+    if (Number(tenantCount.rows[0]?.count ?? '0') === 0) {
+      console.warn(
+        '[neonDb] No tenant exists yet. Provision one with:\n' +
+          '         npx tsx scripts/provision-tenant.ts --id <tenant> --company "<name>"\n' +
+          '         Provisioning from code is deliberately not done: a tenant must\n' +
+          '         carry the identity of a real, existing business, and inventing\n' +
+          '         one here would put a fabricated tax registration on its receipts.',
+      );
+    }
 
     await client.query(`
       INSERT INTO dypos.currencies (code, name, symbol, exchange_rate)
@@ -1047,10 +1125,41 @@ export async function initDatabaseSchema() {
      * Tenants created through `provision-tenant.ts` get their own grants and are
      * untouched by this line — the literal below is the bootstrap tenant only.
      */
+    /*
+     * ══ WHY THIS NO LISTS TENANTS ════════════════════════════════════════════
+     * This granted the full capability catalogue to one tenant by literal:
+     *
+     *   SELECT 'royal-global-hq', c.id, TRUE FROM dypos.capabilities c …
+     *
+     * In a single-tenant product that is a bootstrap. In a SaaS product it is a
+     * defect with two separate failure modes, and the second is the one that
+     * actually bites:
+     *
+     *   1. It reaches into ONE tenant. Every tenant created afterwards through
+     *      `provision-tenant.ts` got a row in `dypos.tenants` and NO rows in
+     *      `dypos.tenant_capabilities` — so every screen on the licence-gated
+     *      shell was hidden for them, and the symptom is an empty sidebar that
+     *      looks like a cancelled subscription. `EntitlementContext` falls back
+     *      to sector defaults, which masks it for the sector the tenant happens
+     *      to match and exposes it for every other one.
+     *
+     *   2. It hard-codes an identity into the engine, so the moment a second
+     *      customer exists the "global" schema is no longer global.
+     *
+     * The correct seed is stated once, as a rule, and applied to every tenant
+     * that does not yet have a grant — which is exactly what `DO NOTHING` was
+     * already there to guarantee. Only tenants with NO grant row are touched, so
+     * a licence an administrator narrowed stays narrowed, and a tenant with a
+     * deliberate partial grant is never completed behind their back.
+     */
     await client.query(`
       INSERT INTO dypos.tenant_capabilities (tenant_id, capability_id, is_enabled)
-      SELECT 'royal-global-hq', c.id, TRUE
-      FROM dypos.capabilities c
+      SELECT t.id, c.id, TRUE
+        FROM dypos.tenants t
+        CROSS JOIN dypos.capabilities c
+       WHERE NOT EXISTS (
+         SELECT 1 FROM dypos.tenant_capabilities tc WHERE tc.tenant_id = t.id
+       )
       ON CONFLICT (tenant_id, capability_id) DO NOTHING
     `);
 

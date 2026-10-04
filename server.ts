@@ -20,6 +20,7 @@ import { registerEntitlementRoutes, registerTenantProfileRoutes } from './server
 import { registerCommerceRoutes } from './server/commerceRoutes.js';
 import { registerAccountingRoutes } from './server/accountingRoutes.js';
 import { registerApiKeyRoutes } from './server/apiKeyRoutes.js';
+import { registerSettlementRoutes } from './server/settlementRoutes.js';
 import { allocateDocumentNumber } from './server/documentNumber.js';
 
 dotenv.config();
@@ -77,6 +78,11 @@ export async function createApp(): Promise<Express> {
 
   // Subscriber API keys: issue, list, revoke, and authenticate with one.
   registerApiKeyRoutes(app);
+
+  // Per-tenant bank settlement accounts. These replace an IBAN that was compiled
+  // into the front-end bundle as a literal AND as a default argument, so every
+  // merchant's takings were routed into one organisation's account.
+  registerSettlementRoutes(app);
 
   // Auth (login / biometric unlock) plus the reporting endpoints that feed
   // the dashboard and the BI charts.

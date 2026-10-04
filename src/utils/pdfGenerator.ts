@@ -1,11 +1,38 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Transaction } from '../types';
+import { branchLine, UNRESOLVED_LABEL, type ResolvedIdentity } from '../services/tenantIdentity';
 
 /**
- * Utility to generate digital PDF invoices for DyPOS / Smart Ports Software
+ * Digital PDF invoice.
+ *
+ * ══ WHY THE IDENTITY IS A REQUIRED ARGUMENT ═════════════════════════════════
+ * This used to print, as literals:
+ *
+ *   doc.text('Smart Ports Software - DyPOS', …)
+ *   doc.text('Subscriber: Royal Global Enterprise · ZATCA Compliant', …)
+ *   doc.text('VAT ID: 300123456700003', …)
+ *
+ * That is three separate defects in one invoice:
+ *
+ *   1. The VAT number was invented. ZATCA (Saudi e-invoicing) rejects a document
+ *      whose tax registration does not match the seller's — and a number that
+ *      matches nothing is worse than a blank one, because it looks compliant.
+ *   2. It CLAIMED compliance with a standard it did not meet. "ZATCA Compliant"
+ *      on a PDF with no QR, no cryptographic stamp, no invoice hash and no
+ *      counter signed by the seller is a false regulatory claim printed on a
+ *      legal document. The wording is removed rather than softened.
+ *   3. The seller's name was the vendor's, not the merchant's, so every customer
+ *      received an invoice that named someone else as the supplier.
+ *
+ * The caller must pass the identity it resolved from the server. If the identity
+ * is unresolved the PDF says so in the document itself, because a PDF that has
+ * already been emailed to a customer cannot be quietly corrected afterwards.
  */
-export const generateInvoicePDF = (transaction: Transaction) => {
+export const generateInvoicePDF = (
+  transaction: Transaction,
+  identity: ResolvedIdentity,
+) => {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -16,13 +43,16 @@ export const generateInvoicePDF = (transaction: Transaction) => {
   doc.setFillColor(15, 23, 42); // slate-900
   doc.rect(0, 0, 210, 40, 'F');
 
-  // Title & Company Name
+  // Title & Company Name — the MERCHANT's, resolved from the server.
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
-  doc.text('Smart Ports Software - DyPOS', 14, 18);
+  doc.text(identity.ownerCompany, 14, 18);
   doc.setFontSize(10);
   doc.setTextColor(52, 211, 153); // brand-400
-  doc.text('Subscriber: Royal Global Enterprise · Simplified Tax Invoice (ZATCA Compliant)', 14, 26);
+  // "ZATCA Compliant" was removed: it was a regulatory claim the document never
+  // earned (no QR, no cryptographic stamp, no seller signature). Printed here is
+  // only what the invoice actually is.
+  doc.text(`Simplified Tax Invoice · ${branchLine(identity)}`, 14, 26);
 
   // Invoice Meta Box
   doc.setTextColor(30, 41, 59);
@@ -32,7 +62,23 @@ export const generateInvoicePDF = (transaction: Transaction) => {
   doc.text(`Cashier: ${transaction.cashierName}`, 14, 64);
   doc.text(`Customer: ${transaction.customerName || 'General Customer'}`, 120, 52);
   doc.text(`Payment Method: ${transaction.paymentMethod.toUpperCase()}`, 120, 58);
-  doc.text(`VAT ID: 300123456700003`, 120, 64);
+  doc.text(`VAT ID: ${identity.taxNumber ?? UNRESOLVED_LABEL}`, 120, 64);
+
+  /*
+   * An invoice with an incomplete seller identity is marked INCOMPLETE on its
+   * face. The PDF is the artefact the customer keeps and the accountant files, so
+   * the correction has to travel with it — a re-issue nobody receives is not a
+   * correction.
+   */
+  if (identity.source === 'unresolved') {
+    doc.setTextColor(185, 28, 28);
+    doc.setFontSize(8);
+    doc.text(
+      `INCOMPLETE SELLER DETAILS — missing: ${identity.missing.join(', ')}`,
+      14,
+      67,
+    );
+  }
 
   // Line Divider
   doc.setDrawColor(226, 232, 240);
