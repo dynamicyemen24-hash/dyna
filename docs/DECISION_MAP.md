@@ -141,15 +141,64 @@ typed-in ones. Verified against the live asset, not the local build.
 
 ## Open, ranked
 
+### Measured and paid since this map was written
+
+| # | Item | Status | Proof |
+|---|---|---|---|
+| 3 | `tsconfig` has no `strict` | **CLOSED.** Measured: a probe config with `strict: true` over the real program produced **zero** diagnostics, and the probe was verified to detect real violations. The backlog was already paid down. | `npm run lint` |
+| 5 | No deployment pipeline | **CLOSED.** `.github/workflows/gate.yml`: type-check → constitution → encoding → offline → theme → primitives → build on every push; database suites and deploy are manual; deploy publishes the exact artifact that passed and then checks the live URL. | `npm run ci` |
+| 6 | No git repository | **CLOSED.** Initialised with a `.gitignore` that keeps `.env`, `dist/`, `dist-server/` and the operational debris out of every commit. | `git log` |
+| — | `lint` was non-deterministic | **CLOSED.** Without `include`, `tsc` swept `dist/` and `dist-server/server.mjs` into its own program, so the result depended on whether a build had been run. | `tsc --listFilesOnly` |
+
+### The constitution: no tenant data may be compiled in
+
+A SaaS product sold to more than one merchant cannot carry a literal identity in
+its bundle. A hard-coded VAT number is not a cosmetic bug — it means customer #2
+receives tax invoices bearing customer #1's registration, and every value on
+those documents is internally consistent, so nothing downstream detects it.
+
+| Removed | Was | Now |
+|---|---|---|
+| Receipt header: company, branch, `300123456700003` | JSX text nodes | `dypos.tenants` + `dypos.branches`, resolved once per session |
+| PDF: `VAT ID: 300123456700003` and the words "ZATCA Compliant" | literals | `identity.taxNumber`; an unresolved identity is marked **on the document** |
+| Settlement IBAN | a literal **and** a default parameter argument | per-tenant `bank_settlement_accounts` (v147, RLS); the IBAN is a required argument that returns `null` |
+| Login branch list | Riyadh / Jeddah / Dammam | the tenant's real branches; "not loaded" and "none exist" are distinct states |
+| Settings company + tax number | `useState` seeds, never persisted | derived from the tenant row |
+| Exchange rates | invented in a `setTimeout`, then persisted | operator-set, effective-dated, or read from the server |
+| Neon owner credential | a `\|\|` fallback shipped in the bundle | fails closed; **rotate it** |
+
+Enforced by `npm run test:no-fake-data` (16 assertions), which scans the source
+and is itself covered by the CI gate.
+
+### Also closed
+
+- **Credential in source.** `server/neonDb.ts` shipped a live Neon owner
+  password as a fallback connection string. Removed; the module now fails
+  closed. `dotenv` also moved into the module that *reads* `DATABASE_URL`,
+  because ES module evaluation ordered the pool before `server.ts`'s
+  `dotenv.config()` ran — the bundled fallback had been hiding that.
+- **Multi-tenancy was nominal.** The capability seed granted one tenant by
+  literal. Measured on the live database: **6 of 7 tenants had no capability
+  rows at all**, so every licence-gated screen was hidden for them. It now seeds
+  each tenant that has no grant and leaves narrowed licences alone.
+- **Offline could lose sales.** `syncNow()` took one boolean for the batch and
+  then emptied the queue. A refused or never-sent sale vanished with no record,
+  and a single `false` re-sent committed sales and duplicated invoices. Each item
+  now receives its own verdict and the queue is rebuilt rather than cleared.
+  Queued ids are device-scoped and monotonic across reloads.
+- **`test:encoding` and `test:offline` did not exist.** `package.json` pointed
+  at files that were never written, so those gates could only ever fail and were
+  skipped. Both now exist and run.
+
+## Still open, ranked
+
 | # | Item | Why it is not done |
 |---|---|---|
-| 1 | `mock*` arrays in six screens | `WorkOrderManager`, `MeasurementManager`, `RetailPOS`, `RestaurantView`, `SubscriptionsView`, `ThirdPartySaleView` render literal rows instead of querying. Each needs its own table + CRUD + permission, not a patch. |
-| 2 | No unit-test runner | No vitest/jest. Two security suites (`test:mfa`, `test:unlock`) run against real PostgreSQL and real routes, so coverage is real — but component-level regression is still absent. |
-| 3 | `tsconfig` has no `strict` | Turning it on surfaces a large backlog at once. Correct as a measured, separate change. |
-| 4 | SSO has no server endpoint | States plainly that it is unprovisioned rather than faking a login. Real wiring needs a provider + server-side code exchange. |
-| 5 | No deployment pipeline | `deploy:api` is `wrangler deploy`, invoked by hand. No CI gate runs build + typecheck + tests before deploy. |
-| 6 | No git repository | There is no rollback point. Initialising one has authority implications (history, remotes) rather than being a mechanical fix. |
-| 7 | MFA delivery is log-only | `MfaDeliverer` defaults to `logDeliverer` — a real random code, but delivered to the server log. Production must register an SMS/e-mail deliverer. |
+| 1 | `mock*` arrays in six screens | Largely resolved; each screen needed its own table + CRUD + permission, not a patch. |
+| 2 | No component-level test runner | The suites here drive real PostgreSQL and real routes, so coverage of *wiring* is real — but there is still no jsdom/DOM runner, so `LoginView` and `POSView` are verified by source contract, not by rendering. |
+| 3 | SSO has no server endpoint | States plainly that it is unprovisioned rather than faking a login. Real wiring needs a provider + server-side code exchange. |
+| 4 | MFA delivery is log-only | `MfaDeliverer` defaults to `logDeliverer` — a real random code, but delivered to the server log. Production must register an SMS/e-mail deliverer. |
+| 5 | Settlement accounts are not editable in the UI | `POST`/`PUT /api/db/settlement/accounts` exist and are permission-checked, but no screen exposes them yet, so a merchant still cannot configure one from the app. |
 
 ## Invariants added
 
