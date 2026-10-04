@@ -1,0 +1,49 @@
+# =====================================================================
+# Cloudflare — DyPOS Enterprise Cloud & Edge
+#
+# One Worker named "dyposcloud" serves BOTH halves of the product:
+#   - the Vite SPA            -> static assets binding (./dist)
+#   - the /api/* edge API     -> Neon over the serverless HTTP driver
+#
+# Serving both from a single Worker keeps everything on one origin, so the
+# browser never makes a cross-origin call and no second host is needed.
+#
+# Domain: dyposcloud.smartportssoft.com
+#
+# Secrets (never commit them):
+#   npx wrangler secret put DATABASE_URL
+# =====================================================================
+
+name = "dyposcloud"
+main = "worker/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+# ---------------------------------------------------------------------
+# Customer domain
+#
+# Without this the zone keeps serving whatever Worker it was bound to
+# before, so deploying "dyposcloud" changes nothing on the public URL.
+# `custom_domain` makes Cloudflare provision the hostname for THIS worker
+# and take it away from the old one.
+# ---------------------------------------------------------------------
+routes = [
+  { pattern = "dyposcloud.smartportssoft.com", custom_domain = true }
+]
+
+# ---------------------------------------------------------------------
+# Static SPA served by the same Worker
+# ---------------------------------------------------------------------
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+# SPA deep links (/, /settings, ...) must fall back to index.html.
+not_found_handling = "single-page-application"
+
+[observability]
+enabled = true
+
+[vars]
+DEFAULT_TENANT = "royal-global-hq"
+APP_NAME = "DyPOS — نظام إدارة الأعمال والمبيعات"

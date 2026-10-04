@@ -1,0 +1,83 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "types": ["vite/client"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+
+    /*
+     * ══ WHY `strict` IS ON ════════════════════════════════════════════════
+     * This was the open item #3 in docs/DECISION_MAP.md: "`tsconfig` has no
+     * `strict` — turning it on surfaces a large backlog at once. Correct as a
+     * measured, separate change."
+     *
+     * It was measured rather than assumed. A probe config with `strict: true`
+     * over the real program produced **zero** diagnostics, and the probe was
+     * verified to actually detect violations (an implicit-`any` parameter and a
+     * `string = 42` assignment both failed the probe and passed the old config).
+     * So the backlog was paid down before this line was written, and the
+     * remaining cost of turning it on is zero. Leaving it off now would be
+     * opting *back* into unchecked nulls and untyped parameters.
+     *
+     * `strict` is not a lint preference here. With `strictNullChecks` off, a
+     * function returning `T | null` is assignable where `T` is expected, which
+     * is exactly how a missing migration or an absent MFA row becomes a
+     * runtime `TypeError` in a till rather than a build failure.
+     */
+    "strict": true
+  },
+
+  /*
+     * ══ WHY THE FILE LIST IS EXPLICIT ══════════════════════════════════════
+     * Without `include`, TypeScript defaults to "every .ts/.tsx/.js file under
+     * the project root". With `allowJs: true` that silently swept `dist/`,
+     * `dist-server/` and `public/sw.js` into the program — 1041 files, of which
+     * roughly 60 were *build output*, including the 3.9 MB `dist-server/server.mjs`
+     * bundle.
+     *
+     * The consequence is not slowness, it is non-determinism: whether `npm run
+     * lint` passes depended on whether someone had run `npm run build` and left
+     * `dist/` behind. A clean clone linted one program; a developer's machine
+     * linted a different one. The same commit could pass in CI and fail locally,
+     * or the reverse — and the usual conclusion ("type-checker is flaky") sends
+     * the investigation nowhere.
+     *
+     * The compiler options below describe the product. The file list below
+     * describes the source. Output is never an input to its own type-check.
+     */
+    "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "server/**/*.ts",
+    "worker/**/*.ts",
+    "scripts/**/*.ts",
+    "server.ts",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "dist-server",
+    ".wrangler",
+    ".wrangler-dry"
+  ]
+}

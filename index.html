@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>نظام نقاط البيع الذكي</title>
+    <meta name="description" content="نظام نقاط البيع الذكي" />
+    <meta property="og:title" content="نظام نقاط البيع الذكي" />
+    <meta property="og:description" content="نظام نقاط البيع الذكي" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ar_SA" />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="نظام نقاط البيع الذكي" />
+    <meta name="twitter:description" content="نظام نقاط البيع الذكي" />
+    <meta name="twitter:image" content="/og-image.png" />
+
+    <!-- Installable app identity. The maskable icon is what Android uses when it
+         crops to its own shape, hence the separate entry. -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" type="image/png" href="/icons/icon-192.png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="application-name" content="DyPOS" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="DyPOS" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#001020" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f5f6f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#001020" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      /*
+       * Anti-flash bootstrap.
+       *
+       * The previous version hardcoded `background: #f6f7f9` and justified it as
+       * "no dark flash on a light application" — but the application is not
+       * light-only. Anyone who chose dark, OLED or high-contrast got a full
+       * frame of near-white before their theme was applied, which is a worse
+       * flash than the one it was trying to prevent.
+       *
+       * The saved theme is therefore read here, BEFORE the stylesheet and React
+       * boot, and the same variables the design system defines are applied
+       * inline. `themeService` does this again on mount as a safety net; this
+       * block is what makes the very first paint correct.
+       *
+       * Wrapped in try/catch because `localStorage` throws outright in private
+       * browsing modes in some browsers, and an exception here would leave the
+       * page unstyled rather than merely unthemed.
+       */
+      html, body { margin: 0; }
+       html { background: #f5f6f7; color: #1d2d3e; }
+       html[data-theme="dark"]           { background:#001020; color:#eaf2ff; }
+       html[data-theme="oled"]           { background:#000000; color:#f0f6ff; }
+       html[data-theme="royal_gold"]     { background:#050b1c; color:#eaf0ff; }
+       html[data-theme="high_contrast"]  { background:#000000; color:#ffffff; }
+       html[data-theme="frosted_glass"]  { background:#eef3f9; color:#0b1a2e; }
+       html[data-theme="light"],
+       html[data-theme="frosted_glass"]  { color-scheme: light; }
+       html[data-theme="dark"],
+       html[data-theme="oled"],
+       html[data-theme="royal_gold"],
+       html[data-theme="high_contrast"]  { color-scheme: dark; }
+
+       /*
+        * Scrollbar, mirrored from `index.css`.
+        *
+        * Duplicated here rather than imported because this block runs BEFORE
+        * the stylesheet is fetched. On a slow till connection a first paint
+        * with an unstyled scrollbar is a white bar over the navy shell —
+        * visible for a beat on every single load. It also sets the scrollbar
+        * variables so the real stylesheet inherits them.
+        */
+       * {
+         scrollbar-width: thin;
+         scrollbar-color: var(--t-scroll-thumb, #8a94a1) var(--t-scroll-track, #eceef1);
+       }
+       *::-webkit-scrollbar { width: 14px; height: 14px; }
+       *::-webkit-scrollbar-track { background-color: var(--t-scroll-track, #eceef1); border-radius: 999px; }
+       *::-webkit-scrollbar-thumb {
+         background-color: var(--t-scroll-thumb, #8a94a1);
+         border: 3px solid transparent;
+         background-clip: content-box;
+         border-radius: 999px;
+       }
+       html[data-theme="dark"] { --t-scroll-thumb: #4a7ba8; --t-scroll-track: #001530; }
+       html[data-theme="oled"] { --t-scroll-thumb: #3f6fa8; --t-scroll-track: #000714; }
+       html[data-theme="royal_gold"] { --t-scroll-thumb: #4a68a8; --t-scroll-track: #0a1430; }
+       html[data-theme="high_contrast"] { --t-scroll-thumb: #ffffff; --t-scroll-track: #000000; }
+       html[data-theme="frosted_glass"] { --t-scroll-thumb: #f5f6f7; --t-scroll-track: #7c8794; }
+    </style>
+    <script>
+      /*
+       * Runs synchronously, ahead of the stylesheet link resolution and long
+       * before React mounts. Wrapped so a storage failure degrades to the default
+       * theme instead of breaking the page.
+       */
+      (function () {
+        try {
+          var saved = localStorage.getItem('dypos_theme');
+          if (saved) {
+            var known = ['light', 'dark', 'oled', 'royal_gold', 'high_contrast', 'frosted_glass'];
+            if (known.indexOf(saved) !== -1) {
+              document.documentElement.setAttribute('data-theme', saved);
+              var m = document.querySelector('meta[name="color-scheme"]');
+              if (m) m.setAttribute('content', saved === 'light' || saved === 'frosted_glass' ? 'light' : 'dark');
+            }
+          }
+        } catch (e) { /* storage unavailable — the default theme stands */ }
+      })();
+    </script>
+  </head>
+  <body class="antialiased selection:bg-brand-500 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

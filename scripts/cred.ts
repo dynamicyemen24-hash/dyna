@@ -1,0 +1,12 @@
+﻿import dotenv from "dotenv"; import pg from "pg";
+dotenv.config();
+const p = new pg.Pool({connectionString: process.env.DATABASE_URL, ssl:{rejectUnauthorized:false}, max:1});
+const u = await p.query(`SELECT username, name, role, is_active, left(password_hash,20) hash_prefix, length(password_hash) len FROM dypos.users WHERE tenant_id='royal-global-hq' ORDER BY username`);
+u.rows.forEach(r=>console.log(`${r.username} | ${r.name} | ${r.role} | active=${r.is_active} | hash="${r.hash_prefix}..." (${r.len})`));
+const cols = await p.query(`SELECT column_name FROM information_schema.columns WHERE table_name='users' AND table_schema='dypos' ORDER BY ordinal_position`);
+console.log("\nusers columns:", cols.rows.map(r=>r.column_name).join(", "));
+const br = await p.query(`SELECT id, name FROM dypos.branches WHERE tenant_id='royal-global-hq' ORDER BY name`);
+console.log("\nbranches:", br.rows.map(r=>r.id+" ("+r.name+")").join(" | "));
+const t = await p.query(`SELECT id, name, commercial_reg, tax_number FROM dypos.tenants WHERE id='royal-global-hq'`);
+console.log("\ntenant:", JSON.stringify(t.rows[0]));
+await p.end();

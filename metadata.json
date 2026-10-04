@@ -1,0 +1,7 @@
+{
+  "name": "DyPOS Enterprise Cloud & Edge",
+  "description": "Production-grade Global ERP & POS Engine by Smart Ports Software, featuring offline-first architecture, enterprise accounting, and Gemini AI intelligence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

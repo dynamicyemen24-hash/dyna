@@ -1,0 +1,73 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Product inventory item with stock and reorder levels",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "name": { "type": "string" },
+        "barcode": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "cost": { "type": "number" },
+        "stock": { "type": "number" },
+        "minStock": { "type": "number" },
+        "unit": { "type": "string" },
+        "branchId": { "type": "string" }
+      },
+      "required": ["id", "tenantId", "name", "barcode", "price", "stock", "minStock"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Point of sale transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tenantId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "tax": { "type": "number" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "cashierName": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "branchId": { "type": "string" }
+      },
+      "required": ["id", "tenantId", "invoiceNumber", "total", "paymentMethod"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Employee operational audit trail entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "action": { "type": "string" },
+        "category": { "type": "string" },
+        "user": { "type": "string" },
+        "branch": { "type": "string" },
+        "details": { "type": "string" },
+        "previousValue": { "type": "string" },
+        "newValue": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "action", "category", "user", "branch", "details"]
+    }
+  },
+  "firestore": {
+    "/tenants/{tenantId}/products/{productId}": {
+      "schema": "Product",
+      "description": "Multi-tenant inventory product documents"
+    },
+    "/tenants/{tenantId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Multi-tenant sales transactions"
+    },
+    "/tenants/{tenantId}/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Multi-tenant employee operational audit logs"
+    }
+  }
+}

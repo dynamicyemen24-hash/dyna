@@ -1,0 +1,44 @@
+node_modules/
+build/
+dist/
+dist-server/
+coverage/
+.DS_Store
+
+# ── Operational debris ─────────────────────────────────────────────────────
+# `*.log` alone was not enough. The root accumulated apitest.log, audit.log,
+# build.log, columns.log, server.log, srv.log … but also `col.out`, `mig.err`,
+# `strict.out` and `ping.out` — the same debris under `.out` / `.err`
+# extensions. `.gitignore` matched the first three letters and let the rest in,
+# so a red `tsc` run left a committed failure log behind. Output debris now
+# needs three patterns, not one.
+*.log
+*.out
+*.err
+
+# Wrangler's local state and the dry-run bundle it caches.
+.wrangler/
+.wrangler-dry/
+
+# End-to-end / scratch run artifacts produced by the scripts in `scripts/`.
+screens-e2e.out
+e2e.out
+
+# One-off operational probes. A previous `.dbping.cjs` lived in the project
+# root, read a real `DATABASE_URL`, applied migration v137 directly and then
+# wrote to `dypos.applied_migrations` by hand — bypassing `scripts/migrate.ts`
+# entirely. It is exactly the kind of script that must never be committed: it
+# can mark a migration applied when only part of it ran, and the ledger then
+# says "done" forever. Probes belong in `scripts/`, reviewed, or nowhere.
+.dbping.*
+
+.env*
+!.env.example
+
+# Scratch artifacts. These are operational debris, never source, and one of them
+# (.tmp_pw) held a 20-character plaintext credential in the project root — a
+# secret has no business being in a tree at all. The pattern is ignored as well
+# as deleted so the next one cannot be committed by accident.
+.tmp*
+*.tmp
+scratch/
