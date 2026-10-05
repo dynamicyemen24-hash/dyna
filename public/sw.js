@@ -17,6 +17,28 @@ const ASSETS_TO_CACHE = [
   '/icons/icon-512.png',
   '/icons/maskable-512.png',
   '/icons/apple-touch-icon.png',
+  /*
+   * The four weights × two subsets of IBM Plex Sans Arabic.
+   *
+   * They are pre-cached rather than left to first paint because a till that is
+   * opened without a connection must still render in its real typeface. If the
+   * family were only discovered by the stylesheet, an offline launch would
+   * silently fall back to a system font — which is precisely the defect that
+   * made the whole design look wrong on a live till.
+   *
+   * At roughly 258 KB total this is a deliberate trade: it is paid once, then
+   * served from the cache forever. `index.html` already commits the browser to
+   * downloading several hundred KB of JavaScript, so this is not what decides
+   * whether the application opens.
+   */
+  '/fonts/arabic-400.woff2',
+  '/fonts/latin-400.woff2',
+  '/fonts/arabic-500.woff2',
+  '/fonts/latin-500.woff2',
+  '/fonts/arabic-600.woff2',
+  '/fonts/latin-600.woff2',
+  '/fonts/arabic-700.woff2',
+  '/fonts/latin-700.woff2',
 ];
 
 self.addEventListener('install', (event) => {

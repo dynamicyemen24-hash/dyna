@@ -90,6 +90,14 @@ jobs:
       - name: Credentials verify in both runtimes
         run: npm run test:credentials
 
+      # The typeface was loaded from Google Fonts, so the design system —
+      # whose every spacing and column width is tuned to that font's metrics —
+      # depended on a third-party request. A slow or filtered connection made
+      # the browser silently swap the whole application onto a fallback font,
+      # and the page visibly reflowed. Nothing failed; it just looked wrong.
+      - name: Typography is self-hosted
+        run: npm run test:typography
+
       - name: Arabic text survives the round trip
         run: npm run test:encoding
 
@@ -274,5 +282,19 @@ database:
           else
             echo "could not find the current stylesheet in index.html"; fail=1
           fi
+
+          # The typeface must be served by THIS origin. It used to come from
+          # Google Fonts, so a till on a filtered connection fell back to a
+          # system font and the whole design stopped matching itself — with no
+          # error anywhere, which is why it reached customers.
+          for f in arabic-400 latin-400 arabic-600 latin-600; do
+            ct=$(curl -s -o /dev/null -w '%{http_code} %{content_type}' "$BASE/fonts/$f.woff2")
+            printf '%-56s %s\n' "$BASE/fonts/$f.woff2" "$ct"
+            case "$ct" in "200 font/woff2"|"200 application/font"*) ;; *) fail=1 ;; esac
+          done
+
+          # And the shipped CSS must declare the faces, not just reference the
+          # family name — a missing @font-face falls back silently.
+          curl -s "$BASE$css" | grep -q '@font-face' || { echo "no @font-face in the shipped CSS"; fail=1; }
 
           exit $fail

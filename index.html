@@ -32,9 +32,22 @@
     <meta name="theme-color" content="#f5f6f7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#001020" />
     <meta name="color-scheme" content="dark light" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!--
+         Typography is self-hosted; see the @font-face block in src/index.css.
+
+         The Google Fonts <link> that used to sit here was the reason the design
+         rendered in the wrong typeface: it is a third-party request, so a slow
+         or blocked connection silently swapped the whole application onto a
+         fallback font with different metrics. The faces now come from this
+         origin and are cached by the service worker with the rest of the shell.
+
+         The Arabic subset at 400 is preloaded because it is the first thing
+         painted on a sign-in screen — an Arabic cashier should not watch the
+         fallback render first. The Latin subsets are ~19 KB against ~43 KB for
+         Arabic, and unicode-range means only the subset actually drawn loads.
+    -->
+    <link rel="preload" href="/fonts/arabic-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/latin-400.woff2" as="font" type="font/woff2" crossorigin>
     <style>
       /*
        * Anti-flash bootstrap.

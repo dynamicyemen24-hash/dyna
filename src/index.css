@@ -1,6 +1,123 @@
 @import "tailwindcss";
 
 /* ==========================================================================
+   Typography — IBM Plex Sans Arabic, SELF-HOSTED
+   ==========================================================================
+
+   WHY THESE FACES EXIST INSTEAD OF A GOOGLE FONTS <link>
+   --------------------------------------------------------
+   `index.html` used to pull this family from fonts.googleapis.com, which made
+   the one thing every screen depends on — the typeface — a third-party network
+   request on every load.
+
+   On a till on a slow or filtered connection that request is often late or
+   blocked, and the failure is not graceful:
+
+     · the browser falls back down the stack to 'Noto Sans Arabic' or whatever
+       the device happens to have. That font has different metrics, so line
+       breaks, letter widths and column widths all shift and a layout tuned in
+       the design system stops matching itself;
+     · `font-display: swap` shows that fallback for the length of the download,
+       so the page visibly re-flows after first paint;
+     · and the product discloses the merchant's IP to a third party on every
+       single sign-in.
+
+   The reported symptom — the design not looking like itself, and the text not
+   looking right — is what that fallback looks like. It is a font-delivery
+   failure, not a design change, which is why no amount of adjusting spacing,
+   sizing or colour would have fixed it.
+
+   These are the same woff2 files Google serves, vendored into `public/fonts/`
+   so they deploy from the same origin as everything else and are cached by the
+   service worker along with the rest of the shell. An offline till now gets its
+   real typeface instead of a system fallback.
+
+   Each face keeps the `unicode-range` from Google's own stylesheet. That is
+   what lets the Latin subset (~19 KB) serve digits and English while Arabic
+   uses the larger Arabic subset (~43 KB), so an English-only screen does not
+   download 42 KB of Arabic glyphs it will never draw.
+
+   `swap` is kept deliberately: `block` would hide all text for up to 3 s on a
+   poor connection, which on a till reads as a frozen application. Served from
+   the same origin this resolves in milliseconds.
+   ========================================================================== */
+
+/* The four weights × two subsets. `latin` is listed after `arabic` at equal
+   specificity because the ranges are disjoint, so order cannot make one win. */
+
+/* ---- 400 ---- */
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/arabic-400.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/latin-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---- 500 ---- */
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/arabic-500.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/latin-500.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---- 600 ---- */
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/arabic-600.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/latin-600.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---- 700 ---- */
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/arabic-700.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'IBM Plex Sans Arabic';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/latin-700.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ==========================================================================
    DyPOS Design System
    A single source of truth for type scale, rhythm, elevation and palette.
 
