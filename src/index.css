@@ -118,6 +118,78 @@
 }
 
 /* ==========================================================================
+   Headings — Tajawal, self-hosted
+   ==========================================================================
+
+   The brand's display face, paired with IBM Plex Sans Arabic for running text.
+
+   The pairing is deliberate rather than decorative. Tajawal is a geometric
+   Kufi-influenced face: wide, high-contrast, and built for short strings at
+   large sizes. On a POS screen the headings are exactly that — a screen title,
+   a KPI label, a section rule — so it reads as a distinct tier instead of more
+   body text. Body copy stays on IBM Plex, which is drawn for dense small text
+   and has the Arabic terminal forms that make numbers legible in tables.
+
+   Same reasoning as the family above for delivery: vendored into
+   `public/fonts/`, so a till never depends on a third party for its headings
+   either. Arabic subset ~9 KB against ~10 KB Latin, so both are cheap.
+   ========================================================================== */
+
+/* ---- 400 ---- */
+@font-face {
+  font-family: 'Tajawal';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/tajawal-arabic-400.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'Tajawal';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/tajawal-latin-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---- 500 ---- */
+@font-face {
+  font-family: 'Tajawal';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/tajawal-arabic-500.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'Tajawal';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/tajawal-latin-500.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---- 700 ---- */
+@font-face {
+  font-family: 'Tajawal';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/tajawal-arabic-700.woff2') format('woff2');
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: 'Tajawal';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/tajawal-latin-700.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ==========================================================================
    DyPOS Design System
    A single source of truth for type scale, rhythm, elevation and palette.
 
@@ -196,6 +268,30 @@
   --color-navy-700: #001c3a;
   --color-navy-600: #002040;
   --color-navy-500: #00295c;
+
+  /* ══ Typography: two families, one numeric system ═══════════════════════
+   *
+   * Tajawal for headings, IBM Plex Sans Arabic for running text. Declared as
+   * theme tokens rather than applied per-component, so the pairing holds across
+   * every screen instead of depending on whoever remembered to add a class.
+   *
+   * `--font-numeric` is the load-bearing one. It exists because Arabic-Indic
+   * digits are what `toLocaleString()` produces under an `ar` locale, and a POS
+   * cashier reading "١٢٬٥٠٠" pays noticeably slower than one reading "12,500" —
+   * the glyphs are drawn for prose, not for aligning in a column. Money and
+   * quantities are Latin digits with tabular figures EVERYWHERE, including
+   * inside Arabic sentences, and this token is how that is stated once.
+   *
+   * The Latin subset of each family carries those digits, and `unicode-range`
+   * already routes ASCII there, so the numerals come from the smaller face
+   * rather than adding a third download.
+   */
+  --font-sans: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', 'Segoe UI',
+    system-ui, -apple-system, sans-serif;
+  --font-display: 'Tajawal', 'IBM Plex Sans Arabic', 'Noto Sans Arabic',
+    system-ui, sans-serif;
+  --font-numeric: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', 'Segoe UI',
+    system-ui, sans-serif;
 
   /* Type scale — deliberately small and dense for operational work. */
   --text-2xs: 0.625rem;   /* 10px  — labels, badges, chart axes   */
@@ -369,13 +465,100 @@ html {
 body {
   background-color: var(--color-canvas);
   color: var(--color-ink);
-  font-family: 'IBM Plex Sans Arabic', 'Noto Sans Arabic', 'Segoe UI',
-    system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.6;
   /* Tabular figures keep money and quantities aligned in dense tables. */
   font-feature-settings: 'tnum' 1, 'ss01' 1;
   transition: background-color 200ms ease, color 200ms ease;
+}
+
+/*
+ * ══ HEADINGS TAKE THE DISPLAY FACE ════════════════════════════════════════
+ * Scoped to the heading elements rather than applied per component.
+ *
+ * The alternative — adding `font-display` to each of ~40 screens — produces a
+ * design that looks consistent only until the next screen someone writes. An
+ * element selector states the rule once and holds it everywhere, including in
+ * the components nobody has touched yet.
+ *
+ * `font-display` is a Tailwind utility class name as well, so this is a plain
+ * element rule and not a utility; there is no collision.
+ */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  /*
+   * Tajawal runs lighter and wider than IBM Plex at the same size, so it is
+   * nudged up a hair in weight and the line-height is tightened to keep a
+   * heading block the same height the design system already budgets for.
+   * Without this the hierarchy reads as a font swap rather than a tier.
+   */
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+/*
+ * ══ NUMERALS ARE LATIN, ALWAYS, EVEN INSIDE AN ARABIC SENTENCE ═════════════
+ *
+ * An Arabic-Indic digit in a POS column is drawn for prose: it does not align
+ * vertically against its neighbours, and a cashier scanning a price column
+ * parses it slower than Latin digits. The same argument applies to a button
+ * that reads "12 pcs" or to a percentage inside an Arabic label.
+ *
+ * This is a REAL bidi hazard, not a preference. Under `dir="rtl"`, digits
+ * inside Arabic text belong to a different bidi class, and without
+ * `unicode-bidi: isolate` a run like "12" can be reordered relative to its
+ * Arabic neighbours — so "من 12 إلى 5" can render with the ends swapped. The
+ * isolate wrapper stops the number being reordered as part of the sentence.
+ *
+ * `font-variant-numeric: tabular-nums` then guarantees equal advance width so
+ * columns of money line up on the decimal point.
+ *
+ * The blanket `body` rule below forces Latin digits everywhere as the default,
+ * so a new screen is correct without remembering this class, and `.num` exists
+ * for the places that need the isolate explicitly.
+ */
+/*
+ * The numeric contract. `.num` is the class an element opts into when it holds
+ * a figure; `.text-numeric` is kept as an alias because it is what the design
+ * system already documented and several screens already use.
+ *
+ * `unicode-bidi: isolate` is the part that is easy to leave out and is a real
+ * defect: under `dir="rtl"` a digit run inside Arabic text can be reordered
+ * against its neighbours, so "من 12 إلى 5" can render with the ends swapped.
+ * The isolate stops the number being absorbed into the sentence's bidi run.
+ *
+ * `direction: ltr` pins the run itself, so a value like "1,234.50" cannot have
+ * its comma and point repositioned.
+ */
+.num,
+.text-numeric {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+  direction: ltr;
+  /* Tightened by a hair: at 13px the default tracking makes a column of
+     money look loose, and this is a POS where the figures are scanned. */
+  letter-spacing: -0.01em;
+}
+
+/*
+ * Buttons and any other control that states a quantity. Latin digits inside an
+ * otherwise Arabic label, which is the case the isolate above exists for.
+ */
+button,
+[role="button"] {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/*
+ * `font-variant-numeric` on body is what makes "numbers are always Latin" true
+ * rather than aspirational: without it a screen that formats under an `ar`
+ * locale can pull in the Arabic-Indic set by inheritance, and nothing would
+ * fail — it would simply render digits the cashier reads more slowly.
+ */
+body {
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
 /* ---- Reusable surface + type utilities -------------------------------- */
@@ -392,10 +575,13 @@ body {
   border-radius: 0.75rem;
 }
 
-@utility text-numeric {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
+/*
+ * The numeric rule itself lives in the Base section, where it can set
+ * `unicode-bidi` and `direction` — a `@utility` here could only carry the font
+ * and the figures, and the bidi isolate is the part that actually prevents a
+ * mis-rendered number. Declaring the same name twice would also mean whichever
+ * Tailwind saw last silently won.
+ */
 
 @utility text-eyebrow {
   font-size: 10px;

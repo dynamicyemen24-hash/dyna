@@ -126,19 +126,89 @@ for (const f of onDisk) {
 // ── 4. unicode-range keeps Latin screens small ────────────────────────────
 // Without it the browser must assume a face may contain any glyph, so an
 // English-only screen downloads the 43 KB Arabic subset just to draw digits.
-console.log('\n=== each face declares unicode-range ===');
+/*
+ * Counted per FAMILY × weight × subset, not as a total.
+ *
+ * The original assertion was "eight faces", which silently encoded one family.
+ * Adding the second family then reported a failure that read like a defect
+ * when it was the assertion that was stale — and an assertion phrased as a
+ * magic number is one that has to be edited by hand every time the design
+ * system gains a tier.
+ *
+ * So the property is stated instead: each declared family must have a face for
+ * every weight it declares, in both subsets.
+ */
+console.log('\n=== each family is complete ===');
 const faces = [...css.matchAll(/@font-face\s*\{[^}]*\}/g)].map((m) => m[0]);
-check('eight faces are declared (4 weights x 2 subsets)', faces.length === 8,
-  `found ${faces.length}`);
+
+const families = new Map<string, { weights: Set<string>; subsets: Set<string> }>();
+for (const face of faces) {
+  const family = /font-family:\s*'([^']+)'/.exec(face)?.[1];
+  const weight = /font-weight:\s*(\d+)/.exec(face)?.[1];
+  const subset = /\/fonts\/[a-z]*-?(arabic|latin)-/.exec(face)?.[1];
+  if (!family || !weight || !subset) continue;
+  const entry = families.get(family) ?? { weights: new Set(), subsets: new Set() };
+  entry.weights.add(weight);
+  entry.subsets.add(subset);
+  families.set(family, entry);
+}
+
+check('both families are declared', families.size === 2,
+  [...families.keys()].join(', '));
+
+/**
+ * The weights each family actually ships, as a subset of what the design
+ * system asks for.
+ *
+ * Tajawal is issued in 400/500/700 only — there is no 600 cut. A `@font-face`
+ * for 600 would not be wrong, the browser would simply SYNTHESIS it by
+ * smearing the neighbours, and a synthesised Arabic weight is visibly wrong in
+ * a way no test reports: it is the "font looks bad" complaint with no cause.
+ *
+ * So the expected set is per family, and the assertion is that each declared
+ * weight is one this family really has. `headings` resolve to 700, which Tajawal
+ * does ship, so the heading tier is unaffected.
+ */
+const FAMILY_WEIGHTS: Record<string, number[]> = {
+  'IBM Plex Sans Arabic': [400, 500, 600, 700],
+  'Tajawal': [400, 500, 700],
+};
+
+for (const [family, { weights, subsets }] of families) {
+  check(`${family} declares an Arabic and a Latin subset`,
+    subsets.has('arabic') && subsets.has('latin'),
+    [...subsets].join(', '));
+
+  const expected = FAMILY_WEIGHTS[family];
+  if (!expected) {
+    check(`${family} is a known family`, false, 'add it to FAMILY_WEIGHTS');
+    continue;
+  }
+
+  // No synthesised weights: every declared face must be a real cut.
+  for (const w of weights) {
+    check(`${family} declares only shipped weights (${w})`,
+      expected.includes(Number(w)), `expected one of ${expected.join(', ')}`);
+  }
+
+  // And no missing ones, or the browser synthesises in the other direction.
+  for (const w of expected) {
+    check(`${family} declares weight ${w}`, weights.has(String(w)),
+      `declares ${[...weights].sort().join(', ')}`);
+  }
+}
+
 for (const face of faces) {
   const w = /font-weight:\s*(\d+)/.exec(face)?.[1];
-  const subset = /\/fonts\/(arabic|latin)-/.exec(face)?.[1];
-  check(`weight ${w} ${subset} declares unicode-range`, /unicode-range:/.test(face));
+  const family = /font-family:\s*'([^']+)'/.exec(face)?.[1];
+  const subset = /\/fonts\/[a-z]*-?(arabic|latin)-/.exec(face)?.[1];
+  check(`${family} ${w} ${subset} declares unicode-range`, /unicode-range:/.test(face));
 }
-check('the Arabic face covers the Arabic block (U+0600-06FF)',
-  faces.some((f) => f.includes('/fonts/arabic-') && /unicode-range:[^;]*U\+0600-06FF/.test(f)));
-check('the Latin face covers ASCII (U+0000-00FF)',
-  faces.some((f) => f.includes('/fonts/latin-') && /unicode-range:[^;]*U\+0000-00FF/.test(f)));
+
+check('an Arabic face covers the Arabic block (U+0600-06FF)',
+  faces.some((f) => /arabic-/.test(f) && /unicode-range:[^;]*U\+0600-06FF/.test(f)));
+check('a Latin face covers ASCII (U+0000-00FF)',
+  faces.some((f) => /latin-/.test(f) && /unicode-range:[^;]*U\+0000-00FF/.test(f)));
 
 // ── 5. The offline till keeps its typeface ────────────────────────────────
 // This product is offline-first; a font that only exists on first paint is a
@@ -150,14 +220,53 @@ for (const f of onDisk) {
 check('sw.js cache name is versioned',
   /const CACHE_NAME = 'dypos-offline-v[\d.]+'/.test(sw));
 
-// ── 6. The font is actually applied ───────────────────────────────────────
-// Self-hosting the files proves nothing if no rule selects the family.
-console.log('\n=== the family is applied to the document ===');
+// ── 6. The families are actually applied ─────────────────────────────────
+// Self-hosting the files proves nothing if no rule selects them.
+//
+// The heading tier is asserted as an ELEMENT rule rather than a per-component
+// class: ~40 screens each opting in separately is a design that stays
+// consistent only until someone writes the next one. An element selector is
+// what makes the pairing hold on a screen nobody has opened yet.
+console.log('\n=== the families are applied ===');
 const bodyRule = /body\s*\{[^}]*\}/.exec(css)?.[0] ?? '';
-check('body sets font-family to the self-hosted family first',
-  /font-family:\s*'IBM Plex Sans Arabic'/.test(bodyRule));
+check('body resolves the sans token', /font-family:\s*var\(--font-sans\)/.test(bodyRule));
 check('a fallback stack is still declared for a missing file',
-  /font-family:[^;]*,\s*[^;]*,/.test(bodyRule));
+  /font-family:[^;]*,\s*[^;]*,/.test(css));
+
+const headingRule = /h1,\s*h2,\s*h3,\s*h4,\s*h5,\s*h6\s*\{[^}]*\}/.exec(css)?.[0] ?? '';
+check('headings resolve the display token (Tajawal)',
+  /font-family:\s*var\(--font-display\)/.test(headingRule));
+
+check('the display token names Tajawal first',
+  /--font-display:\s*'Tajawal'/.test(css));
+check('the sans token names IBM Plex Sans Arabic first',
+  /--font-sans:\s*'IBM Plex Sans Arabic'/.test(css));
+check('a numeric token exists for figures', /--font-numeric:/.test(css));
+
+// ── 7. Numerals are Latin even inside Arabic text ─────────────────────────
+// This is a bidi property, not a preference. Under dir="rtl" a digit run can be
+// reordered against its Arabic neighbours, so "من 12 إلى 5" renders with the
+// ends swapped unless the number is isolated. Nothing fails when that happens —
+// the number is simply wrong on screen — so it is asserted here.
+console.log('\n=== numerals are Latin and bidi-safe ===');
+const numericRule = /\.num,\s*\.text-numeric\s*\{[^}]*\}/.exec(css)?.[0] ?? '';
+check('figures declare unicode-bidi: isolate',
+  /unicode-bidi:\s*isolate/.test(numericRule));
+check('figures pin direction: ltr so 1,234.50 cannot reorder',
+  /direction:\s*ltr/.test(numericRule));
+check('figures use tabular figures', /tabular-nums/.test(numericRule));
+check('body pins lining Latin digits as the default',
+  /font-variant-numeric:[^;]*lining-nums/.test(cssCode));
+
+// The Latin subsets are what actually draw those digits, so a font without a
+// Latin face would silently fall back for every number on screen.
+check('the display face has a Latin subset', css.includes('/fonts/tajawal-latin-'));
+check('the body face has a Latin subset', css.includes('/fonts/latin-'));
+
+// Tajawal is preloaded at the weight headings actually use. Preloading 400
+// while headings render at 700 buys nothing and costs a second round trip.
+check('index.html preloads the display face at 700',
+  /preload[^>]*tajawal-arabic-700/.test(htmlCode));
 
 console.log(`\n${fail === 0 ? '✔' : '✘'} ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

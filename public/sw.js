@@ -39,6 +39,18 @@ const ASSETS_TO_CACHE = [
   '/fonts/latin-600.woff2',
   '/fonts/arabic-700.woff2',
   '/fonts/latin-700.woff2',
+  /*
+   * Tajawal, the heading face. Pre-cached for the same reason as the family
+   * above: a heading is the first thing on every screen, and if it falls back
+   * to a system font the hierarchy collapses on exactly the surfaces where a
+   * cashier is deciding how fast to move.
+   */
+  '/fonts/tajawal-arabic-400.woff2',
+  '/fonts/tajawal-latin-400.woff2',
+  '/fonts/tajawal-arabic-500.woff2',
+  '/fonts/tajawal-latin-500.woff2',
+  '/fonts/tajawal-arabic-700.woff2',
+  '/fonts/tajawal-latin-700.woff2',
 ];
 
 self.addEventListener('install', (event) => {

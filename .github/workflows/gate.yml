@@ -291,7 +291,7 @@ database:
           # Google Fonts, so a till on a filtered connection fell back to a
           # system font and the whole design stopped matching itself — with no
           # error anywhere, which is why it reached customers.
-          for f in arabic-400 latin-400 arabic-600 latin-600; do
+          for f in arabic-400 latin-400 tajawal-arabic-700 tajawal-latin-700; do
             ct=$(curl -s -o /dev/null -w '%{http_code} %{content_type}' "$BASE/fonts/$f.woff2")
             printf '%-56s %s\n' "$BASE/fonts/$f.woff2" "$ct"
             case "$ct" in "200 font/woff2"|"200 application/font"*) ;; *) fail=1 ;; esac

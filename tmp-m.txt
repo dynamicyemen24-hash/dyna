@@ -1,0 +1,50 @@
+feat(typography): Tajawal for headings, and numerals that are always Latin
+
+Two requests, both delivered, both asserted in CI rather than eyeballed.
+
+HEADINGS — TAJAWAL
+Tajawal is now the display face for h1-h6, with IBM Plex Sans Arabic for
+running text. The pairing is functional: Tajawal is a geometric Kufi face
+built for short strings at large sizes, which is exactly what a screen title
+or a KPI label is, while IBM Plex is drawn for dense small text and has the
+Arabic terminal forms that keep figures legible in a column.
+
+The binding is an ELEMENT selector, not a class added per screen. That
+matters for how the design survives: asking ~40 screens to each opt in
+produces a hierarchy that holds only until someone writes the next screen,
+whereas h1..h6 holds on screens nobody has opened yet. A utility class per
+component would also have been the thing someone forgets.
+
+Tajawal ships no 600 cut. Declaring one would make the browser synthesise it
+by smearing 500 and 700, and a synthesised Arabic weight is visibly wrong in
+the specific way that produced the original complaint, with nothing failing
+anywhere. So the suite asserts each family declares only weights it really
+ships, and the expected set is per family rather than one shared list.
+
+NUMERALS ARE LATIN, EVEN INSIDE ARABIC
+Arabic-Indic digits are what toLocaleString produces under an `ar` locale,
+and they are drawn for prose: they do not align vertically in a column, and a
+cashier scanning a price reads them more slowly than Latin digits.
+
+Worse, this is a real bidi defect rather than a preference. Under dir="rtl" a
+digit run is absorbed into the sentence's bidi run, so "من 12 إلى 5" can
+render with its two ends swapped. Nothing errors when that happens; the
+number is simply wrong on screen. `.num`/`.text-numeric` now set
+unicode-bidi: isolate and direction: ltr, and body pins lining-nums so a new
+screen cannot inherit the Arabic-Indic set from its locale. Buttons get the
+same treatment explicitly, since a quantity inside an Arabic button label is
+exactly the case the isolate exists for.
+
+The old @utility text-numeric was removed rather than edited: it could only
+carry the font and the figures, and it is not where the bidi rule belongs.
+Declaring the name twice would also have meant whichever Tailwind saw last
+silently won.
+
+Both families are vendored, pre-cached by the service worker and preloaded at
+the weight each actually renders, so an offline till gets the real typography
+on every screen rather than a fallback exactly where a heading decides how
+fast an operator moves.
+
+Verified live: 14 @font-face rules served from this origin, Tajawal and IBM
+Plex both 200 font/woff2, zero Google references, and sign-in still issues a
+session after the change.

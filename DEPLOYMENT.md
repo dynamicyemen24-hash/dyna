@@ -88,6 +88,43 @@ npm run migrate:status   # list applied/pending
 
 Additive and idempotent; recorded in `dypos.applied_migrations`.
 
+## Typography
+
+Two families, both **self-hosted** in `public/fonts/` — there is no Google Fonts
+`<link>` anywhere, and `npm run test:typography` fails the build if one returns.
+
+| Role | Family | Weights |
+|---|---|---|
+| Headings (`h1`–`h6`) | Tajawal | 400 · 500 · 700 |
+| Body, labels, tables | IBM Plex Sans Arabic | 400 · 500 · 600 · 700 |
+
+The split is functional, not decorative. Tajawal is a geometric Kufi face built
+for short strings at large sizes — a screen title, a KPI label — while IBM Plex
+is drawn for dense small text and has the Arabic terminal forms that keep
+numbers legible in a column. Headings are bound by an **element selector**, not
+by adding a class to ~40 screens, so the tier also holds on the next screen
+nobody has written yet.
+
+Each family ships an Arabic and a Latin subset with `unicode-range` preserved
+from Google's own stylesheet, so a Latin-only screen downloads ~10 KB instead of
+~43 KB. Tajawal has **no 600 cut** — declaring one would make the browser
+synthesise it, which is visibly wrong for Arabic and reported by no test; the
+typography suite asserts each family declares only weights it really ships.
+
+### Numerals are always Latin
+
+Even inside an Arabic sentence, and including on buttons. Two reasons:
+
+- An Arabic-Indic digit is drawn for prose, does not align vertically in a
+  column, and is measurably slower to scan than a Latin digit.
+- It is a real **bidi** hazard. Under `dir="rtl"` a digit run is absorbed into
+  the sentence's bidi run, so `من 12 إلى 5` can render with its ends swapped.
+
+`.num` / `.text-numeric` set `unicode-bidi: isolate` and `direction: ltr` to
+prevent that, and `body` pins `lining-nums` so a screen cannot inherit the
+Arabic-Indic set from its locale. Both are asserted in CI — nothing fails when a
+number mis-renders, it is simply wrong on screen.
+
 ## Credentials
 
 Two runtimes serve this product and they must agree byte-for-byte, because
