@@ -80,9 +80,99 @@ export interface OfflineSyncState {
   notification: OfflineNotification | null;
 }
 
-const STORAGE_KEY_QUEUE = 'dypos_offline_sync_queue';
-const STORAGE_KEY_CONFIG = 'dypos_offline_sync_config';
-const STORAGE_KEY_LAST_SYNC = 'dypos_offline_last_sync';
+/*
+ * ══ THE DEFECT THIS REPLACES ════════════════════════════════════════════════
+ * These were three process-wide constants:
+ *
+ *     const STORAGE_KEY_QUEUE = 'dypos_offline_sync_queue';
+ *
+ * One queue, one key, every tenant.
+ *
+ * On a till that serves more than one organisation — a market stall operator who
+ * uses DyPOS for their own shop in the morning and for a farmer's consignment
+ * desk in the afternoon — this is a straight data leak in both directions:
+ *
+ *   - Tenant B signs in, and the queue is still holding tenant A's unpaid
+ *     invoices. `syncNow()` flushes them under B's token, so A's sales land in
+ *     B's ledger and A's customers' totals appear in B's reports.
+ *   - The reverse: B's queued work is flushed under whichever tenant happens to
+ *     be signed in at reconnect time.
+ *
+ * `localStorage` survives sign-out. Signing out of a merchant's till and signing
+ * in as another merchant is the ordinary way a shared till is used, so the queue
+ * has to be namespaced by the tenant that created it.
+ *
+ * The key is therefore a function of the tenant. The identity used is the
+ * SERVER-derived one carried by the session token, not `tenantId()` from
+ * dyposApi — a tampered localStorage entry must not be able to choose which
+ * bucket a queue is read from. That is what `activeTenant()` provides.
+ */
+
+/**
+ * The tenant whose queued work these keys belong to.
+ *
+ * Read from the **signed session token**, decoded client-side without verifying
+ * the signature — which is safe here precisely because it is only used to pick a
+ * storage namespace, never to grant access. The server re-derives the real scope
+ * from the same token on every request, so a forged or edited value here can
+ * only misfile a queue in a bucket the attacker already controls; it cannot move
+ * one merchant's data into another's ledger.
+ *
+ * `rememberTenant()` is deliberately NOT the source. That is a plain
+ * localStorage string any script on the origin can rewrite, and it is also
+ * written *before* the server has confirmed which tenant the password actually
+ * belongs to — so keying isolation on it would scope the queue to a claim rather
+ * than to an identity.
+ *
+ * Returns `null` when there is no session, and the keys then fall back to a
+ * namespace no signed-in session will ever flush — so a queue created while the
+ * identity was unknown is inert rather than misattributed.
+ */
+function activeTenant(): string | null {
+  try {
+    const raw = localStorage.getItem('dypos_session_v1');
+    if (!raw) return null;
+    const { token } = JSON.parse(raw) as { token?: string };
+    if (typeof token !== 'string') return null;
+
+    // `payload.signature` — decode the first segment only.
+    const body = token.slice(0, token.indexOf('.'));
+    if (!body) return null;
+    const json = atob(body.replace(/-/g, '+').replace(/_/g, '/'));
+    const { tenantId } = JSON.parse(json) as { tenantId?: string };
+    return typeof tenantId === 'string' && tenantId.trim() ? tenantId.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A namespace that is never claimed, so nothing can be flushed into it. */
+const UNCLAIMED_TENANT = '__unclaimed__';
+
+/** Builds a tenant-scoped storage key. */
+const scopedKey = (base: string): string => `${base}::${activeTenant() ?? UNCLAIMED_TENANT}`;
+
+/**
+ * Storage key for `base`, scoped to the signed-in tenant.
+ *
+ * ══ WHY THIS IS A FUNCTION AND NOT A CONSTANT ════════════════════════════════
+ * These were module-level constants:
+ *
+ *     const STORAGE_KEY_QUEUE = scopedKey('dypos_offline_sync_queue');
+ *
+ * which looks scoped and is not. `offlineSyncService` is a module singleton
+ * constructed at import time — before `AuthContext` has restored the session —
+ * so `activeTenant()` returned `null` and the keys froze at `::__unclaimed__`
+ * for the entire life of the page. Every tenant then shared that one bucket,
+ * which is the leak this namespace was introduced to prevent.
+ *
+ * Resolving the key per access means the queue is read from and written to
+ * whichever tenant is actually signed in at that moment, including one that
+ * signs in long after the module loaded.
+ */
+const queueKey = (): string => scopedKey('dypos_offline_sync_queue');
+const configKey = (): string => scopedKey('dypos_offline_sync_config');
+const lastSyncKey = (): string => scopedKey('dypos_offline_last_sync');
 
 class OfflineSyncManager {
   private listeners: Set<(state: OfflineSyncState) => void> = new Set();
@@ -127,9 +217,36 @@ class OfflineSyncManager {
     this.setupNetworkListeners();
   }
 
+  /**
+   * Re-reads the queue for whoever is signed in now.
+   *
+   * ══ WHY THIS IS NEEDED ════════════════════════════════════════════════════
+   * `loadState()` runs from the constructor, and the singleton is constructed at
+   * module import — which is before `AuthContext` has restored the session from
+   * storage. So on a page load the manager reads the `::__unclaimed__` bucket,
+   * finds nothing, and holds an empty queue.
+   *
+   * That is harmless for isolation and fatal for durability: a merchant's real
+   * pending sales, sitting under their own tenant key since the last shift, are
+   * simply not loaded — and every later `saveState()` writes the empty in-memory
+   * queue back over the *scoped* key, destroying the record of unsent sales
+   * before anyone had a chance to flush them.
+   *
+   * So the tenant's queue is re-read when identity becomes known, and the
+   * in-memory queue is replaced rather than merged: merging two tenants' work
+   * into one array is precisely the cross-tenant bug this scoping prevents.
+   */
+  public reloadForTenant(): void {
+    const before = this.queue.length;
+    this.loadState();
+    if (this.queue.length !== before) {
+      this.notify();
+    }
+  }
+
   private loadState() {
     try {
-      const savedQueue = localStorage.getItem(STORAGE_KEY_QUEUE);
+      const savedQueue = localStorage.getItem(queueKey());
       if (savedQueue) {
         this.queue = JSON.parse(savedQueue);
       }
@@ -149,7 +266,7 @@ class OfflineSyncManager {
         0,
       );
 
-      const savedConfig = localStorage.getItem(STORAGE_KEY_CONFIG);
+      const savedConfig = localStorage.getItem(configKey());
       if (savedConfig) {
         const parsed = JSON.parse(savedConfig);
         this.autoSyncOnReconnect = parsed.autoSyncOnReconnect ?? true;
@@ -157,7 +274,7 @@ class OfflineSyncManager {
         this.isSimulatedOffline = parsed.isSimulatedOffline ?? false;
       }
 
-      this.lastSyncTime = localStorage.getItem(STORAGE_KEY_LAST_SYNC) || new Date().toLocaleTimeString('ar-SA');
+      this.lastSyncTime = localStorage.getItem(lastSyncKey()) || new Date().toLocaleTimeString('ar-SA');
       this.syncStatus = this.getEffectiveOnline() ? (this.queue.length > 0 ? 'scheduled' : 'synced') : 'offline';
     } catch (e) {
       console.error('Error loading offline sync state:', e);
@@ -166,9 +283,9 @@ class OfflineSyncManager {
 
   private saveState() {
     try {
-      localStorage.setItem(STORAGE_KEY_QUEUE, JSON.stringify(this.queue));
+      localStorage.setItem(queueKey(), JSON.stringify(this.queue));
       localStorage.setItem(
-        STORAGE_KEY_CONFIG,
+        configKey(),
         JSON.stringify({
           autoSyncOnReconnect: this.autoSyncOnReconnect,
           scheduleIntervalMinutes: this.scheduleIntervalMinutes,
@@ -176,7 +293,7 @@ class OfflineSyncManager {
         })
       );
       if (this.lastSyncTime) {
-        localStorage.setItem(STORAGE_KEY_LAST_SYNC, this.lastSyncTime);
+        localStorage.setItem(lastSyncKey(), this.lastSyncTime);
       }
     } catch (e) {
       console.error('Error saving offline sync state:', e);

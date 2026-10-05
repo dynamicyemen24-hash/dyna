@@ -73,6 +73,23 @@ jobs:
       - name: Constitution — no tenant data in shipped code
         run: npm run test:no-fake-data
 
+      # The same class of defect, one layer down: a scale that generates its own
+      # readings. The POS showed 1.45 kg on load from `Math.random()`, and a
+      # consignment screen computed what a named farmer is owed from it — all of
+      # it type-correct and passing every build.
+      - name: Hardware integrity — no peripheral is simulated
+        run: npm run test:hardware
+
+      # Every credential in the database was written by the Express path, while
+      # production traffic is served by the Cloudflare Worker. Those two files
+      # each implemented PBKDF2 themselves and disagreed on what the stored salt
+      # is — so the Worker rejected every correct password as invalid, for every
+      # account, and the only symptom was "invalid credentials". It type-checked,
+      # compiled and passed every other suite, because two functions with the
+      # same signature are allowed to disagree.
+      - name: Credentials verify in both runtimes
+        run: npm run test:credentials
+
       - name: Arabic text survives the round trip
         run: npm run test:encoding
 
@@ -234,5 +251,28 @@ database:
           check "$BASE/api/auth/unlock" 401
           # Settlement accounts must never be readable anonymously.
           check "$BASE/api/db/settlement/accounts" 401
+
+          # ── The two defects that reached customers ──────────────────────────
+          #
+          # A missing hashed asset used to come back 200 text/html, because
+          # `not_found_handling = "single-page-application"` answers ANY unmatched
+          # path with index.html. A stale client then got "MIME type text/html is
+          # not a supported stylesheet" and an unstyled page. It must be a 404.
+          missing=$(curl -s -o /dev/null -w '%{http_code}' \
+            "$BASE/assets/index-ThisFileDoesNotExist.css")
+          printf '%-56s %s\n' "$BASE/assets/<missing>" "$missing"
+          [ "$missing" = "404" ] || fail=1
+
+          # And a REAL asset of the CURRENT build must still be the real thing.
+          # A `200` here is worthless on its own — the HTML fallback is also 200 —
+          # so the content type is what is actually being asserted.
+          css=$(curl -s "$BASE/" | grep -o '/assets/index-[A-Za-z0-9_-]*\.css' | head -1)
+          if [ -n "$css" ]; then
+            ct=$(curl -s -o /dev/null -w '%{content_type}' "$BASE$css")
+            printf '%-56s %s\n' "$BASE$css" "$ct"
+            case "$ct" in text/css*) ;; *) fail=1 ;; esac
+          else
+            echo "could not find the current stylesheet in index.html"; fail=1
+          fi
 
           exit $fail

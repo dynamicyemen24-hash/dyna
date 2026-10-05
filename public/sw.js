@@ -1,4 +1,13 @@
-const CACHE_NAME = 'dypos-offline-v3.0';
+/**
+ * ══ CACHE NAME IS A VERSION ════════════════════════════════════════════════
+ * Bumped to v4 together with the caching strategy below.
+ *
+ * It has to be bumped whenever the strategy changes, because `activate` deletes
+ * every cache whose name is not this one. Without that, a till that has been
+ * open since the previous release keeps serving the shell from the OLD
+ * strategy's cache indefinitely.
+ */
+const CACHE_NAME = 'dypos-offline-v4.0';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -68,26 +77,73 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Stale-while-revalidate or Network-first for app shell
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
-          if (
-            networkResponse &&
-            networkResponse.status === 200 &&
-            networkResponse.type === 'basic'
-          ) {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          return networkResponse;
-        })
-        .catch(() => cachedResponse);
+  const request = event.request;
+  if (request.method !== 'GET') return;
 
-      return cachedResponse || fetchPromise;
-    })
+  const url = new URL(request.url);
+
+  /*
+   * ══ CONTENT-HASHED ASSETS: CACHE-FIRST, AND CACHE PERMANENTLY ═════════════
+   * A Vite build puts a content hash in the filename, so the URL changes the
+   * moment the bytes change. The same URL therefore always means the same bytes,
+   * and there is nothing to revalidate — which is exactly why the response
+   * carries `immutable`. Cache-first here is correct and is what makes the app
+   * open instantly at a till.
+   */
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response && response.status === 200 && response.type === 'basic') {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  /*
+   * ══ EVERYTHING ELSE, INCLUDING THE SHELL: NETWORK-FIRST ═══════════════════
+   * The previous handler was cache-first for every non-API request, and that is
+   * what broke the site.
+   *
+   * `index.html` is NOT content-hashed — it is the file that names the hashed
+   * files. Serving it from cache meant a till that had been open across a deploy
+   * kept requesting the PREVIOUS build's asset names. Those assets are gone
+   * (new hashes), so the Worker answered with `index.html` itself under
+   * `not_found_handling = "single-page-application"`, served as `text/html`.
+   *
+   * The browser then refused it: "Refused to apply style ... MIME type
+   * ('text/html') is not a supported stylesheet MIME type". The page rendered
+   * unstyled and every subsequent asset failed the same way, and no amount of
+   * retyping credentials would have helped.
+   *
+   * Network-first fixes it: the shell always names assets that exist, because
+   * the shell came from the same deploy as those assets. The cache is still
+   * used when the network is gone, which is the entire point of an offline till.
+   */
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request).then((cached) => {
+        /*
+         * Offline with nothing cached. A bare 503 here is a dead end for a
+         * navigation request, so fall back to the shell, which `install`
+         * pre-cached and which boots the app into its own offline handling.
+         */
+        if (cached) return cached;
+        if (request.mode === 'navigate') return caches.match('/index.html');
+        return new Response('', { status: 503, statusText: 'Offline' });
+      }))
   );
 });

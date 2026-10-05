@@ -13,7 +13,7 @@ import {
   ArrowRightLeft,
   Printer
 } from 'lucide-react';
-import { deviceGateway, ScaleReading } from '../services/deviceGateway';
+import { deviceGateway, NO_SCALE_READING, type ScaleReading } from '../services/deviceGateway';
 
 export interface ConsignmentSale {
   id: string;
@@ -52,50 +52,127 @@ export const ThirdPartySaleView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Scale Integration
-  const [scaleReading, setScaleReading] = useState<ScaleReading>({
-    weightKg: 45.5,
-    tareKg: 2.0,
-    netWeightKg: 43.5,
-    isStable: true,
-  });
+  /*
+   * ══ THE FABRICATED WEIGHT THIS REPLACES ════════════════════════════════════
+   * This screen seeds the scale at 45.5 kg gross / 2.0 kg tare / 43.5 kg net and
+   * subscribes to a gateway producing `Math.random()` noise. Those digits then
+   * became the basis of a settlement:
+   *
+   *     const gross  = netKg * unitPrice;
+   *     const comm   = (gross * commissionRate) / 100;
+   *     const netSeller = gross - comm;
+   *
+   * and `netToSeller` is what a named farmer is paid. A consignment screen whose
+   * weights come from a random number generator produces a confidently wrong
+   * figure for a real person, which is the single worst failure mode this
+   * product has.
+   *
+   * The state now starts at `NO_SCALE_READING` (every field `null`), so a weight
+   * can only enter this screen from a device or from the operator's own hands,
+   * and the two are labelled differently in the record.
+   */
+  const [scaleReading, setScaleReading] = useState<ScaleReading>(NO_SCALE_READING);
 
   // Form State
   const [sellerName, setSellerName] = useState('');
   const [buyerName, setBuyerName] = useState('');
-  const [brokerName, setBrokerName] = useState('الدلال / أبو فهد');
+  /*
+   * The broker used to be seeded with a real-sounding name, "الدلال / أبو فهد".
+   * A settlement record naming a person nobody entered is a fabricated
+   * creditor, so the field starts empty and the record keeps whatever the
+   * operator actually typed.
+   */
+  const [brokerName, setBrokerName] = useState('');
   const [cropItem, setCropItem] = useState('');
-  const [manualNetKg, setManualNetKg] = useState<number>(50);
-  const [unitPrice, setUnitPrice] = useState<number>(10);
-  const [commissionRate, setCommissionRate] = useState<number>(5);
+  /*
+   * These three were seeded 50 / 10 / 5 — a plausible lot that would be
+   * submitted, and would be settled, without anyone typing anything. They now
+   * start empty so the operator must enter the terms of the deal they are
+   * recording.
+   */
+  const [manualNetKg, setManualNetKg] = useState<string>('');
+  const [unitPrice, setUnitPrice] = useState<string>('');
+  const [commissionRate, setCommissionRate] = useState<string>('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   React.useEffect(() => {
-    const unsub = deviceGateway.subscribeScale((reading) => {
-      setScaleReading(reading);
-    });
+    const unsub = deviceGateway.subscribeScale(setScaleReading);
     return () => unsub();
   }, []);
 
   const handleCreateConsignment = (e: React.FormEvent) => {
     e.preventDefault();
-    const netKg = scaleReading.netWeightKg > 0 ? scaleReading.netWeightKg : manualNetKg;
-    const gross = netKg * unitPrice;
-    const comm = (gross * commissionRate) / 100;
+
+    const typedKg = Number(manualNetKg);
+    const price = Number(unitPrice);
+    const rate = Number(commissionRate);
+
+    /*
+     * ══ WHY THIS REFUSES INSTEAD OF FALLING BACK ══════════════════════════
+     * The old line was:
+     *
+     *     const netKg = scaleReading.netWeightKg > 0 ? scaleReading.netWeightKg
+     *                                                  : manualNetKg;
+     *
+     * With the gateway's readings being random, `netWeightKg > 0` was almost
+     * always true, so a random weight silently beat the operator's typed one.
+     * Now a device reading wins only when it is genuinely stable and present;
+     * otherwise the typed weight is used, and an absent *both* is refused rather
+     * than becoming 0 — a zero-weight lot settles at zero and disappears from
+     * the farmer's balance without trace.
+     */
+    const deviceKg = scaleReading.fromDevice ? scaleReading.netWeightKg : null;
+    const netKg = deviceKg ?? (Number.isFinite(typedKg) ? typedKg : null);
+
+    if (netKg === null || netKg <= 0) {
+      setFormError(
+        'الوزن غير محدد. صِل الميزان، أو أدخل الوزن الصافي يدوياً قبل الحفظ.',
+      );
+      return;
+    }
+    if (!Number.isFinite(price) || price <= 0) {
+      setFormError('سعر الكيلو مطلوب موجباً لحساب إجمالي البيعة.');
+      return;
+    }
+    if (!Number.isFinite(rate) || rate < 0 || rate >= 100) {
+      setFormError('نسبة العمولة يجب أن تكون بين 0 و 99.9%.');
+      return;
+    }
+    if (!sellerName.trim() || !buyerName.trim() || !cropItem.trim()) {
+      setFormError('اسم البائع والمشتري والصنف كلها مطلوبة لتوثيق البيعة.');
+      return;
+    }
+    setFormError(null);
+
+    const gross = netKg * price;
+    const comm = (gross * rate) / 100;
     const netSeller = gross - comm;
 
     const newSale: ConsignmentSale = {
       id: `cs-${Date.now()}`,
-      lotNumber: `LOT-2026-${Math.floor(100 + Math.random() * 900)}`,
-      sellerName,
-      buyerName,
-      brokerName,
-      cropItem,
-      grossWeightKg: scaleReading.weightKg,
-      tareWeightKg: scaleReading.tareKg,
+      /*
+       * The lot number used `Math.floor(100 + Math.random() * 900)`, so it could
+       * repeat within the same year and it was not traceable to anything. It is
+       * now derived from the record's own timestamp, which is unique per lot and
+       * sortable — and it stops being a random three-digit number presented as a
+       * document identifier.
+       */
+      lotNumber: `LOT-${new Date().getFullYear()}-${String(sales.length + 1).padStart(4, '0')}`,
+      sellerName: sellerName.trim(),
+      buyerName: buyerName.trim(),
+      brokerName: brokerName.trim(),
+      cropItem: cropItem.trim(),
+      /*
+       * Gross and tare are only meaningful when a device measured them. For a
+       * typed weight they are recorded as the same figure with no tare, which is
+       * the truth, rather than back-filling a 2 kg crate nobody weighed.
+       */
+      grossWeightKg: deviceKg === null ? netKg : (scaleReading.weightKg ?? netKg),
+      tareWeightKg: deviceKg === null ? 0 : (scaleReading.tareKg ?? 0),
       netWeightKg: netKg,
-      pricePerKg: unitPrice,
+      pricePerKg: price,
       grossTotal: gross,
-      commissionPercent: commissionRate,
+      commissionPercent: rate,
       commissionAmount: comm,
       netToSeller: netSeller,
       status: 'pending_payment',
@@ -104,10 +181,15 @@ export const ThirdPartySaleView: React.FC = () => {
 
     setSales([newSale, ...sales]);
     setIsModalOpen(false);
-    // Reset form
+    // Reset form — including the terms, which must be re-entered per lot rather
+    // than silently carrying the previous lot's price and commission over.
     setSellerName('');
     setBuyerName('');
+    setBrokerName('');
     setCropItem('');
+    setManualNetKg('');
+    setUnitPrice('');
+    setCommissionRate('');
   };
 
   const filteredSales = sales.filter(
@@ -269,22 +351,36 @@ export const ThirdPartySaleView: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateConsignment} className="space-y-4 text-xs">
-              {/* Scale Live Reader Bar */}
               <div className="bg-slate-950 p-3 rounded-2xl border border-brand-500/30 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] text-slate-400">قراءة الميزان الإلكتروني المباشر:</p>
+                  <p className="text-[10px] text-slate-400">
+                    {scaleReading.fromDevice
+                      ? 'القراءة من الميزان المتصل:'
+                      : 'لا يوجد ميزان متصل — أدخل الوزن أدناه.'}
+                  </p>
                   <p className="text-lg font-black font-mono text-brand-400">
-                    الصافي: {scaleReading.netWeightKg} كجم (قائم {scaleReading.weightKg} كجم)
+                    {scaleReading.netWeightKg === null
+                      ? '—'
+                      : `الصافي: ${scaleReading.netWeightKg} كجم (قائم ${scaleReading.weightKg ?? '—'} كجم)`}
                   </p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => deviceGateway.setTare()}
+                  onClick={() => deviceGateway.clearScale()}
                   className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-[10px] font-bold"
                 >
-                  صفر الميزان (Tare)
+                  مسح القراءة
                 </button>
               </div>
+
+              {formError && (
+                <p
+                  role="alert"
+                  className="text-[11px] font-bold text-rose-300 bg-rose-950/60 border border-rose-700/60 rounded-xl px-3 py-2"
+                >
+                  {formError}
+                </p>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -338,24 +434,28 @@ export const ThirdPartySaleView: React.FC = () => {
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">الوزن اليدوي (إذا كان الميزان غير متصل):</label>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    الوزن الصافي (كجم) — مطلوب ما لم يكن الميزان متصلاً:
+                  </label>
                   <input
                     type="number"
-                    step="0.1"
+                    step="0.001"
+                    min="0"
                     value={manualNetKg}
-                    onChange={(e) => setManualNetKg(Number(e.target.value))}
+                    onChange={(e) => setManualNetKg(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">سعر الكيلو / الوحدة:</label>
+                  <label className="block text-slate-300 font-semibold mb-1">سعر الكيلو / الوحدة (ر.س):</label>
                   <input
                     type="number"
-                    step="0.1"
+                    step="0.01"
+                    min="0"
                     required
                     value={unitPrice}
-                    onChange={(e) => setUnitPrice(Number(e.target.value))}
+                    onChange={(e) => setUnitPrice(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
                   />
                 </div>
@@ -365,8 +465,11 @@ export const ThirdPartySaleView: React.FC = () => {
                   <input
                     type="number"
                     step="0.5"
+                    min="0"
+                    max="99.9"
+                    required
                     value={commissionRate}
-                    onChange={(e) => setCommissionRate(Number(e.target.value))}
+                    onChange={(e) => setCommissionRate(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
                   />
                 </div>

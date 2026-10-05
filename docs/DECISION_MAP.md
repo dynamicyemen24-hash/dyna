@@ -200,6 +200,80 @@ and is itself covered by the CI gate.
 | 4 | MFA delivery is log-only | `MfaDeliverer` defaults to `logDeliverer` — a real random code, but delivered to the server log. Production must register an SMS/e-mail deliverer. |
 | 5 | Settlement accounts are not editable in the UI | `POST`/`PUT /api/db/settlement/accounts` exist and are permission-checked, but no screen exposes them yet, so a merchant still cannot configure one from the app. |
 
+## P7 — The scale invented its own readings, and a settlement was computed from them (FIXED)
+
+The most expensive defect this project has shipped, and it produced no error,
+no type warning, and a green build throughout.
+
+| Where | What it actually did |
+|---|---|
+| `deviceGateway` constructor | `setInterval` every 1500 ms, `weight = weight + (Math.random() - 0.5) * 0.02`, **starting at 1.45 kg** — a "live" reading that drifted forever |
+| `scaleProtocolHAL` constructor | `startSimulation()`, status `'simulated'`, seeded `1.45` |
+| **`catch` on both connections** | `this.startSimulation()` — so a scale that *failed to pair* restored the fiction |
+| `sendTareCommand` / `sendZeroCommand` | mutated the simulated reading, so a tare "worked" on hardware that did not exist |
+| `openCashDrawer()` / `printReceiptEscPos()` | `console.log(...)` then `return true` |
+| `POSView`, `ThirdPartySaleView`, `ScaleHALWidget` | seeded `1.45`, `45.5 / 2.0 / 43.5`, and `1.45` respectively |
+
+The till displayed **⚖ 1.450 كجم** on page load, before anything was placed on
+anything. And `ThirdPartySaleView` turned those invented digits into money owed to
+a named person:
+
+```ts
+const netKg = scaleReading.netWeightKg > 0 ? scaleReading.netWeightKg : manualNetKg;
+const gross = netKg * unitPrice;
+const netSeller = gross - (gross * commissionRate) / 100;   // what the farmer is paid
+```
+
+With `netWeightKg` being random noise, `> 0` was almost always true, so the
+**random weight silently beat the operator's typed one**. That screen exists to
+decide what a real farmer is owed, and it was deciding from a random number
+generator.
+
+### What replaced it
+
+1. **The reading type cannot hold a fabricated number.** `ScaleReading`'s fields
+   are `number | null`, with one frozen `NO_SCALE_READING`. This is the change
+   that matters: a re-introduced seed literal no longer compiles, and there is no
+   number for a screen to render when no device has spoken.
+2. **No simulation anywhere.** The HAL starts `disconnected`, holds `NO_FRAME`,
+   and a failed connection now *stays* disconnected and returns `{ ok: false,
+   reason }`. The `'simulated'` member survives in the union only so a stale
+   reference is a known type rather than an `any`; nothing sets it.
+3. **Real transports, completed rather than stubbed.** Web Serial frame
+   buffering (a scale sends many lines per second; each `read()` is not a frame),
+   and Bluetooth now actually subscribes to the Weight Measurement characteristic
+   and decodes it — previously it requested a device, declared success, and read
+   no notification at all.
+4. **A peripheral reports a verdict.** `openCashDrawer()` writes the real ESC/POS
+   pulse `1B 70 00 19 FA` and returns `{ ok: false, reason }` with no port open.
+   The POS renders that reason. It can no longer report success for a drawer that
+   did not move.
+5. **The settlement refuses instead of defaulting.** No device weight *and* no
+   typed weight is an error message, not `0` — a zero-weight lot settles at zero
+   and vanishes from a farmer's balance. Pre-filled terms (50 kg / 10 / 5 %) and
+   the seeded broker `الدلال / أبو فهد` are gone; a lot number derived from
+   `Math.random()` was replaced with a sortable per-year sequence.
+
+Proof: `npm run test:hardware` (28 assertions), wired into `npm run ci` and the
+CI gate. It scans the source because the old code was *type-correct while lying* —
+`return true` satisfies `boolean`, `1.45` satisfies `number` — so only a property
+assertion could have caught it.
+
+## Dead code removed (each verified zero-referenced, not merely unused-looking)
+
+| File | Size | Why it was dead |
+|---|---|---|
+| `src/components/IntelligenceCenter.tsx.tail` | 8.5 KB | An orphaned fragment of the pre-P6 screen, **still containing the fabricated `45,200` / `128,400` / `4.2x`** that P6 removed from the real file |
+| `src/data/openingProducts.ts` | 70 KB | `OPENING_INVENTORY_PRODUCTS` had no importer; text was mojibake |
+| `src/data/openingInventory.json` | 67 KB | No importer; the same corrupted rows |
+| `src/services/i18nService.ts` | 12 KB | `i18n` was never imported — the UI is Arabic-first and hardcoded |
+| `src/hooks/usePWAInstall.ts` | 3.4 KB | Superseded by `services/installPrompt.ts` + `InstallPrompt.tsx`, which duplicate its platform detection |
+| `src/services/backupService.ts` | 4 KB | `executeCloudBackup` had no caller; `offlineSyncService` owns that path now |
+
+The `.tail` file is the one worth naming: it was a *committed* copy of the exact
+fake numbers a previous pass claimed to have removed. Nothing imported it, so no
+scan of the running app would ever have found it.
+
 ## Invariants added
 
 1. A correct password alone never yields a session token.

@@ -154,18 +154,116 @@ section('5. identity is monotonic, so a replay cannot become a second sale');
   check('5000 queued items produce no duplicate id', collisions === 0, `collisions=${collisions}`);
 }
 
-section('6. the persistence key is the one production actually reads');
+section('6. the persistence key is tenant-scoped');
 
 {
   const src = fs.readFileSync(
     path.join(process.cwd(), 'src/services/offlineSyncService.ts'), 'utf8',
   );
-  check('the queue is persisted under dypos_offline_sync_queue',
-    /STORAGE_KEY_QUEUE\s*=\s*'dypos_offline_sync_queue'/.test(src));
+  const code = stripComments(src);
+
+  /*
+   * ══ WHAT CHANGED AND WHY THE OLD ASSERTION WAS WRONG ═════════════════════
+   * This section asserted:
+   *
+   *     /STORAGE_KEY_QUEUE\s*=\s*'dypos_offline_sync_queue'/
+   *
+   * i.e. that the queue lives under ONE fixed key. That was not a neutral
+   * detail — it was the defect. `localStorage` survives sign-out, so on a till
+   * shared between two merchants the second sign-in inherited the first one's
+   * unpaid invoices and flushed them under its own token.
+   *
+   * The key is now a function of the tenant, and the tenant comes from the
+   * SIGNED token rather than from `rememberTenant()` — which is a plain
+   * localStorage string written before the server confirms which tenant the
+   * password belongs to, and is therefore a claim rather than an identity.
+   */
+  check('the queue key is scoped by tenant',
+    /dypos_offline_sync_queue::/.test(code) || /scopedKey\('dypos_offline_sync_queue'\)/.test(code),
+    'one global key is how one merchant is billed for another\'s sales');
+  check('the namespace falls back to something unclaimed',
+    /__unclaimed__/.test(code),
+    'work queued with no identity must be inert, not attributed to whoever signs in next');
+  check('the tenant is read from the signed session token',
+    /dypos_session_v1/.test(code) && /tenantId/.test(code));
+  check('the tenant is NOT taken from the rewritable localStorage claim',
+    !/scopedKey[\s\S]{0,400}getItem\('dypos_tenant'\)/.test(code),
+    'rememberTenant() is a client-writable string, not an identity');
+  check('the key is resolved per access, not frozen at module load',
+    /const queueKey = \(\)/.test(code) && /getItem\(queueKey\(\)\)/.test(code),
+    'a constant computed at import resolves before the session is restored');
   check('the queue is restored on construction',
-    /localStorage\.getItem\(STORAGE_KEY_QUEUE\)/.test(src));
+    /localStorage\.getItem\(queueKey\(\)\)/.test(code));
   check('a restored queue resumes the sequence above its max clientSeq',
-    /this\.clientSeq\s*=\s*this\.queue\.reduce\(/.test(src));
+    /this\.clientSeq\s*=\s*this\.queue\.reduce\(/.test(code));
+
+  /*
+   * The reload is not optional. Without it the singleton keeps the queue it read
+   * before sign-in — empty — and the next `saveState()` overwrites the merchant's
+   * real pending sales with that emptiness. Unsent invoices from a whole shift
+   * would be erased by a page refresh.
+   */
+  check('the queue is re-read once the tenant is known',
+    /public reloadForTenant\(\)/.test(code));
+  check('the reload replaces the queue rather than merging tenants',
+    /reloadForTenant[\s\S]{0,400}this\.loadState\(\)/.test(code)
+      && !/reloadForTenant[\s\S]{0,400}push\(\.\.\./.test(code));
+
+  const auth = fs.readFileSync(
+    path.join(process.cwd(), 'src/contexts/AuthContext.tsx'), 'utf8',
+  );
+  check('the queue is reloaded after sign-in, not only on restore',
+    (auth.match(/offlineSyncService\.reloadForTenant\(\)/g) ?? []).length >= 2,
+    'a shared till signs out of one merchant and into another');
+}
+
+section('6b. the queue actually has a transport');
+
+{
+  const transport = fs.readFileSync(
+    path.join(process.cwd(), 'src/services/offlineSyncTransport.ts'), 'utf8',
+  );
+  const app = fs.readFileSync(path.join(process.cwd(), 'src/App.tsx'), 'utf8');
+
+  /*
+   * ══ THE DEFECT THIS GUARDS ════════════════════════════════════════════════
+   * `registerSyncHandler` existed on the manager and was called from NOWHERE.
+   * Every `syncNow()` therefore took the "no handler registered" branch and
+   * returned `{ outcome: 'retry' }` for every item, so the queue never drained:
+   * the till said its sales were recorded, and none of them ever reached the
+   * ledger. `/api/db/sync-batch` was authenticated, tenant-scoped and
+   * server-recomputed — and entirely unreached.
+   *
+   * This is the single assertion that would have caught it, because nothing else
+   * in the system fails when a handler is missing: the build is green, the type
+   * is satisfied, and the queue correctly refuses to discard unsent work.
+   */
+  check('a transport module exists', transport.length > 0);
+  check('the handler is actually registered',
+    /registerSyncHandler/.test(transport),
+    'an unregistered handler means no offline sale ever reaches the server');
+  check('the application registers it',
+    /attachOfflineSyncTransport\(\)/.test(app),
+    'the transport must be wired at start-up or the queue is inert');
+  check('it targets the authenticated batch endpoint',
+    /\/api\/db\/sync-batch/.test(transport));
+  check('it sends the bearer token',
+    /Authorization/.test(transport) && /Bearer/.test(transport),
+    'an unauthenticated sync would be refused by the session gate');
+  check('it does NOT send a client-supplied tenant',
+    !/tenantId:\s*activeTenant/.test(transport)
+      && !/body:\s*JSON\.stringify\(\{[^}]*tenantId/.test(transport),
+    'the server derives the tenant from the token; a client claim is how this was cross-tenant');
+  check('a 5xx is retried rather than discarded',
+    /status >= 500[\s\S]{0,80}'retry'/.test(transport),
+    'a transport fault is not a verdict on the data');
+  check('an auth failure is not retried forever',
+    /401[\s\S]{0,120}'rejected'/.test(transport));
+  check('a row the server skipped is not reported as accepted',
+    /skipped/.test(transport) && /'rejected'/.test(transport),
+    'a silently dropped invoice is a sale the business made and lost');
+  check('the offline id travels so a retry is not a duplicate',
+    /id:\s*item\.id/.test(transport));
 }
 
 section('7. the handler contract can express a conflict at all');

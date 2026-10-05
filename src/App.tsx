@@ -4,6 +4,7 @@ import { AuthzProvider } from './contexts/AuthzContext';
 import { EntitlementProvider, useEntitlement } from './contexts/EntitlementContext';
 import { ToolsProvider } from './contexts/ToolsContext';
 import { offlineSyncService, type OfflineSyncState } from './services/offlineSyncService';
+import { attachOfflineSyncTransport } from './services/offlineSyncTransport';
 import { LoginView } from './components/LoginView';
 import { ChangePasswordView } from './components/ChangePasswordView';
 import InstallPrompt from './components/InstallPrompt';
@@ -11,6 +12,27 @@ import UpdateNotice from './components/UpdateNotice';
 import { MainLayout } from './components/MainLayout';
 import { Dashboard } from './components/Dashboard';
 import { ShiftOpeningDialog } from './components/ShiftOpeningDialog';
+
+/*
+ * ══ WHY THIS IS REGISTERED HERE ═══════════════════════════════════════════
+ * `offlineSyncService.registerSyncHandler` existed on the manager and was called
+ * from nowhere in the application. `syncNow()` therefore took its "no handler"
+ * branch on every attempt, so **every queued offline sale stayed queued
+ * forever** while the status bar alternated between "scheduled" and "offline"
+ * and the operator was told their sales were safely recorded. They were not on
+ * the server: the queue was a write-only log in one browser's localStorage, and
+ * every sale in it was lost to a cleared cache, a replaced disk, or a till sold
+ * second-hand.
+ *
+ * The endpoint it needed (`POST /api/db/sync-batch`) was already authenticated,
+ * already derived its tenant from the token, and already recomputed the totals
+ * server-side. Nothing connected the two. This module is that connection.
+ *
+ * It runs at MODULE LOAD, not inside an effect, because the queue can flush on
+ * the reconnect handler or on a timer — both of which can fire before React has
+ * mounted, and a sale settled in that window would be reported as unsent.
+ */
+attachOfflineSyncTransport();
 
 // Heavy screens are code-split so the initial bundle stays small.
 const MeasurementManager = lazy(() =>

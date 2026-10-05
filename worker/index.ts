@@ -60,7 +60,35 @@ const deriveKey = (
   ).then((key) => crypto.subtle.deriveBits(
     {
       name: 'PBKDF2',
-      salt: hexToBytes(saltHex) as unknown as BufferSource,
+
+      /*
+       * ══ THE SALT IS THE HEX *STRING*, NOT THE BYTES IT ENCODES ═══════════
+       * This must stay byte-identical to `server/passwords.ts`, which calls
+       * Node's `pbkdf2(password, salt, ...)` with `salt` as a STRING — so Node
+       * salts with the 32 ASCII characters of the hex.
+       *
+       * This line used to be `hexToBytes(saltHex)`, i.e. 16 raw bytes. Both
+       * forms are "the salt", so every reading, comment and test said they
+       * agreed, and they type-check, compile and pass lint identically. But
+       * PBKDF2 is not a normal hash: changing one bit of the SALT changes the
+       * entire output, so the two runtimes derived two unrelated keys from one
+       * password.
+       *
+       * The consequence was total and silent. Every credential in the database
+       * was written by the Express path (scripts/release-credentials.ts and the
+       * password-change routes both use its `hashPassword`), while production
+       * traffic is served by this Worker. So the Worker recomputed a different
+       * hash from the correct password, compared it against the stored value,
+       * and returned 401 — for every account, with any password, forever. The
+       * operator saw "invalid credentials" and, reasonably, kept retyping the
+       * password.
+       *
+       * Fixing it here rather than in Express is deliberate: the stored hashes
+       * are correct and there are customers behind them. Express is the
+       * authority on the on-disk format, so the edge conforms to it. Changing
+       * the Node side instead would invalidate every credential in production.
+       */
+      salt: encoder.encode(saltHex) as unknown as BufferSource,
       iterations,
       hash: 'SHA-512',
     },
@@ -317,9 +345,41 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Everything that is not the edge API is served from the static bundle,
-    // which keeps the SPA and the API on one origin (no CORS, no second host).
+    /*
+     * ══ NEVER LET A MISSING ASSET ANSWER WITH HTML ══════════════════════════
+     * `not_found_handling = "single-page-application"` in wrangler.toml makes the
+     * assets binding fall back to `index.html` for ANY unmatched path, so a
+     * request for a hashed asset this deploy does not contain comes back
+     * `200 text/html` — the very body a browser rejects when it asked for a
+     * stylesheet.
+     *
+     * That turns a stale client into a page that cannot load its own CSS, with an
+     * error ("MIME type text/html is not a supported stylesheet") that points
+     * nowhere near the cause.
+     *
+     * So the shell fallback is kept for real navigations, and an `/assets/*` miss
+     * is answered with a real 404. A client asking for a file this release does
+     * not have is told so plainly, and the 404 shows up in the Worker's logs as
+     * the missing-asset signal it is.
+     */
     if (!url.pathname.startsWith('/api/')) {
+      // Everything that is not the edge API is served from the static bundle,
+      // which keeps the SPA and the API on one origin (no CORS, no second host).
+      if (url.pathname.startsWith('/assets/')) {
+        const asset = await env.ASSETS.fetch(request);
+        // The SPA fallback is exactly what turns this into 200/HTML, so the
+        // content type is how "this asset does not exist" is recognised.
+        const servedHtml = (asset.headers.get('content-type') || '').includes('text/html');
+        if (asset.status === 200 && servedHtml) {
+          return new Response('Not found', {
+            status: 404,
+            headers: { 'content-type': 'text/plain; charset=utf-8' },
+          });
+        }
+        return asset;
+      }
+
+      // Everything else — including deep links like /settings — is the SPA shell.
       return env.ASSETS.fetch(request);
     }
 

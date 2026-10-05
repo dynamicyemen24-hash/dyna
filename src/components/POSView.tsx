@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Product, Category, CartItem, Customer, Transaction } from '../types';
 import { 
   Search, 
@@ -27,7 +27,7 @@ import {
 import { generateInvoicePDF } from '../utils/pdfGenerator';
 import { Currency } from '../types';
 import { DEFAULT_CURRENCIES, formatDualCurrency, loadTenantCurrencies, convertFromSAR } from '../services/currencyService';
-import { deviceGateway, ScaleReading } from '../services/deviceGateway';
+import { deviceGateway, NO_SCALE_READING, type ScaleReading } from '../services/deviceGateway';
 import { paymentGatewayService, PaymentGatewayProvider } from '../services/paymentGatewayService';
 import { useEntitlement } from '../contexts/EntitlementContext';
 import { branchLine, UNRESOLVED_LABEL } from '../services/tenantIdentity';
@@ -123,20 +123,60 @@ export const POSView: React.FC<POSViewProps> = ({
   const [currencies, setCurrencies] = useState<Currency[]>(DEFAULT_CURRENCIES);
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>(DEFAULT_CURRENCIES[1]); // USD default
 
-  // IoT Hardware Gateway Scale State
-  const [scaleReading, setScaleReading] = useState<ScaleReading>({
-    weightKg: 1.45,
-    tareKg: 0,
-    netWeightKg: 1.45,
-    isStable: true,
-  });
+  /*
+   * ══ THE FABRICATED READING THIS REPLACES ════════════════════════════════
+   * This state was seeded with a weight of 1.45 kg and `isStable: true`, and a
+   * subscription to a gateway whose "readings" were `Math.random()` noise. So the
+   * till showed "⚖ 1.450 كجم" on page load, before a single item was placed on
+   * anything — and clicking "tare" called a method that only subtracted the
+   * invented number from itself.
+   *
+   * It now starts at `NO_SCALE_READING`, whose fields are `null`. That is the
+   * whole fix: there is no number to display, so the screen displays a state
+   * instead, and the only way a weight appears is a device reporting one or an
+   * operator typing one.
+   */
+  const [scaleReading, setScaleReading] = useState<ScaleReading>(NO_SCALE_READING);
 
   useEffect(() => {
-    const unsub = deviceGateway.subscribeScale((reading) => {
-      setScaleReading(reading);
-    });
+    const unsub = deviceGateway.subscribeScale(setScaleReading);
     return () => unsub();
   }, []);
+
+  /**
+   * Opens the drawer and reports what actually happened.
+   *
+   * The button used to call a method that logged a line and returned `true`. It
+   * now shows the peripheral's own verdict, so "the drawer did not open" is
+   * visible to the operator instead of being silently true.
+   */
+  const [drawerMessage, setDrawerMessage] = useState<string | null>(null);
+  const handleOpenDrawer = useCallback(async () => {
+    const outcome = await deviceGateway.openCashDrawer();
+    setDrawerMessage(outcome.ok ? outcome.detail : outcome.reason);
+  }, []);
+
+  /**
+   * Applies a measured weight to a weighed line in the cart.
+   *
+   * Refuses to apply anything when neither a device nor an operator has produced
+   * a weight. The cart is owned by `App.tsx` and only exposes an increment
+   * callback, so the line is driven through the same path as a keypad press —
+   * there is no second, private way to write a quantity into the sale.
+   */
+  const applyScaleToCart = useCallback(() => {
+    const kg = scaleReading.netWeightKg;
+    if (kg === null || kg <= 0) return;
+
+    const weighed = cart.find((i) => i.product.unit === 'kg' || i.product.unit === 'كجم');
+    if (!weighed) return;
+
+    // `onUpdateQuantity` is a delta, so the target minus the current quantity is
+    // the increment. Rounding guards against a float landing on 4.9999999.
+    const delta = Math.round((kg - weighed.quantity) * 1000) / 1000;
+    if (delta === 0) return;
+    onUpdateQuantity(weighed.product.id, delta);
+  }, [scaleReading.netWeightKg, cart, onUpdateQuantity]);
 
   // Load custom currencies from Firestore
   useEffect(() => {
@@ -446,25 +486,51 @@ export const POSView: React.FC<POSViewProps> = ({
               <span className="hidden sm:inline">كاميرا</span>
             </button>
 
-            {/* IoT Digital Scale Live Reading Badge */}
+            {/*
+              The scale badge renders a NUMBER only when a weight actually
+              exists; otherwise it names the state. Showing "0.000" for a scale
+              that is not there is the same lie as showing "1.450".
+            */}
             <button
-              onClick={() => deviceGateway.setTare()}
-              className="bg-slate-900 border border-brand-500/40 text-brand-300 px-3 py-2 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 hover:bg-slate-800 transition-all"
-              title="انقر لتصفير الميزان (Tare)"
+              type="button"
+              onClick={applyScaleToCart}
+              disabled={scaleReading.netWeightKg === null}
+              className="bg-slate-900 border border-brand-500/40 text-brand-300 px-3 py-2 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title={
+                scaleReading.netWeightKg === null
+                  ? 'لا يوجد ميزان متصل — أدخل الكمية يدوياً'
+                  : (scaleReading.fromDevice
+                    ? 'إدراج الوزن المقيس في السلة'
+                    : 'إدراج الوزن المُدخل يدوياً في السلة')
+              }
             >
               <span>⚖️</span>
-              <span>{scaleReading.netWeightKg.toFixed(3)} كجم</span>
+              <span>
+                {scaleReading.netWeightKg === null
+                  ? 'بدون ميزان'
+                  : `${scaleReading.netWeightKg.toFixed(3)} كجم${scaleReading.fromDevice ? '' : ' (يدوي)'}`}
+              </span>
             </button>
 
-            {/* Cash Drawer Pulse Button */}
+            {/* Cash drawer — reports the peripheral's actual verdict. */}
             <button
-              onClick={() => deviceGateway.openCashDrawer()}
+              type="button"
+              onClick={() => void handleOpenDrawer()}
               className="bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shrink-0"
-              title="نبضة فتح درج النقود (ESC/POS)"
+              title="فتح درج النقود عبر منفذ ESC/POS"
             >
               <span>📥</span>
               <span className="hidden xl:inline">الدرج</span>
             </button>
+            {drawerMessage && (
+              <span
+                role="status"
+                className="text-[10px] font-bold text-amber-300 max-w-[16rem] truncate"
+                title={drawerMessage}
+              >
+                {drawerMessage}
+              </span>
+            )}
 
             {/* Multi-Currency Switcher */}
             <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1 shrink-0">

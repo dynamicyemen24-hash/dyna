@@ -5,6 +5,7 @@
  */
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { apiGet, apiPost, type ListResponse, tenantId, rememberTenant } from '../services/dyposApi';
+import { offlineSyncService } from '../services/offlineSyncService';
 
 export interface AuthUser {
   id: string;
@@ -67,6 +68,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem(SESSION_KEY);
       }
     }
+    /*
+     * The offline queue is namespaced per tenant, and its singleton was built at
+     * module import — before this effect ran, and therefore before the tenant was
+     * known. Without this reload the manager is holding an empty queue, and its
+     * next `saveState()` writes that emptiness over the merchant's real pending
+     * sales: unsent invoices from the previous shift would be erased on a page
+     * refresh without ever being transmitted.
+     *
+     * It runs on every mount because the session may or may not have been
+     * present, and re-reading an empty queue is a no-op.
+     */
+    offlineSyncService.reloadForTenant();
     setLoading(false);
   }, []);
 
@@ -120,6 +133,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setSession(res.session);
     localStorage.setItem(SESSION_KEY, JSON.stringify(res.session));
+
+    /*
+     * Load THIS tenant's offline queue now that the identity is known.
+     *
+     * A till is routinely shared between merchants: sign out of one and sign in
+     * as another on the same device. Without this the manager would still be
+     * holding the previous tenant's queue in memory and its next save would
+     * write that merchant's sales into the new merchant's storage namespace —
+     * the cross-tenant leak the scoping exists to prevent.
+     *
+     * The reload REPLACES the in-memory queue rather than merging, and only
+     * after the new session is persisted, so `activeTenant()` resolves to the
+     * tenant the server actually issued the token for.
+     */
+    offlineSyncService.reloadForTenant();
   }, []);
 
   const signOut = useCallback(() => {
