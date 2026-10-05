@@ -1,7 +1,7 @@
 /**
  * Credential portability between the two runtimes.
  *
- * Run:  npx tsx scripts/test-credential-portability.ts
+ * Run:  npm run test:credentials
  *
  * ══ WHAT THIS IS FOR ════════════════════════════════════════════════════════
  * Production is served by the Cloudflare Worker (`worker/index.ts`) while every
@@ -11,7 +11,7 @@
  *
  * Those two files each implemented PBKDF2-SHA512 independently and both looked
  * right. They disagreed on ONE thing: what the stored salt actually is. Express
- * passes the salt HEX STRING to Node's `pbdf2`, so Node salts with those 32
+ * passes the salt HEX STRING to Node's `pbkdf2`, so Node salts with those 32
  * ASCII characters; the Worker decoded the hex into 16 raw bytes.
  *
  * PBKDF2 is unlike an ordinary hash here — change one bit of the salt and the
@@ -22,8 +22,8 @@
  *
  * Neither the type-checker, the bundler, lint, nor any existing suite can catch
  * this. The two functions have identical types and different behaviour, and the
- * disagreement is only visible when one runtime's OUTPUT is fed to the other's
- * INPUT. So it is asserted here, across both directions, before a deploy.
+ * disagreement only appears when one runtime's OUTPUT is fed to the other's
+ * INPUT. So it is asserted here, in both directions, before a deploy.
  */
 import { hashPassword, verifyPassword } from '../server/passwords.js';
 import {
@@ -44,7 +44,7 @@ const SALT_HEX = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 
 console.log('\n=== a fixed salt must derive identically in both runtimes ===');
 const edgeHash = await hashPasswordEdge(PASSWORD, SALT_HEX, 210_000);
-check('Worker derives the documented PBKDF2-SHA512 value', /^[0-9a-f]{128}$/.test(edgeHash));
+check('Worker derives a 128-char PBKDF2-SHA512 digest', /^[0-9a-f]{128}$/.test(edgeHash));
 
 console.log('\n=== Express-written credential, Worker verification (PRODUCTION) ===');
 const stored = await hashPassword(PASSWORD);
@@ -63,7 +63,7 @@ check('Express verifies a Worker-written hash', await verifyPassword(PASSWORD, {
   hash: edgeHash, salt: SALT_HEX, iterations: 210_000,
 }));
 
-console.log('\n=== a user changing their own password on the edge ===');
+console.log('\n=== a user rotating their own password on the edge ===');
 // The path an operator actually takes: sign in on the Worker, then change the
 // password there. The new hash must still verify on Express afterwards, or the
 // account locks itself out of the on-premise path the moment it rotates.
