@@ -87,6 +87,10 @@ jobs:
       # account, and the only symptom was "invalid credentials". It type-checked,
       # compiled and passed every other suite, because two functions with the
       # same signature are allowed to disagree.
+      #
+      # The same suite also pins the iteration ceiling. Cloudflare THROWS above
+      # 100,000, so every stored credential was permanently unverifiable in
+      # production and sign-in returned 500 for everyone.
       - name: Credentials verify in both runtimes
         run: npm run test:credentials
 

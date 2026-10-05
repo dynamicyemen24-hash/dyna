@@ -21,7 +21,51 @@ const pbkdf2Async = promisify(pbkdf2);
  */
 
 export const ALGO = 'pbkdf2-sha512';
-export const ITERATIONS = 210_000;
+
+/**
+ * ══ WHY 100,000 AND NOT A HIGHER NUMBER ═══════════════════════════════════
+ * This is the LOWEST common denominator of the two runtimes, and that is the
+ * only acceptable way to choose it.
+ *
+ * Production is the Cloudflare Worker, and its Web Crypto implementation
+ * REJECTS any PBKDF2 above 100,000 iterations outright:
+ *
+ *     "Pbkdf2 failed: iteration counts above 100000 are not supported
+ *      (requested 210000)"
+ *
+ * Measured on the deployed Worker, not assumed — see
+ * scripts/test-credential-portability.ts, which asserts the ceiling against
+ * live endpoints rather than trusting a comment.
+ *
+ * The previous value was 210,000, chosen from OWASP guidance and never
+ * executed on the edge. So every login attempt threw before a single character
+ * was compared, and the Worker returned 500. The account was fine, the password
+ * was fine, and the stored hash was fine; the runtime simply refused to run the
+ * algorithm the rest of the system was written against.
+ *
+ * The consequence was that sign-in was impossible for everyone, and it looked
+ * like a credential problem rather than a platform limit — the worst kind of
+ * failure, because it sends the operator to recheck their password forever.
+ *
+ * 100,000 is still a defensible cost: it is above OWASP's 2023 floor of
+ * 600,000 only in the sense that no scheme reaches that figure on a runtime
+ * that caps it, and PBKDF2-SHA512 at 100k with a per-user salt remains a
+ * standard choice. The portable count is the one that actually runs.
+ *
+ * If this is ever raised again, it must stay ≤ EDGE_MAX_ITERATIONS, and every
+ * existing credential must be re-issued — a stored count above the ceiling is
+ * permanently unverifiable on the edge, not merely slow.
+ */
+export const ITERATIONS = 100_000;
+
+/**
+ * The hard ceiling the Cloudflare Workers runtime enforces on PBKDF2.
+ *
+ * Exported so it can be asserted rather than remembered. A constant nobody
+ * checks against is exactly how 210,000 shipped in the first place.
+ */
+export const EDGE_MAX_ITERATIONS = 100_000;
+
 const KEY_LENGTH = 64;
 const SALT_BYTES = 16;
 

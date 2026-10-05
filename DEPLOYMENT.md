@@ -87,3 +87,46 @@ npm run migrate:status   # list applied/pending
 ```
 
 Additive and idempotent; recorded in `dypos.applied_migrations`.
+
+## Credentials
+
+Two runtimes serve this product and they must agree byte-for-byte, because
+production is the Cloudflare Worker while every credential is written by the
+Express path. Three things have to match, and each has been a real outage:
+
+| Property | Rule | Consequence if it drifts |
+|---|---|---|
+| Salt | the **hex string**'s 32 ASCII bytes, not the bytes it decodes to | the edge derives a different key from the correct password → 401 forever |
+| Iterations | **≤ 100,000** | Cloudflare *throws* above that → 500 on every sign-in |
+| Shape | PBKDF2-SHA512, 128-char hex digest | silent fallback to a wrong path |
+
+Measured on the deployed Worker, not assumed:
+
+```
+100,000 -> 200
+210,000 -> 500 "Pbkdf2 failed: iteration counts above 100000 are not supported"
+```
+
+That ceiling is why `ITERATIONS` is 100,000 rather than a higher figure from
+guidance. A stored count above it is not "slow to verify" — it is **permanently
+unverifiable in production**, because the runtime throws before comparing a
+single character.
+
+Asserted by `npm run test:credentials` (13 assertions, both directions, plus a
+rotation performed on the edge). It is in `npm run ci`; do not remove it.
+
+### Re-issuing a credential the edge cannot run
+
+```
+npm run migrate:iterations
+```
+
+PBKDF2 is not re-derivable without the plaintext password, which the database
+does not hold — so this is a credential **reset**, not a transformation. Each
+affected account gets a new random password at the portable cost, is marked
+`must_change_password`, and the value is printed **once**. There is no default
+password and no silent downgrade. Accounts already portable are untouched, and
+throwaway `*_probe_*` accounts are deleted rather than handed out as logins.
+
+The script re-queries the table afterwards and exits non-zero if any row is
+still above the ceiling, so it cannot report success it has not earned.

@@ -22,6 +22,7 @@
     "ci": "npm run lint && npm run test:no-fake-data && npm run test:hardware && npm run test:credentials && npm run test:typography && npm run test:encoding && npm run test:offline && npm run test:theme && npm run test:primitives && npm run build",
     "ci:db": "npm run migrate:status && npm run test:gate && npm run test:tenant && npm run test:mfa && npm run test:unlock && npm run test:price && npm run test:kpi && npm run test:yemen && npm run test:offline && npm run test:saas-e2e",
     "migrate": "tsx scripts/migrate.ts",
+    "migrate:iterations": "tsx scripts/migrate-iteration-ceiling.ts",
     "migrate:status": "tsx scripts/migrate.ts --status",
     "preview": "vite preview --port 3000",
     "release:credentials": "tsx scripts/release-credentials.ts",

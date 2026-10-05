@@ -38,6 +38,24 @@ type Fetcher = { fetch(input: RequestInfo | URL): Promise<Response> };
 
 const encoder = new TextEncoder();
 
+/**
+ * The portable PBKDF2 cost, and the ceiling this runtime enforces.
+ *
+ * Cloudflare Workers' Web Crypto REFUSES (throws on) PBKDF2 above 100,000
+ * iterations. Measured on the deployed Worker, not assumed:
+ *
+ *     100,000 -> 200
+ *     210,000 -> 500 "iteration counts above 100000 are not supported"
+ *
+ * These must stay equal to `ITERATIONS` and `EDGE_MAX_ITERATIONS` in
+ * server/passwords.ts. That equality is asserted by
+ * scripts/test-credential-portability.ts — a constant duplicated in two
+ * runtimes is precisely the kind of value that drifts, and when it drifts the
+ * symptom is "invalid credentials" on every account.
+ */
+export const MAX_ITERATIONS = 100_000;
+const DEFAULT_ITERATIONS = MAX_ITERATIONS;
+
 export const hexToBytes = (hex: string): Uint8Array => {
   const clean = hex.trim();
   const out = new Uint8Array(clean.length >> 1);
@@ -127,14 +145,55 @@ export async function verifyPassword(
   }
   if (!stored.hash || !stored.salt) return false;
 
-  const iterations = Number(stored.iterations) || 210_000;
+  /*
+   * ══ A STORED COST THE RUNTIME CANNOT RUN IS NOT A SLOW HASH ══════════════
+   * Cloudflare's Web Crypto REJECTS PBKDF2 above 100,000 iterations by
+   * throwing — it does not clamp, and it does not return a wrong answer.
+   *
+   * Measured on the deployed Worker:
+   *     100,000 -> 200
+   *     210,000 -> 500 "Pbkdf2 failed: iteration counts above 100000
+   *                      are not supported (requested 210000)"
+   *
+   * So a row carrying 210,000 — which is what every credential in the database
+   * was written with — made sign-in throw for EVERY account before a single
+   * character was compared. The user saw a server error while the honest
+   * diagnosis was "this row cannot be verified on this platform".
+   *
+   * Returning `false` here would be a lie that routes the row into the
+   * bad-password path and increments the lockout counter. So it is reported as
+   * a defect, logged loudly, and reported to the caller as a server fault —
+   * which is the truth, and is actionable by an operator.
+   */
+  const iterations = Number(stored.iterations) || DEFAULT_ITERATIONS;
+  if (iterations > MAX_ITERATIONS) {
+    console.error(
+      `[dypos-auth] stored credential needs ${iterations} iterations but this `
+      + `runtime caps at ${MAX_ITERATIONS}. This account CANNOT sign in until it `
+      + `is re-issued — run scripts/migrate-iteration-ceiling.ts`,
+    );
+    throw new Error(
+      `credential requires ${iterations} iterations, above the portable `
+      + `maximum of ${MAX_ITERATIONS}`,
+    );
+  }
+
   const derived = await deriveKey(password, stored.salt, iterations);
   return timingSafeEqualHex(bytesToHex(derived), stored.hash);
 }
 
 export async function hashPasswordEdge(
-  password: string, saltHex: string, iterations = 210_000,
+  password: string, saltHex: string, iterations = DEFAULT_ITERATIONS,
 ): Promise<string> {
+  // Never write a credential this runtime could not later read. Clamping here
+  // would silently downgrade security; refusing makes the mistake visible at
+  // the point it is made.
+  if (iterations > MAX_ITERATIONS) {
+    throw new Error(
+      `refusing to write a credential at ${iterations} iterations: this `
+      + `runtime caps at ${MAX_ITERATIONS}`,
+    );
+  }
   return bytesToHex(await deriveKey(password, saltHex, iterations));
 }
 
@@ -675,7 +734,10 @@ async function authPasswordChange(
   if (!policy.ok) return json({ error: policy.problems[0], problems: policy.problems }, 422);
 
   const salt = randomHex(16);
-  const iterations = 210_000;
+  // The portable cost, not a literal. A hard-coded 210,000 here wrote
+  // credentials the edge can never read back — the same defect as the stored
+  // one, reached from the other direction.
+  const iterations = MAX_ITERATIONS;
   const hash = await hashPasswordEdge(next, salt, iterations);
 
   await getSql(env)`UPDATE dypos.users
