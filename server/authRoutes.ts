@@ -13,6 +13,8 @@ import {
   readMfaPolicy, mfaRequired, issueChallenge, verifyChallenge,
   getMfaDeliverer, redeemBreakGlass, issueBreakGlassGrant,
 } from './mfa.js';
+import { resolveExistingIdentity } from './enrollmentEngine.js';
+import { authRateLimit } from './rateLimit.js';
 
 /**
  * Tenant-wide MFA policy.
@@ -54,6 +56,8 @@ async function resolveLoginTenant(raw: unknown): Promise<{ tenantId: string } | 
 
   // No tenant named: keep the historical single-tenant behaviour. This is what
   // an existing client sends, and it must keep working unchanged.
+  // DEFAULT_TENANT kept: pre-auth bootstrap — no signed identity exists yet to
+  // derive a tenant from; the password must still verify inside this tenant.
   if (!requested) return { tenantId: DEFAULT_TENANT };
 
   const { rows } = await pool.query(
@@ -80,6 +84,40 @@ async function audit(
 }
 
 /**
+ * Rotation gate: a session whose password is still temporary may ONLY rotate
+ * it (`POST /api/auth/change-password`). Every other privileged auth-module
+ * operation (shift open, grant issue, resets by admins, credential/event reads)
+ * answers 403 until the rotation lands.
+ *
+ * WHY NOT A NARROWER TOKEN: `issueSessionToken` (server/sessions.ts) signs a
+ * fixed payload and every data route trusts that signature via the global gate
+ * (server/authz.ts) — both files are outside this change's scope, so the token
+ * shape cannot carry a "password-change-only" claim yet. Until it does, this
+ * per-route guard plus the client gate in `App.tsx` (forced ChangePasswordView)
+ * is the smallest change that keeps a pre-rotation token out of anything but
+ * the rotation itself. Full enforcement on data routes needs the claim above.
+ */
+async function requireRotatedPassword(req: any, res: any, next: any) {
+  try {
+    const userId = req.principal?.userId;
+    if (!userId) return next();
+    const { rows } = await pool.query(
+      `SELECT must_change_password FROM dypos.users WHERE id = $1`,
+      [userId],
+    );
+    if (rows[0]?.must_change_password) {
+      return res.status(403).json({
+        error: 'يجب تغيير كلمة المرور المؤقتة قبل استخدام هذه العملية',
+        mustChangePassword: true,
+      });
+    }
+    next();
+  } catch (e) {
+    next(e);
+  }
+}
+
+/**
  * Authentication routes.
  *
  * A login returns a session only after the password is verified with PBKDF2,
@@ -87,7 +125,13 @@ async function audit(
  * any business screen becomes reachable.
  */
 export function registerAuthRoutes(app: Express) {
-  app.post('/api/auth/login', asyncRoute(async (req, res) => {
+  /*
+   * Every pre-auth route below carries `authRateLimit`. The budget is per IP
+   * per route and counts 401/403 verdicts separately from raw traffic — see
+   * server/rateLimit.ts for why both numbers exist. A route in this file
+   * WITHOUT the limiter is a route an attacker can grind for free.
+   */
+  app.post('/api/auth/login', authRateLimit('login'), asyncRoute(async (req, res) => {
     const { username, password, branchId } = req.body || {};
     if (!username || !password) {
       return fail(res, 400, 'اسم المستخدم وكلمة المرور مطلوبان');
@@ -108,6 +152,8 @@ export function registerAuthRoutes(app: Express) {
     // same message. Anything more specific would turn this endpoint into a way
     // of discovering which customers use the product.
     if (!resolved) {
+      // DEFAULT_TENANT kept: the tenant is unknown, so no session/principal
+      // exists to derive one from; the audit row needs a non-null tenant.
       await audit(DEFAULT_TENANT, uname, 'login_failed', req, 'unknown_tenant');
       return fail(res, 401, GENERIC_AUTH_ERROR);
     }
@@ -131,7 +177,29 @@ export function registerAuthRoutes(app: Express) {
       return fail(res, 401, GENERIC_AUTH_ERROR);
     };
 
-    if (!user) return deny('unknown_user');
+    if (!user) {
+      const identityState = await resolveExistingIdentity({
+        tenantName: String((req.body || {}).tenantName || ''),
+        tenantCode: String((req.body || {}).tenantCode || ''),
+        username: uname,
+        email: String((req.body || {}).email || ''),
+        phone: String((req.body || {}).phone || ''),
+        branchName: String((req.body || {}).branchName || ''),
+        deviceFingerprint: String((req.body || {}).deviceFingerprint || ''),
+      });
+
+      if (identityState.state === 'EXISTING_USER_NO_ACCESS' || identityState.state === 'AMBIGUOUS_IDENTITY') {
+        await audit(loginTenant, uname, 'identity_conflict', req, identityState.reason);
+        return fail(res, 409, 'هوية المستخدم غير مؤكدة؛ يُرجى التحقق من بيانات المؤسسة أو التواصل مع المسؤول');
+      }
+
+      if (identityState.state === 'PENDING_VERIFICATION' || identityState.state === 'EXISTING_TENANT_NO_BRANCH') {
+        await audit(loginTenant, uname, 'identity_pending_verification', req, identityState.reason);
+        return fail(res, 403, 'الهوية تحتاج إلى تحقق إضافي قبل السماح بالدخول');
+      }
+
+      return deny('unknown_user');
+    }
     if (!user.is_active) return deny('inactive');
     if (isLocked(user.locked_until)) return deny('locked');
 
@@ -229,11 +297,17 @@ export function registerAuthRoutes(app: Express) {
      * browser, comparing against a constant in the shipped bundle. The session
      * was therefore already fully usable before — and regardless of — the code
      * the operator typed.
+     *
+     * The gate applies during forced rotation too (`must_change_password` does
+     * NOT skip it): a temporary password is the weakest credential in the
+     * system, so exempting exactly those accounts from the second factor would
+     * turn every forced rotation into an MFA bypass. The client already handles
+     * the challenge-then-rotate order (LoginView → 2FA → ChangePasswordView).
      */
     const policy = await readMfaPolicy(user.id, { requireForAll: mfaRequiredForAll() });
     const needsFactor = mfaRequired(policy, { requireForAll: mfaRequiredForAll() });
 
-    if (needsFactor && !user.must_change_password) {
+    if (needsFactor) {
       const issued = await issueChallenge(
         user.id, loginTenant, effectiveBranch ?? null, policy.digits,
       );
@@ -303,7 +377,7 @@ export function registerAuthRoutes(app: Express) {
    *
    * The response never echoes the code, and a wrong code never yields a token.
    */
-  app.post('/api/auth/mfa/verify', asyncRoute(async (req, res) => {
+  app.post('/api/auth/mfa/verify', authRateLimit('mfa-verify'), asyncRoute(async (req, res) => {
     const { challenge, code } = req.body || {};
     if (!challenge || !code) {
       return fail(res, 400, 'الرمز مطلوب');
@@ -316,6 +390,9 @@ export function registerAuthRoutes(app: Express) {
       // by design, and writing the attempted code into the username column would
       // turn the audit ledger into a list of (partly correct) codes. The reason
       // is recorded; the code never is.
+      // DEFAULT_TENANT kept: a failed challenge carries no verified identity,
+      // so there is no principal tenant to audit under (see mfa.ts — the row's
+      // tenant is only exposed on successful verification).
       await audit(DEFAULT_TENANT, 'mfa', 'mfa_failed', req, outcome.reason);
       // One message for every failure: an attacker must not be able to tell an
       // unknown challenge from a wrong code, nor learn how many tries remain.
@@ -339,6 +416,9 @@ export function registerAuthRoutes(app: Express) {
     );
     const row = user.rows[0];
     if (!row) return fail(res, 401, GENERIC_AUTH_ERROR);
+    // DEFAULT_TENANT kept: defensive fallback only — the tenant is read off the
+    // MFA-verified user row above; a null here fails closed downstream (the
+    // token would resolve no principal), it never widens scope.
     const userTenant = row.tenant_id || DEFAULT_TENANT;
 
     // Branch scope is re-read from RBAC, exactly as on the password step.
@@ -415,7 +495,7 @@ export function registerAuthRoutes(app: Express) {
    * double-click or a retried request cannot produce two float records for
    * one handover.
    */
-  app.post('/api/auth/shift/open', attachPrincipal, requirePermission('pos.use'), asyncRoute(async (req, res) => {
+  app.post('/api/auth/shift/open', attachPrincipal, requireRotatedPassword, requirePermission('pos.use'), asyncRoute(async (req, res) => {
     // `attachPrincipal` has already resolved and verified the identity, so the
     // tenant and the branch scope come from a signed token — not from a header
     // or a body field the caller chose.
@@ -489,17 +569,23 @@ export function registerAuthRoutes(app: Express) {
    * authorised supervisor, expires, is single-use, and is audited on both issue
    * and redemption.
    */
-  app.post('/api/auth/break-glass', asyncRoute(async (req, res) => {
+  app.post('/api/auth/break-glass', authRateLimit('break-glass'), asyncRoute(async (req, res) => {
     const { code } = req.body || {};
+    // DEFAULT_TENANT kept: pre-auth redemption — the caller holds no session by
+    // definition, so no principal tenant exists. The grant only authorises
+    // escalation (never opens a session) and is tenant-scoped in SQL (mfa.ts),
+    // so a foreign code simply does not match.
     const result = await redeemBreakGlass(
       String(code || ''),
       clientIp(req) || 'unknown',
       DEFAULT_TENANT,
     );
     if (!result.ok) {
+      // DEFAULT_TENANT kept: same pre-auth audit as above — no verified tenant yet.
       await audit(DEFAULT_TENANT, 'break_glass', 'break_glass_denied', req, result.reason);
       return fail(res, 401, result.message || GENERIC_AUTH_ERROR);
     }
+    // DEFAULT_TENANT kept: same pre-auth audit as above.
     await audit(DEFAULT_TENANT, 'break_glass', 'break_glass_redeemed', req);
     // The grant authorises escalation; it does not itself open a session, so the
     // caller must still present credentials.
@@ -511,16 +597,20 @@ export function registerAuthRoutes(app: Express) {
    * emergency access accountable instead of a backdoor.
    */
   app.post(
-    '/api/auth/break-glass/issue', attachPrincipal, requirePermission('auth.break_glass'),
+    '/api/auth/break-glass/issue', attachPrincipal, requireRotatedPassword, requirePermission('auth.break_glass'),
     asyncRoute(async (req, res) => {
       const reason = String(req.body?.reason || '').trim();
       if (!reason) return fail(res, 400, 'سبب الإصدار مطلوب — يُسجَّل في سجل التدقيق');
+      // Tenant from the issuer's SIGNED session, not the bootstrap default: a
+      // grant redeemed anywhere else must not match, and the audit row must sit
+      // in the issuing organisation's ledger.
+      const issuerTenant = req.principal!.tenantId;
       const grant = await issueBreakGlassGrant(
         // `readActor` is the server's own identity reader (see authz.ts) — the
         // grant must name a real issuer, not a client-supplied string.
-        DEFAULT_TENANT, readActor(req), reason,
+        issuerTenant, readActor(req), reason,
       );
-      await audit(DEFAULT_TENANT, 'break_glass', 'break_glass_issued', req, reason);
+      await audit(issuerTenant, 'break_glass', 'break_glass_issued', req, reason);
       res.json(grant);
     }),
   );
@@ -532,7 +622,7 @@ export function registerAuthRoutes(app: Express) {
    * under a forced rotation: without it, anyone at an unlocked terminal could
    * take the account over permanently.
    */
-  app.post('/api/auth/change-password', attachPrincipal, asyncRoute(async (req, res) => {
+  app.post('/api/auth/change-password', attachPrincipal, authRateLimit('change-password'), asyncRoute(async (req, res) => {
     const { currentPassword, newPassword, confirmPassword } = req.body || {};
     if (!currentPassword || !newPassword) {
       return fail(res, 400, 'كلمة المرور الحالية والجديدة مطلوبتان');
@@ -544,11 +634,17 @@ export function registerAuthRoutes(app: Express) {
       return fail(res, 400, 'كلمة المرور الجديدة يجب أن تختلف عن الحالية');
     }
 
+    // Tenant from the caller's SIGNED session (`attachPrincipal` verified it):
+    // the user row must belong to the organisation the token was issued for, so
+    // a session of tenant A can never rotate (or probe) a same-named account in
+    // tenant B. Deliberately NOT behind `requireRotatedPassword` — this IS the
+    // rotation path a pre-rotation token is allowed to reach.
+    const callerTenant = req.principal!.tenantId;
     const user = req.principal!.username;
     const { rows } = await pool.query(
       `SELECT id, password_hash, password_salt, password_iterations
        FROM dypos.users WHERE tenant_id = $1 AND username = $2`,
-      [DEFAULT_TENANT, user],
+      [callerTenant, user],
     );
     const u = rows[0];
     if (!u) return fail(res, 404, 'المستخدم غير موجود');
@@ -560,12 +656,12 @@ export function registerAuthRoutes(app: Express) {
       legacyDigest: u.password_salt ? null : u.password_hash,
     });
     if (!ok) {
-      await audit(DEFAULT_TENANT, user, 'login_failed', req, 'change_wrong_current');
+      await audit(callerTenant, user, 'login_failed', req, 'change_wrong_current');
       return fail(res, 401, 'كلمة المرور الحالية غير صحيحة');
     }
 
     const tenant = await pool.query(
-      `SELECT name FROM dypos.tenants WHERE id = $1`, [DEFAULT_TENANT],
+      `SELECT name FROM dypos.tenants WHERE id = $1`, [callerTenant],
     );
     const policy = checkPasswordStrength(String(newPassword), {
       username: user,
@@ -585,7 +681,7 @@ export function registerAuthRoutes(app: Express) {
        WHERE id = $1`,
       [u.id, c.hash, c.salt, c.iterations, ALGO],
     );
-    await audit(DEFAULT_TENANT, user, 'password_changed', req, `strength ${policy.score}/4`);
+    await audit(callerTenant, user, 'password_changed', req, `strength ${policy.score}/4`);
 
     res.json({ ok: true, mustChangePassword: false, message: 'تم تغيير كلمة المرور بنجاح' });
   }));
@@ -593,6 +689,9 @@ export function registerAuthRoutes(app: Express) {
   /** Strength check without storing anything — drives the live meter. */
   app.post('/api/auth/password-policy', asyncRoute(async (req, res) => {
     const { password, username } = req.body || {};
+    // DEFAULT_TENANT kept: public pre-auth endpoint — no session to derive a
+    // tenant from, and the tenant name is only a strength-check dictionary word,
+    // never an access decision.
     const tenant = await pool.query(`SELECT name FROM dypos.tenants WHERE id = $1`, [DEFAULT_TENANT]);
     res.json(checkPasswordStrength(String(password || ''), {
       username: String(username || ''),
@@ -604,16 +703,20 @@ export function registerAuthRoutes(app: Express) {
   app.post(
     '/api/auth/forgot-password',
     attachPrincipal,
+    requireRotatedPassword,
     requirePermission('user.manage'),
     asyncRoute(async (req, res) => {
       const { username } = req.body || {};
       if (!username) return fail(res, 400, 'اسم المستخدم مطلوب');
       const uname = String(username).trim().toLowerCase();
 
+      // Tenant from the admin's SIGNED session: a reset token must be issued for
+      // an account in the admin's own organisation, never by naming another one.
+      const issuerTenant = req.principal!.tenantId;
       const u = await pool.query(
         `SELECT id FROM dypos.users
          WHERE tenant_id = $1 AND username = $2 AND is_active = TRUE`,
-        [DEFAULT_TENANT, uname],
+        [issuerTenant, uname],
       );
       if (!u.rows.length) return fail(res, 404, GENERIC_AUTH_ERROR);
 
@@ -623,22 +726,29 @@ export function registerAuthRoutes(app: Express) {
          WHERE id = $1`,
         [u.rows[0].id, t.hash, t.expiresAt],
       );
-      await audit(DEFAULT_TENANT, uname, 'password_reset_requested', req);
+      await audit(issuerTenant, uname, 'password_reset_requested', req);
 
       res.json({ ok: true, resetToken: t.token, expiresAt: t.expiresAt });
     }),
   );
 
   /** Redeems a reset token and sets a new password. */
-  app.post('/api/auth/reset-password', asyncRoute(async (req, res) => {
+  app.post('/api/auth/reset-password', authRateLimit('reset-password'), asyncRoute(async (req, res) => {
     const { token, newPassword } = req.body || {};
     if (!token || !newPassword) return fail(res, 400, 'الرمز وكلمة المرور مطلوبان');
 
+    /*
+     * No tenant predicate here by design. This step is pre-auth (no session),
+     * and the reset token itself is the credential: it was issued for one user
+     * row by /api/auth/forgot-password, which IS tenant-scoped to the issuing
+     * admin's organisation. Filtering by DEFAULT_TENANT would strand every
+     * reset issued elsewhere, so the tenant is read off the MATCHED row and
+     * used for the audit below — never from client input.
+     */
     const u = await pool.query(
-      `SELECT id, username, reset_token_hash, reset_token_expires
+      `SELECT id, username, tenant_id, reset_token_hash, reset_token_expires
        FROM dypos.users
-       WHERE tenant_id = $1 AND reset_token_hash IS NOT NULL`,
-      [DEFAULT_TENANT],
+       WHERE reset_token_hash IS NOT NULL`,
     );
     const match = u.rows.find((r: any) =>
       isResetTokenValid(String(token), r.reset_token_hash, r.reset_token_expires));
@@ -659,13 +769,16 @@ export function registerAuthRoutes(app: Express) {
        WHERE id = $1`,
       [match.id, c.hash, c.salt, c.iterations, ALGO],
     );
-    await audit(DEFAULT_TENANT, match.username, 'password_reset_completed', req);
+    await audit(match.tenant_id, match.username, 'password_reset_completed', req);
 
     res.json({ ok: true, message: 'تمت إعادة تعيين كلمة المرور' });
   }));
 
   /** Credential state for an operator — never returns the hash. */
-  app.get('/api/auth/credentials/:username', attachPrincipal, asyncRoute(async (req, res) => {
+  app.get('/api/auth/credentials/:username', attachPrincipal, requireRotatedPassword, asyncRoute(async (req, res) => {
+    // Tenant from the caller's SIGNED session: credential state of another
+    // organisation must never be readable by naming its users.
+    const callerTenant = req.principal!.tenantId;
     const { rows } = await pool.query(
       `SELECT u.username, u.name, u.role, u.is_active, u.must_change_password,
               u.password_algo, u.password_updated_at, u.last_login,
@@ -674,19 +787,22 @@ export function registerAuthRoutes(app: Express) {
                 WHERE a.username = u.username AND a.event_type = 'login_failed'
                   AND a.created_at > NOW() - INTERVAL '24 hours') AS failures_24h
        FROM dypos.users u WHERE u.tenant_id = $1 AND u.username = $2`,
-      [DEFAULT_TENANT, String(req.params.username).toLowerCase()],
+      [callerTenant, String(req.params.username).toLowerCase()],
     );
     if (!rows.length) return fail(res, 404, 'المستخدم غير موجود');
     res.json({ item: rows[0] });
   }));
 
   /** Recent authentication activity, for the security view. */
-  app.get('/api/auth/events', attachPrincipal, asyncRoute(async (_req, res) => {
+  app.get('/api/auth/events', attachPrincipal, requireRotatedPassword, asyncRoute(async (req, res) => {
+    // Tenant from the caller's SIGNED session: the audit ledger is per
+    // organisation, and a header claim must never select whose log is read.
+    const callerTenant = req.principal!.tenantId;
     const { rows } = await pool.query(
       `SELECT username, event_type, ip_address, reason, created_at
        FROM dypos.auth_events WHERE tenant_id = $1
        ORDER BY created_at DESC LIMIT 100`,
-      [DEFAULT_TENANT],
+      [callerTenant],
     );
     res.json({ items: rows });
   }));

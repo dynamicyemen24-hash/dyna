@@ -10,6 +10,7 @@
  * passed against the broken endpoint.
  */
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import pg from 'pg';
 import express from 'express';
 import { makeId } from '../server/apiHelpers.ts';
@@ -31,7 +32,7 @@ dotenv.config();
  */
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 2,
   // Recycle idle sockets so a later run does not inherit a dead one.
   idleTimeoutMillis: 10_000,
@@ -195,6 +196,10 @@ async function main() {
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
+  // Drain close callbacks before exiting: on Windows, exiting inside the
+  // close window trips libuv's UV_HANDLE_CLOSURING assertion (non-zero abort
+  // even on a full pass), which would break the `&&` chain in `ci:db`.
+  await new Promise((r) => setTimeout(r, 50));
   process.exit(fail === 0 ? 0 : 1);
 }
 

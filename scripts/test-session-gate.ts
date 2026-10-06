@@ -119,6 +119,24 @@ async function main() {
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
+
+  /*
+   * Why a delay before `process.exit`, and not the immediate call it replaced:
+   *
+   * `server.close()`'s callback fires when the last connection is gone, but on
+   * Windows libuv is still finishing the close of those stream handles on the
+   * NEXT loop turn. Calling `process.exit` from inside that window makes uv
+   * close a handle that is already `UV_HANDLE_CLOSURING`, which asserts:
+   *
+   *   Assertion failed: !(handle->flags & UV_HANDLE_CLOSURING), file src\win\async.c
+   *
+   * The assertion ABORTS the process — so this test reported `8 passed,
+   * 0 failed` and still exited non-zero, which silently broke the `&&` chain
+   * in `npm run ci:db`: everything after this suite simply never ran, and the
+   * log ended at the gate with no failure in it. A macrotask lets the close
+   * callbacks drain first; the exit code then reports what the checks said.
+   */
+  await new Promise((r) => setTimeout(r, 50));
   process.exit(fail ? 1 : 0);
 }
 

@@ -28,6 +28,7 @@
  * else's tenant and receiving NOTHING.
  */
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import pg from 'pg';
 import express from 'express';
 import { tenantOf, assertTenantClaim, makeId, asyncRoute } from '../server/apiHelpers.ts';
@@ -51,7 +52,7 @@ function check(name: string, ok: boolean, detail = ''): void {
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 4,
   idleTimeoutMillis: 10_000,
   connectionTimeoutMillis: 20_000,
@@ -217,6 +218,10 @@ async function main() {
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
+  // Drain close callbacks first: exiting inside that window trips libuv's
+  // UV_HANDLE_CLOSURING assertion on Windows and aborts with a non-zero code
+  // even on a full pass, breaking the `&&` chain in `ci:db`.
+  await new Promise((r) => setTimeout(r, 50));
   process.exit(fail ? 1 : 0);
 }
 

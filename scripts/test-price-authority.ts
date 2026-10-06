@@ -25,6 +25,7 @@
  * would prove nothing about the route that runs.
  */
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import pg from 'pg';
 import { createApp } from '../server.ts';
 import { issueSessionToken } from '../server/sessions.ts';
@@ -44,7 +45,7 @@ function check(name: string, ok: boolean, detail = ''): void {
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 4,
   idleTimeoutMillis: 10_000,
 });
@@ -211,6 +212,10 @@ async function main() {
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);
+  // Drain close callbacks before exiting: exiting inside the close window on
+  // Windows trips libuv's UV_HANDLE_CLOSURING assertion — a non-zero abort
+  // even on a full pass, which would break the `&&` chain in `ci:db`.
+  await new Promise((r) => setTimeout(r, 50));
   process.exit(fail ? 1 : 0);
 }
 

@@ -105,6 +105,15 @@ jobs:
       - name: Arabic text survives the round trip
         run: npm run test:encoding
 
+      # The legacy SQL packs and the numbered migrations both declare nine of the
+      # same tables with incompatible column sets. `CREATE TABLE IF NOT EXISTS`
+      # then decides the winner by execution order, and live code queries the
+      # loser's columns by name — surfacing as "column does not exist" at request
+      # time, far from the statement responsible. This needs no database, so it
+      # belongs in the push gate rather than the credentialed job.
+      - name: Migration preflight — no conflicting schema declaration
+        run: npm run test:migration-preflight
+
       # Both had shipped defects that produced no error at all: an incorrect
       # discount and rounding ladder, and a theme switcher that changed no
       # pixels because it set a class where the stylesheet listened for an
@@ -170,11 +179,26 @@ database:
       - name: Session gate — no anonymous caller reaches a data route
         run: npm run test:gate
 
+      # The pre-auth surface is public by design, so it is the only surface a
+      # stranger can grind: per-account lockout bounds one user, this bounds
+      # one IP, and the edge copy in worker/index.ts closes the production
+      # door. Asserted on a real database because the failure branch runs real
+      # queries (tenant resolve, identity engine, audit) — a mocked pool would
+      # prove the middleware and miss the 500 it used to hide behind.
+      - name: Rate limiting — the pre-auth surface cannot be ground for free
+        run: npm run test:rate-limit
+
       - name: Tenant isolation
         run: npm run test:tenant
 
       - name: Server-enforced MFA
         run: npm run test:mfa
+
+      # Same two-phase flow on the edge: without it, an enrolled user signs in
+      # on the public site with the password alone while the local server
+      # demands a factor.
+      - name: MFA parity — the edge holds the same two-phase sign-in
+        run: npm run test:mfa-parity
 
       - name: Biometric unlock is not a bypass
         run: npm run test:unlock

@@ -20,6 +20,7 @@ import {
 // and drift between them is how an endpoint ends up weaker than the login it
 // sits beside.
 import { attachPrincipal } from './authz.js';
+import { authRateLimit } from './rateLimit.js';
 import { verifySessionToken } from './sessions.js';
 import {
   verifyPassword, isLocked, lockoutMinutesFor, GENERIC_AUTH_ERROR,
@@ -68,7 +69,7 @@ export function registerCoreScreenRoutes(app: Express) {
  * A biometric assertion is deliberately NOT accepted: honouring an unverified
  * boolean from the client is exactly what made this endpoint worthless.
  */
-app.post('/api/auth/unlock', attachPrincipal, asyncRoute(async (req, res) => {
+app.post('/api/auth/unlock', attachPrincipal, authRateLimit('unlock'), asyncRoute(async (req, res) => {
   const principal = req.principal;
   if (!principal) return fail(res, 401, 'جلسة غير موثقة');
 
