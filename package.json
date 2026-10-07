@@ -1,7 +1,7 @@
 {
   "name": "dypos-cloud",
   "private": true,
-  "version": "1.37.0",
+  "version": "1.37.1",
   "description": "DyPOS — offline-first enterprise ERP and POS (cloud + edge), multi-tenant, Arabic-first.",
   "type": "module",
   "scripts": {
