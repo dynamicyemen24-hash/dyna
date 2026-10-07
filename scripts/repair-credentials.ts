@@ -31,6 +31,7 @@
  * the two cases separately so the server log can tell them apart.
  */
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import pg from 'pg';
 import { hashPassword, ALGO, ITERATIONS } from '../server/passwords.ts';
 
@@ -38,7 +39,7 @@ dotenv.config();
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 2,
 });
 
@@ -80,7 +81,14 @@ async function main() {
    * a genuine credential — no special format, no bypass, and it upgrades on its
    * own next login if the scheme ever changes.
    */
-  const NEW_PASSWORD = process.env.DYPOS_REPAIR_PASSWORD || 'DyPOS@2026';
+  const NEW_PASSWORD = process.env.DYPOS_REPAIR_PASSWORD;
+  if (!NEW_PASSWORD) {
+    throw new Error(
+      'DYPOS_REPAIR_PASSWORD is not set. Refusing to reset every affected ' +
+      'account to a hardcoded default — a predictable password in source is ' +
+      'a credential in every clone. Set a one-time value and re-run.',
+    );
+  }
 
   for (const u of rows) {
     const fresh = await hashPassword(NEW_PASSWORD);
