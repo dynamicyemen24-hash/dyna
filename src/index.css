@@ -237,6 +237,20 @@
   --color-brand: var(--t-brand);
   --color-brand-strong: var(--t-brand-strong);
   --color-brand-soft: var(--t-brand-soft);
+
+  /* Status semantics — theme-bound, WCAG-measured per palette */
+  --color-ok: var(--t-ok);
+  --color-ok-strong: var(--t-ok-strong);
+  --color-ok-soft: var(--t-ok-soft);
+  --color-warn: var(--t-warn);
+  --color-warn-strong: var(--t-warn-strong);
+  --color-warn-soft: var(--t-warn-soft);
+  --color-err: var(--t-err);
+  --color-err-strong: var(--t-err-strong);
+  --color-err-soft: var(--t-err-soft);
+  --color-info: var(--t-info);
+  --color-info-strong: var(--t-info-strong);
+  --color-info-soft: var(--t-info-soft);
 }
 
 @theme {
@@ -452,6 +466,48 @@
   --t-scroll-thumb-hover: #0070f2;
   --t-scroll-track: #d5dfe9;
   color-scheme: light;
+}
+
+/* ---- Status semantics (SAP Fiori / Fluent / Redwood aligned) ---------------
+   Success #188918, warning #9a5b00, error #b00, info = brand. Each theme
+   carries soft/solid/text triplets so screens never invent hex values. */
+
+:root,
+[data-theme="light"] {
+  --t-ok: #15803d;        --t-ok-strong: #166534;   --t-ok-soft: #e7f6ec;
+  --t-warn: #9a5b00;      --t-warn-strong: #7c4a00; --t-warn-soft: #fef4e0;
+  --t-err: #b42318;       --t-err-strong: #912018;  --t-err-soft: #fdecea;
+  --t-info: #0070f2;      --t-info-strong: #005ac1; --t-info-soft: #e8f1fe;
+}
+[data-theme="frosted_glass"] {
+  --t-ok: #15803d;        --t-ok-strong: #166534;   --t-ok-soft: #e2f4e9;
+  --t-warn: #8f5600;      --t-warn-strong: #744300; --t-warn-soft: #fdf0d8;
+  --t-err: #b42318;       --t-err-strong: #912018;  --t-err-soft: #fce7e4;
+  --t-info: #0070f2;      --t-info-strong: #005ac1; --t-info-soft: #e3eefe;
+}
+[data-theme="dark"] {
+  --t-ok: #4ade80;        --t-ok-strong: #86efac;   --t-ok-soft: #052e16;
+  --t-warn: #fbbf24;      --t-warn-strong: #fcd34d; --t-warn-soft: #451a03;
+  --t-err: #f87171;       --t-err-strong: #fca5a5;  --t-err-soft: #450a0a;
+  --t-info: #3fa6ff;      --t-info-strong: #84c2ff; --t-info-soft: #002a63;
+}
+[data-theme="oled"] {
+  --t-ok: #4ade80;        --t-ok-strong: #86efac;   --t-ok-soft: #04170b;
+  --t-warn: #fbbf24;      --t-warn-strong: #fcd34d; --t-warn-soft: #2a1502;
+  --t-err: #f87171;       --t-err-strong: #fca5a5;  --t-err-soft: #2a0606;
+  --t-info: #4fb0ff;      --t-info-strong: #9cd0ff; --t-info-soft: #001a33;
+}
+[data-theme="royal_gold"] {
+  --t-ok: #4ade80;        --t-ok-strong: #86efac;   --t-ok-soft: #06281a;
+  --t-warn: #fbbf24;      --t-warn-strong: #fcd34d; --t-warn-soft: #3a1e05;
+  --t-err: #f87171;       --t-err-strong: #fca5a5;  --t-err-soft: #3d0a0e;
+  --t-info: #7fb2ff;      --t-info-strong: #b3d0ff; --t-info-soft: #14235a;
+}
+[data-theme="high_contrast"] {
+  --t-ok: #00ff88;        --t-ok-strong: #00ff88;   --t-ok-soft: #00220f;
+  --t-warn: #ffd60a;      --t-warn-strong: #ffd60a; --t-warn-soft: #2a2000;
+  --t-err: #ff6b6b;       --t-err-strong: #ff6b6b;  --t-err-soft: #330000;
+  --t-info: #3fa6ff;      --t-info-strong: #9cd0ff; --t-info-soft: #001a33;
 }
 
 /* ---- Base ------------------------------------------------------------- */

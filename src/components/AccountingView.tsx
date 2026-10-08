@@ -56,7 +56,7 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ journalEntries, 
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-slate-950 text-slate-100">
+    <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-canvas text-ink">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-black text-white flex items-center gap-2">

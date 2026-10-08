@@ -71,8 +71,8 @@ export const ErrorBox: React.FC<{ message: string; onRetry?: () => void }> = ({
   onRetry,
 }) => (
   <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-    <AlertCircle className="text-rose-500" size={34} />
-    <p className="text-rose-600 text-sm font-medium max-w-md">{message}</p>
+    <AlertCircle className="text-err" size={34} />
+    <p className="text-err-strong text-sm font-medium max-w-md">{message}</p>
     {onRetry && (
       <button
         onClick={onRetry}
@@ -104,14 +104,14 @@ export const Toast: React.FC<{
     className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl elev-2 border text-sm font-bold max-w-lg ${
       kind === 'ok'
         ? 'bg-surface border-hairline text-ink'
-        : 'bg-rose-50 border-rose-200 text-rose-700'
+        : 'bg-err-soft border-err/30 text-err-strong'
     }`}
     role="status"
   >
     {kind === 'ok' ? (
       <CheckCircle2 size={18} className="text-brand" />
     ) : (
-      <AlertCircle size={18} className="text-rose-500" />
+      <AlertCircle size={18} className="text-err" />
     )}
     <span>{message}</span>
     <button
@@ -235,4 +235,176 @@ export const Card: React.FC<{ children: React.ReactNode; className?: string }> =
   className = '',
 }) => (
   <div className={`surface-card p-5 ${className}`}>{children}</div>
+);
+
+/* --------------------------- Status semantics --------------------------- */
+/* Fiori ObjectStatus + Fluent Badge + Redwood pattern, theme-token driven. */
+export type StatusTone = 'ok' | 'warn' | 'err' | 'info' | 'brand' | 'neutral';
+
+const STATUS_TONE_CLASS: Record<StatusTone, string> = {
+  ok: 'bg-ok-soft text-ok-strong border-ok/30',
+  warn: 'bg-warn-soft text-warn-strong border-warn/30',
+  err: 'bg-err-soft text-err-strong border-err/30',
+  info: 'bg-info-soft text-info-strong border-info/30',
+  brand: 'bg-brand-soft text-brand-strong border-brand/30',
+  neutral: 'bg-subtle text-muted border-hairline',
+};
+
+export const StatusBadge: React.FC<{
+  tone?: StatusTone;
+  dot?: boolean;
+  children: React.ReactNode;
+}> = ({ tone = 'neutral', dot = false, children }) => (
+  <span
+    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${STATUS_TONE_CLASS[tone]}`}
+  >
+    {dot && (
+      <span
+        aria-hidden="true"
+        className={`w-1.5 h-1.5 rounded-full ${
+          tone === 'ok' ? 'bg-ok' : tone === 'warn' ? 'bg-warn' : tone === 'err' ? 'bg-err' : tone === 'info' ? 'bg-info' : tone === 'brand' ? 'bg-brand' : 'bg-faint'
+        }`}
+      />
+    )}
+    {children}
+  </span>
+);
+
+/* ------------------------------ Skeletons ------------------------------- */
+/* Content-shaped loading: reserves layout so first paint never jumps. */
+export const Skeleton: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <div aria-hidden="true" className={`animate-pulse rounded-lg bg-subtle border border-hairline ${className}`} />
+);
+
+export const SkeletonRows: React.FC<{ rows?: number }> = ({ rows = 5 }) => (
+  <div className="space-y-2.5" role="status" aria-label="جارٍ تحميل البيانات">
+    {Array.from({ length: rows }).map((_, i) => (
+      <Skeleton key={i} className="h-11 w-full" />
+    ))}
+  </div>
+);
+
+export const SkeletonCards: React.FC<{ count?: number }> = ({ count = 4 }) => (
+  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" role="status" aria-label="جارٍ تحميل البيانات">
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className="surface-card p-4 space-y-3">
+        <Skeleton className="h-3 w-2/5" />
+        <Skeleton className="h-7 w-4/5" />
+      </div>
+    ))}
+  </div>
+);
+
+/* ------------------------------ SearchField ----------------------------- */
+/* Fiori SearchField: debounced-ready input with clear action + kbd hint. */
+export const SearchField: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  kbd?: string;
+  autoFocus?: boolean;
+}> = ({ value, onChange, placeholder = 'بحث…', kbd, autoFocus }) => (
+  <div className="relative">
+    <svg
+      aria-hidden="true"
+      className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-faint pointer-events-none"
+      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+    >
+      <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+    </svg>
+    <input
+      type="search"
+      value={value}
+      autoFocus={autoFocus}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      aria-label={placeholder}
+      className="w-full bg-surface border border-hairline rounded-xl ps-9 pe-16 py-2.5 text-sm text-ink placeholder-faint outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/20"
+    />
+    {value && (
+      <button
+        type="button"
+        onClick={() => onChange('')}
+        aria-label="مسح البحث"
+        className="absolute end-9 top-1/2 -translate-y-1/2 w-5 h-5 grid place-items-center rounded-full text-faint hover:text-ink hover:bg-subtle transition-colors"
+      >
+        ×
+      </button>
+    )}
+    {kbd && (
+      <kbd className="absolute end-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded border border-hairline bg-subtle text-[10px] font-mono text-faint">
+        {kbd}
+      </kbd>
+    )}
+  </div>
+);
+
+/* ------------------------------- MessageStrip ---------------------------- */
+/* Fiori MessageStrip: inline semantic notice with optional dismiss. */
+export const MessageStrip: React.FC<{
+  tone?: StatusTone;
+  title?: string;
+  onDismiss?: () => void;
+  children: React.ReactNode;
+}> = ({ tone = 'info', title, onDismiss, children }) => {
+  const wrap: Record<StatusTone, string> = {
+    ok: 'bg-ok-soft border-ok/30 text-ok-strong',
+    warn: 'bg-warn-soft border-warn/30 text-warn-strong',
+    err: 'bg-err-soft border-err/30 text-err-strong',
+    info: 'bg-info-soft border-info/30 text-info-strong',
+    brand: 'bg-brand-soft border-brand/30 text-brand-strong',
+    neutral: 'bg-subtle border-hairline text-muted',
+  };
+  return (
+    <div className={`flex items-start gap-2.5 rounded-xl border px-3.5 py-2.5 text-[13px] ${wrap[tone]}`} role="status">
+      <div className="min-w-0 flex-1">
+        {title && <p className="font-bold mb-0.5">{title}</p>}
+        <div className="opacity-90 leading-relaxed">{children}</div>
+      </div>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="إغلاق التنبيه"
+          className="shrink-0 w-6 h-6 grid place-items-center rounded-lg opacity-70 hover:opacity-100 hover:bg-black/5 transition"
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+};
+
+/* --------------------------------- Tabs --------------------------------- */
+/* Segmented tab bar: roving single-select with aria-selected semantics. */
+export const Tabs: React.FC<{
+  tabs: { id: string; label: string; count?: number }[];
+  active: string;
+  onChange: (id: string) => void;
+}> = ({ tabs, active, onChange }) => (
+  <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-subtle border border-hairline" role="tablist" aria-label="تبويبات العرض">
+    {tabs.map((t) => {
+      const selected = t.id === active;
+      return (
+        <button
+          key={t.id}
+          role="tab"
+          aria-selected={selected}
+          onClick={() => onChange(t.id)}
+          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[13px] font-bold transition-all ${
+            selected
+              ? 'bg-surface text-ink shadow-sm border border-hairline'
+              : 'text-muted hover:text-ink'
+          }`}
+        >
+          {t.label}
+          {t.count !== undefined && (
+            <span className={`px-1.5 py-px rounded-md text-[10px] font-mono ${selected ? 'bg-brand-soft text-brand-strong' : 'bg-surface text-faint border border-hairline'}`}>
+              {t.count}
+            </span>
+          )}
+        </button>
+      );
+    })}
+  </div>
 );

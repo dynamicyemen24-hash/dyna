@@ -3,19 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>نظام نقاط البيع الذكي</title>
-    <meta name="description" content="نظام نقاط البيع الذكي" />
-    <meta property="og:title" content="نظام نقاط البيع الذكي" />
-    <meta property="og:description" content="نظام نقاط البيع الذكي" />
+    <title>دينا: منصة التجارة الذكية</title>
+    <meta name="description" content="دينا — نظام تجاري ذكي متكامل: مبيعات ومخزون وعملاء وحسابات وتقارير، يعمل دون اتصال ويُزامن عند عودة الشبكة." />
+    <meta name="keywords" content="دينا, منصة التجارة الذكية, نظام تجاري ذكي, نقاط بيع, إدارة مخزون, محاسبة, تقارير مالية" />
+    <meta name="author" content="شركة المنافذ الذكية للبرمجيات" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta property="og:title" content="دينا: منصة التجارة الذكية" />
+    <meta property="og:description" content="نظام تجاري ذكي متكامل: مبيعات ومخزون وعملاء وحسابات وتقارير — يعمل دون اتصال ويُزامن عند العودة." />
     <meta property="og:type" content="website" />
-    <meta property="og:locale" content="ar_SA" />
+    <meta property="og:locale" content="ar_YE" />
+    <meta property="og:locale:alternate" content="ar_SA" />
+    <meta property="og:site_name" content="دينا" />
     <meta property="og:image" content="/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="دينا: منصة التجارة الذكية" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="نظام نقاط البيع الذكي" />
-    <meta name="twitter:description" content="نظام نقاط البيع الذكي" />
+    <meta name="twitter:title" content="دينا: منصة التجارة الذكية" />
+    <meta name="twitter:description" content="نظام تجاري ذكي متكامل: مبيعات ومخزون وعملاء وحسابات وتقارير — يعمل دون اتصال ويُزامن عند العودة." />
     <meta name="twitter:image" content="/og-image.png" />
+    <meta name="twitter:image:alt" content="دينا: منصة التجارة الذكية" />
 
     <!-- Installable app identity. The maskable icon is what Android uses when it
          crops to its own shape, hence the separate entry. -->
@@ -23,15 +32,18 @@
     <link rel="icon" type="image/png" href="/icons/icon-192.png" sizes="192x192" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="application-name" content="DyPOS" />
+    <meta name="application-name" content="دينا" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="DyPOS" />
+    <meta name="apple-mobile-web-app-title" content="دينا" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#001020" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f5f6f7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#001020" />
     <meta name="color-scheme" content="dark light" />
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":"SoftwareApplication","name":"دينا: منصة التجارة الذكية","applicationCategory":"BusinessApplication","operatingSystem":"Web","inLanguage":"ar","description":"نظام تجاري ذكي متكامل: مبيعات ومخزون وعملاء وحسابات وتقارير، يعمل دون اتصال ويُزامن عند عودة الشبكة."}
+    </script>
     <!--
          Typography is self-hosted; see the @font-face block in src/index.css.
 
@@ -41,100 +53,132 @@
          fallback font with different metrics. The faces now come from this
          origin and are cached by the service worker with the rest of the shell.
 
-         The Arabic subset at 400 is preloaded because it is the first thing
-         painted on a sign-in screen — an Arabic cashier should not watch the
-         fallback render first. The Latin subsets are ~19 KB against ~43 KB for
-         Arabic, and unicode-range means only the subset actually drawn loads.
+         The Arabic subset at 400 is preloaded with high priority because it is
+         the first thing painted on a sign-in screen — an Arabic cashier should
+         not watch the fallback render first. The Latin subsets are ~19 KB
+         against ~43 KB for Arabic, and unicode-range means only the subset
+         actually drawn loads.
     -->
-    <link rel="preload" href="/fonts/arabic-400.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/latin-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/arabic-400.woff2" as="font" type="font/woff2" crossorigin fetchpriority="high" />
+    <link rel="preload" href="/fonts/latin-400.woff2" as="font" type="font/woff2" crossorigin />
     <!-- Tajawal is the heading face; 700 is the weight headings use. -->
-    <link rel="preload" href="/fonts/tajawal-arabic-700.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/tajawal-latin-700.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/tajawal-arabic-700.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/tajawal-latin-700.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       /*
        * Anti-flash bootstrap.
        *
-       * The previous version hardcoded `background: #f6f7f9` and justified it as
-       * "no dark flash on a light application" — but the application is not
-       * light-only. Anyone who chose dark, OLED or high-contrast got a full
-       * frame of near-white before their theme was applied, which is a worse
-       * flash than the one it was trying to prevent.
-       *
-       * The saved theme is therefore read here, BEFORE the stylesheet and React
-       * boot, and the same variables the design system defines are applied
-       * inline. `themeService` does this again on mount as a safety net; this
-       * block is what makes the very first paint correct.
-       *
-       * Wrapped in try/catch because `localStorage` throws outright in private
-       * browsing modes in some browsers, and an exception here would leave the
-       * page unstyled rather than merely unthemed.
+       * Reads the persisted theme before the stylesheet resolves so the very
+       * first paint already matches the operator's choice. Anyone who chose
+       * dark, OLED, gold, frosted or high-contrast no longer gets a frame of
+       * the light shell. Defaults to the OS preference when nothing is saved.
+       * Wrapped contract: localStorage may throw in private browsing, so the
+       * default theme stands instead of breaking the page.
        */
       html, body { margin: 0; }
-       html { background: #f5f6f7; color: #1d2d3e; }
-       html[data-theme="dark"]           { background:#001020; color:#eaf2ff; }
-       html[data-theme="oled"]           { background:#000000; color:#f0f6ff; }
-       html[data-theme="royal_gold"]     { background:#050b1c; color:#eaf0ff; }
-       html[data-theme="high_contrast"]  { background:#000000; color:#ffffff; }
-       html[data-theme="frosted_glass"]  { background:#eef3f9; color:#0b1a2e; }
-       html[data-theme="light"],
-       html[data-theme="frosted_glass"]  { color-scheme: light; }
-       html[data-theme="dark"],
-       html[data-theme="oled"],
-       html[data-theme="royal_gold"],
-       html[data-theme="high_contrast"]  { color-scheme: dark; }
+      html { background: #f5f6f7; color: #1d2d3e; }
+      html[data-theme="dark"]           { background:#001020; color:#eaf2ff; }
+      html[data-theme="oled"]           { background:#000000; color:#f0f6ff; }
+      html[data-theme="royal_gold"]     { background:#050b1c; color:#eaf0ff; }
+      html[data-theme="high_contrast"]  { background:#000000; color:#ffffff; }
+      html[data-theme="frosted_glass"]  { background:#eef3f9; color:#0b1a2e; }
+      html[data-theme="light"],
+      html[data-theme="frosted_glass"]  { color-scheme: light; }
+      html[data-theme="dark"],
+      html[data-theme="oled"],
+      html[data-theme="royal_gold"],
+      html[data-theme="high_contrast"]  { color-scheme: dark; }
 
-       /*
-        * Scrollbar, mirrored from `index.css`.
-        *
-        * Duplicated here rather than imported because this block runs BEFORE
-        * the stylesheet is fetched. On a slow till connection a first paint
-        * with an unstyled scrollbar is a white bar over the navy shell —
-        * visible for a beat on every single load. It also sets the scrollbar
-        * variables so the real stylesheet inherits them.
-        */
-       * {
-         scrollbar-width: thin;
-         scrollbar-color: var(--t-scroll-thumb, #8a94a1) var(--t-scroll-track, #eceef1);
-       }
-       *::-webkit-scrollbar { width: 14px; height: 14px; }
-       *::-webkit-scrollbar-track { background-color: var(--t-scroll-track, #eceef1); border-radius: 999px; }
-       *::-webkit-scrollbar-thumb {
-         background-color: var(--t-scroll-thumb, #8a94a1);
-         border: 3px solid transparent;
-         background-clip: content-box;
-         border-radius: 999px;
-       }
-       html[data-theme="dark"] { --t-scroll-thumb: #4a7ba8; --t-scroll-track: #001530; }
-       html[data-theme="oled"] { --t-scroll-thumb: #3f6fa8; --t-scroll-track: #000714; }
-       html[data-theme="royal_gold"] { --t-scroll-thumb: #4a68a8; --t-scroll-track: #0a1430; }
-       html[data-theme="high_contrast"] { --t-scroll-thumb: #ffffff; --t-scroll-track: #000000; }
-       html[data-theme="frosted_glass"] { --t-scroll-thumb: #f5f6f7; --t-scroll-track: #7c8794; }
+      /*
+       * Scrollbar, mirrored from `index.css`.
+       *
+       * Duplicated here rather than imported because this block runs BEFORE
+       * the stylesheet is fetched. On a slow till connection a first paint
+       * with an unstyled scrollbar is a white bar over the navy shell —
+       * visible for a beat on every single load. It also sets the scrollbar
+       * variables so the real stylesheet inherits them.
+       */
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--t-scroll-thumb, #8a94a1) var(--t-scroll-track, #eceef1);
+      }
+      *::-webkit-scrollbar { width: 14px; height: 14px; }
+      *::-webkit-scrollbar-track { background-color: var(--t-scroll-track, #eceef1); border-radius: 999px; }
+      *::-webkit-scrollbar-thumb {
+        background-color: var(--t-scroll-thumb, #8a94a1);
+        border: 3px solid transparent;
+        background-clip: content-box;
+        border-radius: 999px;
+      }
+      html[data-theme="dark"] { --t-scroll-thumb: #4a7ba8; --t-scroll-track: #001530; }
+      html[data-theme="oled"] { --t-scroll-thumb: #3f6fa8; --t-scroll-track: #000714; }
+      html[data-theme="royal_gold"] { --t-scroll-thumb: #4a68a8; --t-scroll-track: #0a1430; }
+      html[data-theme="high_contrast"] { --t-scroll-thumb: #ffffff; --t-scroll-track: #000000; }
+      html[data-theme="frosted_glass"] { --t-scroll-thumb: #f5f6f7; --t-scroll-track: #7c8794; }
+
+      /*
+       * First-paint splash inside #root.
+       *
+       * Pure CSS so it shows even while the JS bundle downloads. React
+       * replaces it on mount. Honours reduced-motion: the spinner becomes a
+       * static ring, and the pulse is disabled.
+       */
+      #dypos-boot {
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        font-family: "Tajawal", system-ui, sans-serif;
+      }
+      #dypos-boot .dypos-boot-ring {
+        width: 44px; height: 44px; border-radius: 999px;
+        border: 3px solid currentColor;
+        border-top-color: transparent;
+        opacity: .55;
+        animation: dypos-spin 0.9s linear infinite;
+      }
+      #dypos-boot p { margin: 0; font-size: 15px; opacity: .75; }
+      @keyframes dypos-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        #dypos-boot .dypos-boot-ring { animation: none; border-top-color: currentColor; }
+      }
     </style>
     <script>
       /*
        * Runs synchronously, ahead of the stylesheet link resolution and long
-       * before React mounts. Wrapped so a storage failure degrades to the default
-       * theme instead of breaking the page.
+       * before React mounts. Saved choice wins; otherwise the OS preference
+       * decides so first-time visitors get a correct first paint, not the
+       * light default. `dypos_theme` is the single key — nothing else reads
+       * or writes the persisted theme.
        */
       (function () {
         try {
+          var known = ['light', 'dark', 'oled', 'royal_gold', 'high_contrast', 'frosted_glass'];
           var saved = localStorage.getItem('dypos_theme');
-          if (saved) {
-            var known = ['light', 'dark', 'oled', 'royal_gold', 'high_contrast', 'frosted_glass'];
-            if (known.indexOf(saved) !== -1) {
-              document.documentElement.setAttribute('data-theme', saved);
-              var m = document.querySelector('meta[name="color-scheme"]');
-              if (m) m.setAttribute('content', saved === 'light' || saved === 'frosted_glass' ? 'light' : 'dark');
-            }
-          }
+          var theme = known.indexOf(saved) !== -1
+            ? saved
+            : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.setAttribute('data-theme', theme);
+          var m = document.querySelector('meta[name="color-scheme"]');
+          if (m) m.setAttribute('content', theme === 'light' || theme === 'frosted_glass' ? 'light' : 'dark');
         } catch (e) { /* storage unavailable — the default theme stands */ }
       })();
     </script>
   </head>
   <body class="antialiased selection:bg-brand-500 selection:text-white">
-    <div id="root"></div>
+    <div id="root">
+      <div id="dypos-boot" role="status" aria-live="polite" aria-label="جارٍ تحميل دينا">
+        <div class="dypos-boot-ring" aria-hidden="true"></div>
+        <p>دينا: منصة التجارة الذكية — جارٍ التحميل…</p>
+      </div>
+    </div>
+    <noscript>
+      <div style="min-height:100dvh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;padding:24px;text-align:center">
+        <p>تتطلب منصة دينا تفعيل JavaScript لتشغيل نظام التجارة الذكي.</p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

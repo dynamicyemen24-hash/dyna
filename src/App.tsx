@@ -659,11 +659,11 @@ const AuthenticatedWorkspace: React.FC<{
 
   if (!identity && !remembered) {
     return (
-      <div role="alert" className="min-h-screen grid place-items-center p-6 text-center">
-        <div className="max-w-md space-y-3">
+      <div role="alert" className="min-h-screen grid place-items-center p-6 text-center bg-canvas text-ink">
+        <div className="max-w-md space-y-3 surface-card p-8">
           <h1 className="font-semibold">تعذّر التحقق من هوية المؤسسة</h1>
-          <p className="text-sm text-slate-500">انتهت الجلسة أو تعذّر استعادتها. سجّل الدخول مجددًا.</p>
-          <button type="button" onClick={onSignOut} className="px-4 py-2 rounded-lg bg-slate-900 text-white">
+          <p className="text-sm text-muted">انتهت الجلسة أو تعذّر استعادتها. سجّل الدخول مجددًا.</p>
+          <button type="button" onClick={onSignOut} className="px-4 py-2 rounded-lg bg-ink text-surface">
             تسجيل الخروج
           </button>
         </div>
@@ -857,23 +857,23 @@ const NoBranchNotice: React.FC<{
   message: string;
   onRetry: () => void;
 }> = ({ loading, message, onRetry }) => (
-  <div className="flex-1 grid place-items-center p-8 bg-slate-950 text-slate-100">
-    <div className="max-w-md text-center bg-slate-900 border border-slate-800 rounded-2xl p-8 space-y-3">
+  <div className="flex-1 grid place-items-center p-8 bg-canvas text-ink">
+    <div className="max-w-md text-center surface-card p-8 space-y-3">
       {loading ? (
         <>
-          <span className="inline-block w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-slate-300">جارٍ تحميل بيانات الجلسة…</p>
+          <span className="inline-block w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-muted">جارٍ تحميل بيانات الجلسة…</p>
         </>
       ) : (
         <>
-          <h3 className="text-sm font-bold text-white">لا يوجد فرع متاح</h3>
-          <p className="text-xs text-slate-400 leading-relaxed">
+          <h3 className="text-sm font-bold text-ink">لا يوجد فرع متاح</h3>
+          <p className="text-xs text-muted leading-relaxed">
             لم يُرجع الخادم أي فرع لهذه المؤسسة. لا يمكن عرض بيانات الفرع قبل
             اختيار فرع فعلي — عرض فرع افتراضي كان يُظهر أرقامًا لا تخصّ أحدًا.
           </p>
-          {message && <p className="text-[11px] text-rose-400 font-mono" dir="auto">{message}</p>}
+          {message && <p className="text-[11px] text-err font-mono" dir="auto">{message}</p>}
           <button onClick={onRetry}
-            className="mt-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold">
+            className="mt-2 px-4 py-2 rounded-xl bg-subtle hover:bg-hairline text-ink border border-hairline text-xs font-semibold transition-colors">
             إعادة المحاولة
           </button>
         </>
@@ -1034,12 +1034,12 @@ const BranchLoadError: React.FC<{ message: string; onRetry: () => void }> = ({
   message,
   onRetry,
 }) => (
-  <div className="min-h-screen bg-[#f6f7f9] grid place-items-center px-6">
+  <div className="min-h-screen bg-canvas grid place-items-center px-6">
     <div
       role="alert"
-      className="max-w-md text-center bg-white border border-slate-200 rounded-2xl p-8 shadow-sm space-y-4"
+      className="max-w-md text-center surface-card p-8 space-y-4"
     >
-      <div className="mx-auto w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 grid place-items-center">
+      <div className="mx-auto w-12 h-12 rounded-2xl bg-err-soft text-err grid place-items-center">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="22"
@@ -1058,19 +1058,19 @@ const BranchLoadError: React.FC<{ message: string; onRetry: () => void }> = ({
         </svg>
       </div>
       <div>
-        <h1 className="text-[15px] font-bold text-slate-900">
+        <h1 className="text-[15px] font-bold text-ink">
           تعذّر الاتصال بالخادم
         </h1>
-        <p className="text-[12.5px] text-slate-500 mt-1.5 leading-relaxed">
+        <p className="text-[12.5px] text-muted mt-1.5 leading-relaxed">
           نحتاج قائمة الفروع قبل عرض شاشة تسجيل الدخول.
         </p>
-        <p className="text-[11.5px] text-slate-400 mt-3 font-mono break-words" dir="auto">
+        <p className="text-[11.5px] text-faint mt-3 font-mono break-words" dir="auto">
           {message}
         </p>
       </div>
       <button
         onClick={onRetry}
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-700 text-white text-[12.5px] font-semibold transition-colors"
+        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-ink hover:opacity-85 text-surface text-[12.5px] font-semibold transition-opacity"
       >
         إعادة المحاولة
       </button>

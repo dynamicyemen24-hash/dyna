@@ -437,8 +437,11 @@ export const POSView: React.FC<POSViewProps> = ({
     onClearCart();
   };
 
+  /* Night mode is an operator choice for late shifts (amber-on-black eases
+     eye strain under low light). The default branch now follows theme
+     tokens so the six themes reach the sales floor. */
   return (
-    <div className={`flex-1 flex flex-col lg:flex-row h-[calc(100vh-65px)] overflow-hidden transition-colors duration-300 ${nightMode ? 'bg-black text-amber-100' : 'bg-slate-950 text-slate-100'}`}>
+    <div className={`flex-1 flex flex-col lg:flex-row h-[calc(100vh-65px)] overflow-hidden transition-colors duration-300 ${nightMode ? 'bg-black text-amber-100' : 'bg-canvas text-ink'}`}>
       {/* Left / Products Catalog Area */}
       <div className="flex-1 flex flex-col p-4 overflow-hidden border-l border-slate-800">
         {/* Search, Barcode & Camera Scanner Bar */}

@@ -48,7 +48,7 @@ export const BranchesView: React.FC<BranchesViewProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-slate-950 text-slate-100">
+    <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-canvas text-ink">
       <div className="mb-6">
         <h2 className="text-xl font-black text-white flex items-center gap-2">
           <Building2 className="w-6 h-6 text-brand-400" />

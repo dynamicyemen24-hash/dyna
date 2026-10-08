@@ -1,4 +1,4 @@
-/**
+﻿/**
  * DyPOS Enterprise — Cloudflare Worker API.
  *
  * Runs on the Cloudflare edge and talks to Neon over the serverless HTTP
@@ -940,6 +940,102 @@ export default {
             WHERE tenant_id = ${tenant} AND is_active = TRUE
             ORDER BY name ASC`,
         });
+      }
+      // ---- Public identity endpoints -----------------------------------------
+      // These two routes exist BEFORE the token check on purpose: the sign-in
+      // form calls them while no session exists yet, and the whole point is to
+      // resolve or create an identity without one. They are intentionally
+      // read-only in effect for resolve, and transaction-safe for enroll.
+      //
+      // Both are pinned to the deployment's own tenant scope via `env_default`
+      // for the resolution queries, exactly like `/branches` above — a client
+      // cannot enumerate another merchant's tenants by asking.
+
+      if (path === '/identity/resolve' && method === 'POST') {
+        const b: any = body || {};
+        const decision = await resolveIdentityEdge(env, {
+          tenantName: String(b.tenantName ?? ''),
+          tenantCode: String(b.tenantCode ?? ''),
+          ownerName: String(b.ownerName ?? ''),
+          username: String(b.username ?? ''),
+          email: String(b.email ?? ''),
+          phone: String(b.phone ?? ''),
+          branchName: String(b.branchName ?? ''),
+          deviceFingerprint: String(b.deviceFingerprint ?? ''),
+        });
+
+        return json({
+          ok: !['AMBIGUOUS_IDENTITY', 'PENDING_VERIFICATION', 'EXISTING_USER_NO_ACCESS'].includes(decision.state),
+          decision,
+        });
+      }
+
+      if (path === '/identity/enroll' && method === 'POST') {
+        const b: any = body || {};
+        const idempotencyKeyHeader = request.headers.get('Idempotency-Key') || '';
+
+        // Idempotency: a retried enrollment must not create a second tenant.
+        // Checked here, before any writes, against the same store the Worker
+        // uses for every other replay-safe endpoint.
+        if (idempotencyKeyHeader) {
+          const prior = await getSql(env)`SELECT result_json FROM dypos.identity_idempotency
+            WHERE key = ${idempotencyKeyHeader}`;
+          if (prior[0]?.result_json) {
+            return json({ ok: true, result: prior[0].result_json, replayed: true }, 201);
+          }
+        }
+
+        const identityDecision = await resolveIdentityEdge(env, {
+          tenantName: String(b.tenantName ?? ''),
+          tenantCode: String(b.tenantCode ?? ''),
+          ownerName: String(b.ownerName ?? ''),
+          username: String(b.username ?? ''),
+          email: String(b.email ?? ''),
+          phone: String(b.phone ?? ''),
+          branchName: String(b.branchName ?? ''),
+          deviceFingerprint: String(b.deviceFingerprint ?? ''),
+        });
+
+        if (identityDecision.state !== 'NEW_TENANT') {
+          return fail(409, identityDecision.reason || 'Identity is not safe for enrollment', path, method, requestId);
+        }
+
+        const prereq = resolvePrerequisitesEdge({
+          tenantExists: true,
+          tenantStatus: 'active',
+          userExists: false,
+          userStatus: 'pending',
+          branchExists: false,
+          userHasBranchAccess: false,
+          deviceTrusted: Boolean(b.deviceFingerprint),
+          subscriptionStatus: 'trial',
+          allowDefaultBranchCreation: true,
+        });
+
+        if (prereq.decision !== 'CREATE_DEFAULT_BRANCH' && prereq.decision !== 'READY') {
+          return fail(409, prereq.reason, path, method, requestId);
+        }
+
+        const result = await enrollTenantEdge(env, {
+          tenantName: String(b.tenantName ?? ''),
+          tenantCode: String(b.tenantCode ?? ''),
+          ownerName: String(b.ownerName ?? ''),
+          username: String(b.username ?? ''),
+          email: String(b.email ?? ''),
+          phone: String(b.phone ?? ''),
+          password: String(b.password ?? ''),
+          branchName: String(b.branchName ?? ''),
+          deviceFingerprint: String(b.deviceFingerprint ?? ''),
+          idempotencyKey: idempotencyKeyHeader || undefined,
+        });
+
+        if (result.state === 'AMBIGUOUS_IDENTITY' || result.state === 'PENDING_VERIFICATION' || result.state === 'EXISTING_USER_NO_ACCESS') {
+          return fail(409, result.reason || 'Identity not safe to enroll', path, method, requestId);
+        }
+
+        const response = json({ ok: true, result, prereq }, 201);
+        if (idempotencyKeyHeader) cacheIdempotencyKey(idempotencyKeyHeader, response);
+        return response;
       }
 
       // --- Everything below this line is business data ----------------------

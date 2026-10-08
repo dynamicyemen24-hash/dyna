@@ -721,28 +721,24 @@ return (
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
       {/* Header */}
-      <header className={`sticky top-0 z-50 backdrop-blur-xl border-b transition-colors duration-300 ${
-        themeMode === 'light' ? 'bg-white/95 border-gray-200' : 'bg-slate-950/90 border-slate-800'
-      }`}>
+      <header className="sticky top-0 z-50 backdrop-blur-xl border-b transition-colors duration-300 border-hairline bg-surface/95">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center p-1.5 shadow-lg transition-colors duration-300 ${
-              themeMode === 'light' ? 'bg-slate-950 border border-brand-500/30' : 'bg-slate-900 border border-brand-500/30'
-            }`}>
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center p-1.5 shadow-lg transition-colors duration-300 bg-subtle border border-hairline">
               <img src="/favicon.ico" alt="دينا Icon" className="w-full h-full object-contain" />
             </div>
             <div className="hidden sm:block">
-              <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white transition-colors duration-300">
+              <h1 className="text-lg font-black tracking-tight text-ink transition-colors duration-300">
                 شركة المنافذ الذكية للبرمجيات
               </h1>
-<p className="text-xs font-medium text-brand-500 font-mono">
+<p className="text-xs font-medium text-brand font-mono">
 دينا: منصة التجارة الذكية · Smart Ports Software
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 text-xs font-mono text-slate-500 dark:text-slate-400">
+            <div className="flex items-center gap-1 text-xs font-mono text-muted">
               <Clock className="w-3.5 h-3.5" />
               <span>{currentTime}</span>
             </div>
@@ -798,9 +794,7 @@ return (
 
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4 z-10 w-full pt-4">
-        <div className={`w-full max-w-6xl rounded-3xl shadow-2xl backdrop-blur-2xl grid grid-cols-1 lg:grid-cols-12 overflow-hidden border transition-colors duration-300 ${
-          themeMode === 'light' ? 'bg-white/90 border-gray-200' : 'bg-slate-950/80 border-slate-800'
-        }`}>
+        <div className="w-full max-w-6xl rounded-3xl shadow-2xl backdrop-blur-2xl grid grid-cols-1 lg:grid-cols-12 overflow-hidden border transition-colors duration-300 bg-surface/90 border-hairline">
           {/* Right / form side — spans the visual right in LTR and is handled with logical layout for RTL */}
           <div className="lg:col-span-7 p-6 sm:p-10 flex flex-col justify-between relative">
             <div>
@@ -886,7 +880,11 @@ return (
             </div>
           </div>
 
-          {/* Left / diagnostics side */}
+          {/* Left / diagnostics side.
+              Intentionally dark in every theme (Fiori monitoring-panel
+              pattern): a status board read at arm's length needs maximum
+              contrast against the form side. Secondary text below uses theme
+              tokens so the panel still adapts its ink. */}
           <div className="lg:col-span-5 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 p-6 sm:p-8 flex flex-col justify-between border-t lg:border-t-0 lg:border-r border-slate-800 relative overflow-hidden">
             <div>
               {/* Brand card */}
@@ -898,11 +896,11 @@ return (
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent p-3 flex flex-col justify-end">
                   <span className="text-[10px] text-cyan-300 font-mono font-bold tracking-wider">SMART PORTS SOFTWARE</span>
-                  <p className="text-xs font-black text-white">المنظومة السحابية المعتمدة لنقاط البيع والكاشير</p>
+                  <p className="text-xs font-black text-white">منصة دينا السحابية لإدارة التجارة والأعمال</p>
                 </div>
               </div>
 
-              <div className="inline-flex items-center gap-1.5 bg-brand-500/10 border border-brand-500/30 px-3 py-1 rounded-full text-xs font-bold text-brand-400 mb-3">
+              <div className="inline-flex items-center gap-1.5 bg-brand-soft/10 border border-brand/30 px-3 py-1 rounded-full text-xs font-bold text-brand-strong mb-3">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>جاهزية التشغيل والربط المباشر</span>
               </div>
@@ -949,9 +947,7 @@ return (
         </div>
       </main>
 
-      <footer className={`p-3 text-center text-[10px] opacity-70 z-50 transition-colors duration-300 ${
-        themeMode === 'light' ? 'bg-gray-100' : 'bg-slate-900'
-      }`}>
+      <footer className="p-3 text-center text-[10px] opacity-70 z-50 transition-colors duration-300 bg-subtle">
         <p>© {new Date().getFullYear()} شركة المنافذ الذكية للبرمجيات (Smart Ports Software) · دينا: منصة التجارة الذكية SaaS</p>
       </footer>
     </div>
@@ -1382,7 +1378,7 @@ const TwoFactorGate: React.FC<TwoFactorGateProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 animate-in zoom-in-95 duration-200">
-      <div className={`bg-slate-950 p-4 rounded-2xl border border-brand-500/40 text-center ${themeMode === 'light' ? 'bg-white/80' : ''}`}>
+      <div className="bg-subtle p-4 rounded-2xl border border-brand/40 text-center">
         <div className="w-10 h-10 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center mx-auto mb-2 border border-brand-500/30">
           <Smartphone className="w-5 h-5" />
         </div>

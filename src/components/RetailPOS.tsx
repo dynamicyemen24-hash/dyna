@@ -455,7 +455,7 @@ export const RetailPOS: React.FC = () => {
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-black">نقطة البيع</h2>
+              <h2 className="text-2xl font-black">المبيعات</h2>
               {/*
                 The badge that used to sit here read "ZATCA Phase 2 Ready" with
                 a green pulsing dot, driven by `useState(true)` — a constant, not

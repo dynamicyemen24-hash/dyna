@@ -205,7 +205,7 @@ export const ThirdPartySaleView: React.FC = () => {
   const totalNetDueSellers = sales.reduce((acc, s) => acc + s.netToSeller, 0);
 
   return (
-    <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-slate-950 text-slate-100 font-['Cairo',sans-serif]">
+    <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-canvas text-ink font-['Cairo',sans-serif]">
       {/* Top Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>

@@ -86,7 +86,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'intelligence', label: 'مركز الذكاء', labelEn: 'Intelligence', icon: BrainCircuit, area: 'overview' },
   { id: 'assistant', label: 'المساعد الذكي', labelEn: 'AI Assistant', icon: Sparkles, area: 'overview' },
 
-  { id: 'pos', label: 'نقطة البيع', labelEn: 'Point of Sale', icon: ShoppingCart, area: 'sell' },
+  { id: 'pos', label: 'المبيعات', labelEn: 'Sales', icon: ShoppingCart, area: 'sell' },
   { id: 'product', label: 'البيع السريع', labelEn: 'Quick Sale', icon: Package, area: 'sell' },
   { id: 'customer', label: 'العملاء', labelEn: 'Customers', icon: Users, area: 'sell' },
   { id: 'appointment', label: 'المواعيد', labelEn: 'Appointments', icon: Calendar, area: 'sell' },

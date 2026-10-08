@@ -498,7 +498,7 @@ export function useWorkCenter(): WorkCenter {
       subtitle: `${k.invoicesToday} فاتورة منجزة`,
       metric: sar(k.revenueToday),
       metricLabel: 'إيراد اليوم',
-      actionLabel: 'نقطة البيع',
+      actionLabel: 'المبيعات',
       target: 'pos',
       permissions: ['sales.create'],
     });

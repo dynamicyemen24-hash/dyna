@@ -86,7 +86,7 @@ export const SettingsView: React.FC = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-slate-950 text-slate-100 font-['Cairo',sans-serif]">
+    <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-canvas text-ink font-['Cairo',sans-serif]">
       <div className="mb-6">
         <h2 className="text-xl font-black text-white flex items-center gap-2">
           <Settings className="w-6 h-6 text-brand-400" />

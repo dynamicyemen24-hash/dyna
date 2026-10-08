@@ -78,7 +78,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({ products, tran
   ];
 
   return (
-    <div className="flex-1 flex flex-col p-6 overflow-hidden bg-slate-950 text-slate-100">
+    <div className="flex-1 flex flex-col p-6 overflow-hidden bg-canvas text-ink">
       <div className="mb-4">
         <h2 className="text-xl font-black text-white flex items-center gap-2">
           <Bot className="w-6 h-6 text-brand-400" />

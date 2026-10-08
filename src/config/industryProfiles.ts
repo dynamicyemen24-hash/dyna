@@ -19,23 +19,59 @@ export interface IndustryProfile {
  * than by any real entitlement. Capabilities are now *derived* from the tabs a
  * sector declares, which makes the two impossible to desynchronise.
  */
+/**
+ * Capability each screen requires, keyed by screen id.
+ *
+ * A `null` value means the screen is purely informational / chrome (work centre,
+ * settings, audit trail, AI assistant, intelligence hub) and is offered in every
+ * sector by design — it does not require a specific capability grant.
+ *
+ * Screens with a non-null value require that capability to be enabled in the
+ * tenant's `dypos.tenant_capabilities` grant for the screen to be licensed.
+ *
+ * NOTE: The `capabilitiesForProfile()` derivation function reads this map so
+ * that a screen can never be visible without the capability it requires. If a
+ * screen is added here without a capability, it will always be licensed (null
+ * gate), which is the intended behaviour for chrome/screens.
+ */
 export const SCREEN_CAPABILITY: Record<string, string | null> = {
+  // Dashboard & intelligence chrome
+  dashboard: null,
+  intelligence: null,
+  assistant: null,
+
+  // Core sell & supply
+  pos: 'sales',
   product: 'product',
   inventory: 'product',
   purchases: 'product',
   customer: 'customer',
   measurement: 'measurement',
-  appointment: 'appointment',
+  service: 'service',
+
+  // Restaurant & catering
+  restaurant: 'service',
+  consignment: 'product',
+
+  // Work & production
   work_order: 'work_order',
   production: 'production',
   batch_expiry: 'batch_expiry',
-  serial_imei: 'serial_imei',
+  serial_imei: 'serial',
+
+  // Finance & accounting
   commission: 'commission',
   delivery: 'delivery',
   subscription: 'subscription',
   ledger: 'ledger',
   financials: 'ledger',
-  service: 'service',
+
+  // Governance & HR
+  reports: 'reports',
+  hr: null,
+  branches: null,
+  audit: null,
+  settings: null,
 };
 
 /** Screens every sector shares — navigation, audit and configuration. */
@@ -231,25 +267,55 @@ const REASON_TEXT: Record<ScreenDenialReason, string> = {
 
 /**
  * The permission each screen requires, keyed by screen id (any-of semantics).
+/**
+ * Permission each screen requires, keyed by screen id (any-of semantics).
  *
  * A screen absent from this map needs no specific permission — it is either
- * purely informational (the work centre) or gated by the sector licence alone.
- * Every entry here mirrors a guard the server already enforces on that
- * screen's own routes, so the client never invents an entitlement it cannot
- * honour, and hiding is a usability measure, never a control.
+ * purely informational (the work centre, settings, audit trail) or gated by
+ * the sector licence alone. Every entry here mirrors a guard the server already
+ * enforces on that screen's own routes, so the client never invents an
+ * entitlement it cannot honour, and hiding is a usability measure, never a control.
+ *
+ * The `any-of` semantics means a screen is permitted when the user holds
+ * *any* of the listed permissions.
  */
 export const SCREEN_PERMISSIONS: Record<string, string[] | undefined> = {
+  // Dashboard & intelligence chrome — no specific permissions needed
+  dashboard: undefined,
+  intelligence: undefined,
+  assistant: undefined,
+
+  // Core sell & supply
   pos: ['sales.create', 'sales.void', 'sales.discount'],
   product: ['sales.create', 'sales.discount'],
   customer: ['customer.view', 'customer.create', 'customer.manage'],
   appointment: ['appointment.manage'],
-  inventory: ['inventory.view', 'inventory.adjust', 'product.manage'],
-  purchases: ['purchase.view', 'purchase.create', 'purchase.approve'],
+  measurement: ['inventory.view', 'inventory.adjust', 'product.manage'],
+  service: undefined,
+
+  // Restaurant & catering
+  restaurant: ['sales.create', 'sales.discount'],
+  consignment: ['sales.create'],
+
+  // Work & production
+  work_order: undefined,
+  production: undefined,
   batch_expiry: ['batch.view', 'batch.manage'],
   serial_imei: ['serial.view'],
+
+  // Finance & accounting
+  commission: undefined,
+  delivery: undefined,
+  subscription: undefined,
   ledger: ['ledger.view', 'ledger.post', 'ledger.reverse'],
   financials: ['reports.view'],
   reports: ['reports.view'],
+
+  // Governance & HR
+  hr: undefined,
+  branches: undefined,
+  audit: undefined,
+  settings: undefined,
 };
 
 /**
@@ -257,6 +323,16 @@ export const SCREEN_PERMISSIONS: Record<string, string[] | undefined> = {
  *
  * A kitchen display without a service area is not "an unused screen", it is a
  * wrong screen — so this is a sector rule, not a licence rule.
+ */
+/**
+ * Hard sector overrides: screens that make sense in exactly one sector.
+ *
+ * A kitchen display without a service area is not "an unused screen", it is a
+ * wrong screen — so this is a sector rule, not a licence rule.
+ *
+ * When a screen has an override entry, it will only be shown for tenants whose
+ * profileId matches one of the listed sector IDs. Screens without an override
+ * are governed by the sector's `tabs` list and capability grants instead.
  */
 export const SCREEN_SECTORS: Record<string, string[] | undefined> = {
   restaurant: ['restaurant'],
