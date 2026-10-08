@@ -376,6 +376,12 @@ export const LoginView: React.FC<{
   const [authError, setAuthError] = useState('');
   const [authedUser, setAuthedUser] = useState<StandardAuthParams | null>(null);
   const usernameRef = useRef<HTMLInputElement | null>(null);
+  const [showQuickLogin, setShowQuickLogin] = useState(false);
+  const [registrationInProgress, setRegistrationInProgress] = useState(false);
+  const [pendingLoginData, setPendingLoginData] = useState<{
+    username: string;
+    password: string;
+  } | null>(null);
 
   // ---- Context 2: surface mode ----
   const [inputMode, setInputMode] = useState<SurfaceMode>('standard');
@@ -405,6 +411,30 @@ export const LoginView: React.FC<{
       // Clear remembered username after first input to avoid staying stale
       const timer = setTimeout(() => setUsername(''), 1500);
       return () => clearTimeout(timer);
+    }
+    // Save progress if navigating away from login screen
+    if (authStep !== 'credentials') {
+      try {
+        sessionStorage.setItem('dypos_login_progress', JSON.stringify({ username, password }));
+      } catch {
+        // Storage disabled: progress lost gracefully
+      }
+    }
+  }, [authStep, username, password]);
+
+  // Restore progress on mount if we navigated away previously
+  useEffect(() => {
+    const saved = sessionStorage.getItem('dypos_login_progress');
+    if (saved) {
+      const data = JSON.parse(saved);
+      setUsername(data.username);
+      setPassword(data.password);
+      // Clear saved progress after restoring
+      try {
+        sessionStorage.removeItem('dypos_login_progress');
+      } catch {
+        // Storage disabled
+      }
     }
   }, []);
 
@@ -533,17 +563,29 @@ export const LoginView: React.FC<{
       // Remember username on this device if enabled
       if (rememberMe && username.trim()) {
         sessionStorage.setItem('dypos_remember_username', username);
+        // Also persist the rememberMe flag itself so App.tsx can auto-login next time
+        sessionStorage.setItem('dypos_remember_me', 'true');
+      } else {
+        // If rememberMe unchecked, clear any previously remembered data
+        sessionStorage.removeItem('dypos_remember_username');
+        sessionStorage.removeItem('dypos_remember_me');
       }
 
       // The server withheld the session: a second factor is outstanding.
-      if ('mfaRequired' in res) {
+      // Intelligent MFA: only require 2FA if rememberMe is NOT checked.
+      // If rememberMe IS checked, trusted device → skip MFA and proceed directly.
+      if ('mfaRequired' in res && !rememberMe) {
         setMfaChallenge(res);
         setOtpDigits(Array.from({ length: res.digits }, () => ''));
         setAuthStep('2fa');
         return;
       }
 
-      const s = res.session;
+      // At this point either: (a) no MFA required, or (b) rememberMe is checked
+      // and server allowed session without 2FA (trusted device). Proceed to login.
+      // Type-safe access: res is guaranteed to have .session at this point.
+      const sessionRes = res as { session: AuthedSession };
+      const s = sessionRes.session;
       sessionStorage.setItem('dypos_token', s.token);
       setAuthedUser({
         name: s.user.name,
@@ -551,7 +593,8 @@ export const LoginView: React.FC<{
         username: s.user.username,
         mustChangePassword: Boolean(s.mustChangePassword),
       });
-      setAuthStep('2fa');
+      // Note: navigation to main screen is handled by parent onAuthenticated
+      // callback after session is stored. No need to set authStep here.
     } catch (err: any) {
       // Map common authentication errors to user-friendly messages
       let message = 'تعذّر تسجيل الدخول';

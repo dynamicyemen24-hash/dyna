@@ -655,8 +655,9 @@ const AuthenticatedWorkspace: React.FC<{
 }> = ({ session, onSignOut }) => {
   const { branches, authority, snapshotFetchedAt, error, refresh } = useEntitlement();
   const identity = readSignedIdentity();
+  const remembered = sessionStorage.getItem('dypos_remember_me') === 'true';
 
-  if (!identity) {
+  if (!identity && !remembered) {
     return (
       <div role="alert" className="min-h-screen grid place-items-center p-6 text-center">
         <div className="max-w-md space-y-3">
@@ -670,6 +671,11 @@ const AuthenticatedWorkspace: React.FC<{
     );
   }
 
+  // If remembered but no identity (token expired), clear the remember flag
+  if (remembered && !identity) {
+    sessionStorage.removeItem('dypos_remember_me');
+  }
+
   const referenceBranches: Branch[] = branches
     .filter((branch) => branch.allowed)
     .map((branch) => ({ ...branch, manager: branch.manager || '' }));
@@ -678,7 +684,7 @@ const AuthenticatedWorkspace: React.FC<{
     <DataProvider
       operator={{ username: session.user.username, name: session.user.name, role: session.user.role }}
       referenceBranches={referenceBranches}
-      tenantId={identity.tenantId}
+      tenantId={identity!.tenantId}
       initialBranchId={session.branch?.id}
     >
       <AppContent
