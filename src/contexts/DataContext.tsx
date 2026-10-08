@@ -86,7 +86,7 @@ interface DataActions {
   /** Resolves true only once the server has recorded the shift. */
   openShift: (openingCash: number) => Promise<boolean>;
   /** Closes the shift, recording the counted closing balance for variance. */
-  closeShift: (closingCash: number) => void;
+  closeShift: (closingCash: number) => Promise<boolean>;
   setShift: (updater: (s: ShiftInfo) => ShiftInfo) => void;
   pushAudit: (
     action: string, details: string, category?: AuditLogEntry['category'],
@@ -115,6 +115,7 @@ const DataContext = createContext<DataContextValue | null>(null);
 
 /** A closed shift until the operator opens one. Not a fabricated balance. */
 const CLOSED_SHIFT: ShiftInfo = {
+  id: undefined,
   isOpen: false,
   cashierName: '',
   startTime: '',
@@ -246,6 +247,8 @@ export const DataProvider: React.FC<{
     return referenceBranches.find((branch) => branch.id === savedId) ?? null;
   });
   const [shift, setShiftState] = useState<ShiftInfo>(CLOSED_SHIFT);
+  const shiftRef = React.useRef<ShiftInfo>(CLOSED_SHIFT);
+  useEffect(() => { shiftRef.current = shift; }, [shift]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
 
   const [status, setStatus] = useState<LoadStatus>('idle');
@@ -460,6 +463,7 @@ export const DataProvider: React.FC<{
       );
       setShiftState({
         ...CLOSED_SHIFT,
+        id: res?.shiftId,
         isOpen: true,
         cashierName: operator.name || operator.username,
         startTime: new Date().toISOString(),
@@ -481,12 +485,21 @@ export const DataProvider: React.FC<{
    * actually needs, and it is computed ONCE here while the totals are still
    * known — not recomputed later from a partially reset state.
    */
-  const closeShift = useCallback((closingCash: number) => {
-    if (!Number.isFinite(closingCash) || closingCash < 0) return;
-    setShiftState((s) => {
-      if (!s.isOpen) return s;
-      const expected = Math.round((s.openingCash + s.cashSales) * 100) / 100;
-      const variance = Math.round((closingCash - expected) * 100) / 100;
+  const closeShift = useCallback(async (closingCash: number) => {
+    if (!Number.isFinite(closingCash) || closingCash < 0) return false;
+    const current = shiftRef.current;
+    if (!current.isOpen || !current.id) return false;
+    try {
+      const res = await apiPost<{ shiftId: string; closingCash: number; expectedCash?: number; difference?: number }>(
+        '/api/auth/shift/close',
+        { shiftId: current.id, closingCash: Math.round(closingCash * 100) / 100 },
+      );
+      const expected = Number.isFinite(Number(res?.expectedCash))
+        ? Number(res.expectedCash)
+        : Math.round((current.openingCash + current.cashSales) * 100) / 100;
+      const variance = Number.isFinite(Number(res?.difference))
+        ? Number(res.difference)
+        : Math.round((closingCash - expected) * 100) / 100;
       setAuditLogs((prev) => [{
         id: `log-${Date.now()}-shift-close`,
         timestamp: new Date().toISOString(),
@@ -498,8 +511,11 @@ export const DataProvider: React.FC<{
           ` · الفرق ${variance.toFixed(2)}`,
         category: variance === 0 ? 'info' : 'warning',
       } as AuditLogEntry, ...prev]);
-      return { ...CLOSED_SHIFT };
-    });
+      setShiftState({ ...CLOSED_SHIFT });
+      return true;
+    } catch {
+      return false;
+    }
   }, [operator.name, operator.username, selectedBranch?.name]);
 
   const pushAudit = useCallback((
