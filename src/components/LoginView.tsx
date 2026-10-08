@@ -376,6 +376,7 @@ export const LoginView: React.FC<{
   const [authError, setAuthError] = useState('');
   const [authedUser, setAuthedUser] = useState<StandardAuthParams | null>(null);
   const usernameRef = useRef<HTMLInputElement | null>(null);
+  const passwordRef = useRef<HTMLInputElement | null>(null);
   const [showQuickLogin, setShowQuickLogin] = useState(false);
   const [registrationInProgress, setRegistrationInProgress] = useState(false);
   const [pendingLoginData, setPendingLoginData] = useState<{
