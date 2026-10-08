@@ -702,9 +702,16 @@ export function registerAuthRoutes(app: Express) {
     const shiftId = String(req.body?.shiftId ?? '').trim();
     if (!shiftId) return fail(res, 400, 'حدد رقم الوردية');
 
+    const actorUser = (await pool.query(
+      `SELECT id FROM dypos.users WHERE tenant_id = $1 AND username = $2`,
+      [tenantId, actor.username],
+    )).rows[0];
+    if (!actorUser) return fail(res, 403, 'الجلسة لم تعد صالحة');
+
     const shift = (await pool.query(
-      `SELECT * FROM dypos.pos_sessions WHERE id = $1 AND tenant_id = $2`,
-      [shiftId, tenantId],
+      `SELECT * FROM dypos.pos_sessions
+        WHERE id = $1 AND tenant_id = $2 AND user_id = $3`,
+      [shiftId, tenantId, actorUser.id],
     )).rows[0];
     if (!shift) return fail(res, 404, 'الوردية غير موجودة أو لا تتبع هذه المؤسسة');
 
