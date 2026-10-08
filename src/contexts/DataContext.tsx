@@ -278,7 +278,7 @@ export const DataProvider: React.FC<{
       })
       .catch(() => {});
     return () => { alive = false; };
-  // The signed-in operator is the lifecycle boundary; branch snapshots may be refreshed independently.  // eslint-disable-next-line react-hooks/exhaustive-deps  }, [operator.name, operator.username]);
+  }, [operator.name, operator.username]);
 
   useEffect(() => {
     setBranches(referenceBranches);
