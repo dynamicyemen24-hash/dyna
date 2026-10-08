@@ -230,6 +230,7 @@ function AppContent({
           customerName: data.customerName ?? 'عميل نقدي',
           cashierName: shift.cashierName,
           branchId: selectedBranch.id,
+          shiftId: shift.id ?? null,
           items: lines,
         });
 
@@ -294,6 +295,7 @@ function AppContent({
             paymentMethod: data.paymentMethod ?? 'mada',
             customerName: data.customerName ?? 'عميل نقدي',
             cashierName: shift.cashierName,
+            shiftId: shift.id ?? null,
             items: lines,
           };
           const queueId = offlineSyncService.enqueue('transaction', `فاتورة ${selectedBranch.name}`, queuedPayload);
@@ -434,8 +436,8 @@ function AppContent({
    * reach state, and is written to exactly one place (`openShift`).
    */
   const handleToggleShift = useCallback(async (openingCash: number) => {
-    if (shift.isOpen) closeShift(openingCash);
-    else await openShift(openingCash);
+    if (shift.isOpen) return closeShift(openingCash);
+    return openShift(openingCash);
   }, [shift.isOpen, openShift, closeShift]);
 
   /*

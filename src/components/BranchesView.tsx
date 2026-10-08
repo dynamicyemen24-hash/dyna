@@ -8,7 +8,7 @@ interface BranchesViewProps {
   selectedBranch: Branch;
   onSelectBranch: (branch: Branch) => void;
   shift: ShiftInfo;
-  onToggleShift: (openingCash: number) => void | Promise<void>;
+  onToggleShift: (openingCash: number) => void | boolean | Promise<void | boolean>;
   /** The signed-in operator, for the audit line on the count. */
   cashierName?: string;
 }
@@ -40,8 +40,8 @@ export const BranchesView: React.FC<BranchesViewProps> = ({
   const confirmCount = async (value: number) => {
     setBusy(true);
     try {
-      await onToggleShift(value);
-      setDialogOpen(false);
+      const result = await onToggleShift(value);
+      if (result !== false) setDialogOpen(false);
     } finally {
       setBusy(false);
     }

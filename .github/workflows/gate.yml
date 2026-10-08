@@ -31,7 +31,7 @@ name: gate
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -223,12 +223,13 @@ database:
         run: npm run test:offline
 
   deploy:
-    name: deploy (manual, confirmed)
+    name: deploy (verified main)
     runs-on: ubuntu-latest
     needs: [verify]
-    # Publishing to paying customers is a human decision. The gate proves the
-    # build is sound; it does not decide to ship it.
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    # Production is commit-driven: main may publish only after the exact
+    # artifact passed the verification gate. workflow_dispatch remains available
+    # for an explicit production replay when needed.
+    if: github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     steps:
       - uses: actions/checkout@v4
@@ -243,6 +244,14 @@ database:
       - uses: actions/download-artifact@v4
         with:
           name: dist-verified
+
+      # Apply numbered database migrations before the application is exposed.
+      # Migrations are idempotent and the production-safe migrations remain
+      # backwards-compatible with the verified application artifact.
+      - name: Apply production database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx tsx scripts/migrate.ts
 
       # The `verify` job built this exact `dist/`. Rebuilding it here would
       # defeat the purpose: the bytes that passed the gate would not be the bytes

@@ -165,10 +165,16 @@ function activeTenant(): string | null {
 
     if (!token) return null;
 
-    // 3. Decode the JWT payload to get tenantId.
-    const body = token.slice(0, token.indexOf('.'));
-    if (!body) return null;
-    const json = atob(body.replace(/-/g, '+').replace(/_/g, '/'));
+    // 3. Decode the JWT PAYLOAD (the middle segment) to get tenantId.
+    // The first segment is the JOSE header. Reading it as the payload makes
+    // tenant resolution fail closed to __unclaimed__, so a perfectly valid
+    // offline queue can never be restored after a reload.
+    const parts = token.split('.');
+    if (parts.length < 2 || !parts[1]) return null;
+    const payload = parts[1];
+    const padded = payload.replace(/-/g, '+').replace(/_/g, '/')
+      + '='.repeat((4 - (payload.length % 4)) % 4);
+    const json = atob(padded);
     const { tenantId } = JSON.parse(json) as { tenantId?: string };
     return typeof tenantId === 'string' && tenantId.trim() ? tenantId.trim() : null;
   } catch {
@@ -234,7 +240,9 @@ class OfflineSyncManager {
       // server and weakens replay detection for restored outbox items.
       const existing = localStorage.getItem(KEY);
       if (existing) return existing;
-      const minted = `d${Math.random().toString(36).slice(2, 10)}`;
+      const minted = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? `d${crypto.randomUUID().replace(/-/g, '')}`
+        : `d${Math.random().toString(36).slice(2, 10)}`;
       localStorage.setItem(KEY, minted);
       return minted;
     } catch {

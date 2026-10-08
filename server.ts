@@ -386,6 +386,22 @@ export async function createApp(): Promise<Express> {
       }
 
       const id = b.id || makeId('inv');
+    const shiftId = typeof b.shiftId === 'string' ? b.shiftId.trim() : null;
+    if (!shiftId) {
+      await client.query('ROLLBACK');
+      return fail(res, 409, 'افتح وردية فعّالة قبل تسجيل المبيعات');
+    }
+    {
+      const shift = (await client.query(
+        `SELECT id FROM dypos.pos_sessions
+           WHERE id = $1 AND tenant_id = $2 AND branch_id = $3 AND status = 'open'`,
+        [shiftId, tenant, b.branchId ?? null],
+      )).rows[0];
+      if (!shift) {
+        await client.query('ROLLBACK');
+        return fail(res, 409, 'الوردية غير مفتوحة أو لا تتبع هذا الفرع');
+      }
+    }
 
       /*
        * ══ PRICES AND TAX ARE COMPUTED HERE, NOT SENT BY THE CLIENT ═══════
@@ -537,8 +553,8 @@ export async function createApp(): Promise<Express> {
            (id, tenant_id, invoice_number, branch_id, customer_name,
             cashier_name, subtotal, tax, discount, total,
             payment_method, status, currency_code, exchange_rate, items, timestamp,
-            idempotency_key)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17)
+            idempotency_key, shift_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18)
          RETURNING *`,
         [
           id, tenant, invoiceNumber, b.branchId ?? null, b.customerName ?? 'عميل نقدي',
@@ -546,7 +562,7 @@ export async function createApp(): Promise<Express> {
           b.paymentMethod ?? 'mada', 'completed',
           b.currencyCode ?? 'SAR', Number(b.exchangeRate ?? 1),
           JSON.stringify(items), b.timestamp ?? new Date().toISOString(),
-          idempotencyKey,
+          idempotencyKey, shiftId,
         ],
       );
 
@@ -878,6 +894,20 @@ app.get('/api/tenant/context', async (req, res) => {
           continue;
         }
         const invoiceNumber = String(tx.invoiceNumber || tx.invoice_number);
+        const shiftId = typeof tx.shiftId === 'string' ? tx.shiftId.trim() : '';
+        if (!shiftId) {
+          txSkipped++;
+          continue;
+        }
+        const shift = (await client.query(
+          `SELECT id, branch_id FROM dypos.pos_sessions
+             WHERE id = $1 AND tenant_id = $2`,
+          [shiftId, tenant],
+        )).rows[0];
+        if (!shift || (tx.branchId && String(tx.branchId) !== String(shift.branch_id))) {
+          txSkipped++;
+          continue;
+        }
 
         /*
          * AMOUNTS ARE NOT TAKEN FROM THE REQUEST.
@@ -931,19 +961,20 @@ app.get('/api/tenant/context', async (req, res) => {
           `INSERT INTO dypos.invoices (
              id, tenant_id, invoice_number, branch_id, cashier_name,
              customer_name, subtotal, tax, discount, total, payment_method,
-             status, items, timestamp)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+             status, items, timestamp, shift_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
            ON CONFLICT (id) DO UPDATE SET
              status = EXCLUDED.status, total = EXCLUDED.total,
              subtotal = EXCLUDED.subtotal, tax = EXCLUDED.tax,
              updated_at = CURRENT_TIMESTAMP`,
           [
-            tx.id, tenant, invoiceNumber, tx.branchId || 'main',
+            tx.id, tenant, invoiceNumber, tx.branchId || shift.branch_id,
             tx.cashierName || 'الكاشير', tx.customerName || 'عميل نقدي',
             subtotal, tax, 0, total,
             tx.paymentMethod || 'mada', tx.status || 'completed',
             JSON.stringify(items),
             tx.timestamp || new Date().toISOString(),
+            tx.shiftId || null,
           ],
         );
         txInserted++;
