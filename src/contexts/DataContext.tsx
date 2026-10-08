@@ -256,6 +256,31 @@ export const DataProvider: React.FC<{
   const [error, setError] = useState('');
 
   useEffect(() => {
+    let alive = true;
+    apiGet('/api/auth/shift/current')
+      .then((res: any) => {
+        if (!alive || !res?.shift) return;
+        const open = res.shift;
+        setSelectedBranch((current) =>
+          referenceBranches.find((b) => b.id === open.branchId) ?? current,
+        );
+        setShiftState({
+          id: open.id,
+          isOpen: true,
+          cashierName: operator.name || operator.username,
+          startTime: open.startTime,
+          openingCash: Number(open.openingCash || 0),
+          totalSales: Number(open.totalSales || 0),
+          cashSales: Number(open.cashSales || 0),
+          cardSales: Number(open.cardSales || 0),
+          transactionsCount: Number(open.transactionsCount || 0),
+        });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [operator.name, operator.username, referenceBranches]);
+
+  useEffect(() => {
     setBranches(referenceBranches);
     setSelectedBranch((current) => {
       let persistedId: string | null = null;
