@@ -650,6 +650,51 @@ export function registerAuthRoutes(app: Express) {
    * - Closing cash is counted and verified against opening + sales - payments
    * - One close per shift (idempotent)
    */
+  app.get('/api/auth/shift/current', attachPrincipal, requireRotatedPassword, requirePermission('pos.use'), asyncRoute(async (req, res) => {
+    const actor = req.principal!;
+    const user = (await pool.query(
+      `SELECT id FROM dypos.users WHERE tenant_id = $1 AND username = $2`,
+      [actor.tenantId, actor.username],
+    )).rows[0];
+    if (!user) return fail(res, 403, 'الجلسة لم تعد صالحة');
+
+    const row = (await pool.query(
+      `SELECT id, branch_id, opening_time, opening_cash, status
+         FROM dypos.pos_sessions
+        WHERE tenant_id = $1 AND user_id = $2 AND status = 'open'
+        ORDER BY opening_time DESC
+        LIMIT 1`,
+      [actor.tenantId, user.id],
+    )).rows[0];
+
+    if (!row) return res.json({ shift: null });
+
+    const totals = (await pool.query(
+      `SELECT
+         COALESCE(SUM(total), 0) AS total_sales,
+         COALESCE(SUM(total) FILTER (WHERE payment_method IN ('cash','mada')), 0) AS cash_sales,
+         COALESCE(SUM(total) FILTER (WHERE payment_method NOT IN ('cash','mada')), 0) AS non_cash_sales,
+         COUNT(*) AS transactions_count
+       FROM dypos.invoices
+      WHERE tenant_id = $1 AND branch_id = $2 AND shift_id = $3 AND status = 'completed'`,
+      [actor.tenantId, row.branch_id, row.id],
+    )).rows[0];
+
+    res.json({
+      shift: {
+        id: row.id,
+        branchId: row.branch_id,
+        startTime: row.opening_time,
+        openingCash: Number(row.opening_cash || 0),
+        totalSales: Number(totals?.total_sales || 0),
+        cashSales: Number(totals?.cash_sales || 0),
+        cardSales: Number(totals?.non_cash_sales || 0),
+        transactionsCount: Number(totals?.transactions_count || 0),
+        status: row.status,
+      },
+    });
+  }));
+
   app.post('/api/auth/shift/close', attachPrincipal, requireRotatedPassword, requirePermission('pos.use'), asyncRoute(async (req, res) => {
     const actor = req.principal!;
     const tenantId = actor.tenantId;
@@ -672,10 +717,15 @@ export function registerAuthRoutes(app: Express) {
 
     // Compute expected: opening + total sales - payments received
     const sales = await pool.query(
-      `SELECT COALESCE(SUM(total), 0) AS total FROM dypos.invoices WHERE tenant_id = $1 AND branch_id = $2 AND status = 'completed'`,
-      [tenantId, shift.branch_id],
+      `SELECT
+         COALESCE(SUM(total), 0) AS total_sales,
+         COALESCE(SUM(total) FILTER (WHERE payment_method IN ('cash','mada')), 0) AS cash_sales
+       FROM dypos.invoices
+      WHERE tenant_id = $1 AND branch_id = $2 AND shift_id = $3 AND status = 'completed'`,
+      [tenantId, shift.branch_id, shiftId],
     );
-    const totalSales = Number(sales.rows[0].total);
+    const totalSales = Number(sales.rows[0].total_sales);
+    const cashSales = Number(sales.rows[0].cash_sales);
 
     const alreadyClosed = (await pool.query(
       `SELECT id FROM dypos.pos_sessions WHERE id = $1 AND status = 'closed'`,
@@ -683,20 +733,30 @@ export function registerAuthRoutes(app: Express) {
     )).rows[0];
     if (alreadyClosed) return fail(res, 400, 'تم إغلاق هذه الوردية بالفعل');
 
-    const id = shiftId; // Reuse the same shift ID for close
+    const expectedCash = Number(shift.opening_cash || 0) + cashSales;
+    const difference = closingCash - expectedCash;
+
     await pool.query(
       `UPDATE dypos.pos_sessions
          SET closing_cash = $1,
              end_time = NOW(),
              status = 'closed'
-       WHERE id = $2`,
-      [closingCash, shiftId],
+       WHERE id = $2 AND tenant_id = $3 AND status = 'open'`,
+      [closingCash, shiftId, tenantId],
     );
 
     await audit(tenantId, actor.username, 'shift_close', req,
-      `الرصيد الختائي ${closingCash.toFixed(2)} · الرصيد الافتتاحي ${shift.opening_cash.toFixed(2)} · المبيعات ${totalSales.toFixed(2)}`);
+      `الرصيد الختامي ${closingCash.toFixed(2)} · الافتتاحي ${Number(shift.opening_cash).toFixed(2)} · النقدية ${cashSales.toFixed(2)} · إجمالي المبيعات ${totalSales.toFixed(2)} · الفرق ${difference.toFixed(2)}`);
 
-    res.json({ shiftId, closingCash, startTime: shift.start_time, endTime: new Date().toISOString(), status: 'closed' });
+    res.json({
+      shiftId,
+      closingCash,
+      expectedCash,
+      difference,
+      startTime: shift.opening_time ?? shift.start_time,
+      endTime: new Date().toISOString(),
+      status: 'closed',
+    });
   }));
 
   /**
