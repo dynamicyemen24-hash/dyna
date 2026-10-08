@@ -952,7 +952,7 @@ return (
       <footer className={`p-3 text-center text-[10px] opacity-70 z-50 transition-colors duration-300 ${
         themeMode === 'light' ? 'bg-gray-100' : 'bg-slate-900'
       }`}>
-        <p>© {new Date().getFullYear()} شركة المنافذ الذكية للبرمجيات (Smart Ports Software) · منصة التجارة · بقاعدة بيانات Neon PostgreSQL</p>
+        <p>© {new Date().getFullYear()} شركة المنافذ الذكية للبرمجيات (Smart Ports Software) · دينا: منصة التجارة الذكية SaaS</p>
       </footer>
     </div>
   );
