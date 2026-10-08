@@ -60,7 +60,9 @@ export interface SyncResult {
 
 export type SyncHandler = (items: OfflineQueueItem[]) => Promise<SyncResult>;
 
-export type NotificationType = 'online' | 'offline' | 'syncing' | 'success' | 'error';
+export type NotificationType = 
+  | 'online' | 'offline' | 'syncing' | 'success' | 'error'
+  | 'conflict' | 'partial' | 'retry_later';
 
 export interface OfflineNotification {
   id: string;
@@ -369,9 +371,17 @@ class OfflineSyncManager {
         if (this.scheduleIntervalMinutes > 0) {
           this.scheduleDelayedSync(this.scheduleIntervalMinutes * 60 * 1000);
         } else {
-          // Instant sync
+          // Instant sync with retry logic
           setTimeout(() => {
-            this.syncNow();
+            this.syncNow().then((result) => {
+              if (result.success && result.syncedCount > 0) {
+                this.showNotification(
+                  'success',
+                  'المزامنة التلقائيةcompleted ✅',
+                  `${result.syncedCount} عملية تم ترحيلها بنجاح إلى السحابة`,
+                );
+              }
+            });
           }, 800);
         }
       } else {
@@ -503,12 +513,16 @@ class OfflineSyncManager {
         'تم حفظ العملية محلياً (Offline)',
         `تم تسجيل "${title}" في قائمة الانتظار المحلية بأمان. إجمالي العمليات المجدولة: ${this.queue.length}`
       );
+    } else if (this.autoSyncOnReconnect) {
+      // Queue the item and schedule immediate sync attempt
+      this.scheduleDelayedSync(200); // quick flush
+      this.showNotification(
+        'syncing',
+        'جاري الحفظ والمزامنة...',
+        `تم تسجيل "${title}" وسيتم المزامنة تلقائياً عند توفر الاتصال`
+      );
     } else {
-      if (this.autoSyncOnReconnect) {
-        this.scheduleDelayedSync(500); // quick flush
-      } else {
-        this.syncStatus = 'scheduled';
-      }
+      this.syncStatus = 'scheduled';
     }
 
     this.notify();
@@ -668,10 +682,41 @@ class OfflineSyncManager {
       const stillQueued = this.queue.length;
       if (stillQueued) parts.push(`${stillQueued} عملية لم تُحسم وستُعاد المحاولة`);
 
+      // Show appropriate notification based on outcomes
+      let notificationType: NotificationType = 'syncing';
+      let notificationTitle = 'اكتملت المزامنة جزئياً';
+      let notificationMessage = `${syncedCount} من ${unsyncedItems.length} عملية تم ترحيلها`;
+
+      if (conflicted.length > 0 && rejected.length > 0) {
+        notificationType = 'conflict';
+        notificationTitle = 'مزامنة بخلافات';
+      } else if (conflicted.length > 0) {
+        notificationType = 'conflict';
+        notificationTitle = 'عمليات تحتاج مراجعة';
+      } else if (rejected.length > 0) {
+        notificationType = 'error';
+        notificationTitle = 'عمليات rejected';
+      }
+
+      // Build detailed message
+      const detailParts: string[] = [];
+      if (conflicted.length) {
+        detailParts.push(`${conflicted.length} عملية تحتاج مراجعة يدوية`);
+      }
+      if (rejected.length) {
+        const why = rejected.map((r) => r.reason).filter(Boolean)[0];
+        detailParts.push(`${rejected.length} عملية rejected${why ? `: ${why}` : ''}`);
+      }
+      if (stillQueued) {
+        detailParts.push(`${stillQueued} عملية في الطابور`);
+      }
+
+      notificationMessage += ` · ${detailParts.join(' · ')}.`;
+
       this.showNotification(
-        rejected.length || conflicted.length ? 'error' : 'syncing',
-        `اكتملت المزامنة جزئياً — ${syncedCount} من ${unsyncedItems.length}`,
-        `${parts.join(' · ')}. العمليات غير المحسومة محفوظة في الطابور ولم تُفقد.`,
+        notificationType,
+        notificationTitle,
+        `${notificationMessage}. ${parts.join(' · ')}. العمليات غير المحسومة محفوظة في الطابور ولم تُفقد.`,
       );
     }
 
