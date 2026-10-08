@@ -891,6 +891,20 @@ app.get('/api/tenant/context', async (req, res) => {
           continue;
         }
         const invoiceNumber = String(tx.invoiceNumber || tx.invoice_number);
+        const shiftId = typeof tx.shiftId === 'string' ? tx.shiftId.trim() : '';
+        if (!shiftId) {
+          txSkipped++;
+          continue;
+        }
+        const shift = (await client.query(
+          `SELECT id, branch_id FROM dypos.pos_sessions
+             WHERE id = $1 AND tenant_id = $2`,
+          [shiftId, tenant],
+        )).rows[0];
+        if (!shift || (tx.branchId && String(tx.branchId) !== String(shift.branch_id))) {
+          txSkipped++;
+          continue;
+        }
 
         /*
          * AMOUNTS ARE NOT TAKEN FROM THE REQUEST.
@@ -951,7 +965,7 @@ app.get('/api/tenant/context', async (req, res) => {
              subtotal = EXCLUDED.subtotal, tax = EXCLUDED.tax,
              updated_at = CURRENT_TIMESTAMP`,
           [
-            tx.id, tenant, invoiceNumber, tx.branchId || 'main',
+            tx.id, tenant, invoiceNumber, tx.branchId || shift.branch_id,
             tx.cashierName || 'الكاشير', tx.customerName || 'عميل نقدي',
             subtotal, tax, 0, total,
             tx.paymentMethod || 'mada', tx.status || 'completed',
