@@ -702,62 +702,82 @@ export function registerAuthRoutes(app: Express) {
     const shiftId = String(req.body?.shiftId ?? '').trim();
     if (!shiftId) return fail(res, 400, 'حدد رقم الوردية');
 
+    const closingCash = Number(req.body?.closingCash);
+    if (!Number.isFinite(closingCash) || closingCash < 0) {
+      return fail(res, 400, 'الرصيد الختامي يجب أن يكون رقماً غير سالب');
+    }
+
     const actorUser = (await pool.query(
       `SELECT id FROM dypos.users WHERE tenant_id = $1 AND username = $2`,
       [tenantId, actor.username],
     )).rows[0];
     if (!actorUser) return fail(res, 403, 'الجلسة لم تعد صالحة');
 
-    const shift = (await pool.query(
-      `SELECT * FROM dypos.pos_sessions
-        WHERE id = $1 AND tenant_id = $2 AND user_id = $3`,
-      [shiftId, tenantId, actorUser.id],
-    )).rows[0];
-    if (!shift) return fail(res, 404, 'الوردية غير موجودة أو لا تتبع هذه المؤسسة');
+    // Closing is a financial boundary: lock the shift row so two concurrent
+    // close requests cannot both calculate a Z-report and both report success.
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    if (shift.status !== 'open') return fail(res, 400, 'الوردية غير مفتوحة');
+      const shift = (await client.query(
+        `SELECT * FROM dypos.pos_sessions
+          WHERE id = $1 AND tenant_id = $2 AND user_id = $3
+          FOR UPDATE`,
+        [shiftId, tenantId, actorUser.id],
+      )).rows[0];
+      if (!shift) {
+        await client.query('ROLLBACK');
+        return fail(res, 404, 'الوردية غير موجودة أو لا تتبع هذه المؤسسة');
+      }
+      if (shift.status !== 'open') {
+        await client.query('ROLLBACK');
+        return fail(res, 400, 'الوردية غير مفتوحة');
+      }
 
-    const closingCash = Number(req.body?.closingCash);
-    if (!Number.isFinite(closingCash) || closingCash < 0) {
-      return fail(res, 400, 'الرصيد الختامي يجب أن يكون رقماً غير سالب');
+      const sales = await client.query(
+        `SELECT
+           COALESCE(SUM(total), 0) AS total_sales,
+           COALESCE(SUM(total) FILTER (WHERE payment_method IN ('cash','mada')), 0) AS cash_sales
+         FROM dypos.invoices
+        WHERE tenant_id = $1 AND branch_id = $2 AND shift_id = $3 AND status = 'completed'`,
+        [tenantId, shift.branch_id, shiftId],
+      );
+      const totalSales = Number(sales.rows[0].total_sales);
+      const cashSales = Number(sales.rows[0].cash_sales);
+
+      const expectedCash = Number(shift.opening_cash || 0) + cashSales;
+      const difference = closingCash - expectedCash;
+      const closedAt = new Date();
+
+      await client.query(
+        `UPDATE dypos.pos_sessions
+           SET closing_cash = $1,
+               end_time = $2,
+               status = 'closed'
+         WHERE id = $3 AND tenant_id = $4 AND user_id = $5 AND status = 'open'`,
+        [closingCash, closedAt, shiftId, tenantId, actorUser.id],
+      );
+
+      await client.query('COMMIT');
+
+      await audit(tenantId, actor.username, 'shift_close', req,
+        `الرصيد الختامي ${closingCash.toFixed(2)} · الافتتاحي ${Number(shift.opening_cash).toFixed(2)} · النقدية ${cashSales.toFixed(2)} · إجمالي المبيعات ${totalSales.toFixed(2)} · الفرق ${difference.toFixed(2)}`);
+
+      res.json({
+        shiftId,
+        closingCash,
+        expectedCash,
+        difference,
+        startTime: shift.opening_time ?? shift.start_time,
+        endTime: closedAt.toISOString(),
+        status: 'closed',
+      });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
     }
-
-    // Compute expected: opening + total sales - payments received
-    const sales = await pool.query(
-      `SELECT
-         COALESCE(SUM(total), 0) AS total_sales,
-         COALESCE(SUM(total) FILTER (WHERE payment_method IN ('cash','mada')), 0) AS cash_sales
-       FROM dypos.invoices
-      WHERE tenant_id = $1 AND branch_id = $2 AND shift_id = $3 AND status = 'completed'`,
-      [tenantId, shift.branch_id, shiftId],
-    );
-    const totalSales = Number(sales.rows[0].total_sales);
-    const cashSales = Number(sales.rows[0].cash_sales);
-
-    const expectedCash = Number(shift.opening_cash || 0) + cashSales;
-    const difference = closingCash - expectedCash;
-
-    await pool.query(
-      `UPDATE dypos.pos_sessions
-         SET closing_cash = $1,
-             end_time = NOW(),
-             status = 'closed'
-       WHERE id = $2 AND tenant_id = $3 AND status = 'open'`,
-      [closingCash, shiftId, tenantId],
-    );
-
-    await audit(tenantId, actor.username, 'shift_close', req,
-      `الرصيد الختامي ${closingCash.toFixed(2)} · الافتتاحي ${Number(shift.opening_cash).toFixed(2)} · النقدية ${cashSales.toFixed(2)} · إجمالي المبيعات ${totalSales.toFixed(2)} · الفرق ${difference.toFixed(2)}`);
-
-    res.json({
-      shiftId,
-      closingCash,
-      expectedCash,
-      difference,
-      startTime: shift.opening_time ?? shift.start_time,
-      endTime: new Date().toISOString(),
-      status: 'closed',
-    });
   }));
 
   /**
