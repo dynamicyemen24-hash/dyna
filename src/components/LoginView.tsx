@@ -715,37 +715,13 @@ export const LoginView: React.FC<{
    * other tokenised component uses, so flipping `data-theme` restyles the whole
    * screen including the form, without a re-render.
    */
-  return (
+return (
     <div
       className="min-h-screen flex flex-col bg-[var(--t-canvas)] text-[var(--t-ink)] font-['Cairo',sans-serif] transition-colors duration-300"
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
-      {/* Announcement Bar (the missing visual for the existing ticker state) */}
-      <div className={`fixed top-0 left-0 right-0 z-[60] px-4 py-2 text-xs font-semibold flex items-center gap-3 ${
-        themeMode === 'light' ? 'bg-brand-600 text-white' : 'bg-brand-950/90 text-brand-50 backdrop-blur-sm'
-      } transition-colors duration-300`}>
-        <Bell className="w-3.5 h-3.5 shrink-0 animate-pulse" />
-        <span className="flex-1 truncate">{announcements[announcementIdx]}</span>
-        <div className="flex gap-1">
-          {announcements.map((_, i) => (
-            <div
-              key={i}
-              className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                i === announcementIdx ? 'bg-white' : 'bg-white/30'
-              }`}
-            />
-          ))}
-        </div>
-      </div>
-
-      {!reduceMotion && (
-        <Suspense fallback={null}>
-          <ThreeBackgroundCanvas currentTheme={themeMode} className="fixed inset-0 opacity-70 z-0 pointer-events-none" />
-        </Suspense>
-      )}
-
       {/* Header */}
-      <header className={`sticky top-0 z-50 backdrop-blur-xl border-b p-4 transition-colors duration-300 ${
+      <header className={`sticky top-0 z-50 backdrop-blur-xl border-b transition-colors duration-300 ${
         themeMode === 'light' ? 'bg-white/95 border-gray-200' : 'bg-slate-950/90 border-slate-800'
       }`}>
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -821,7 +797,7 @@ export const LoginView: React.FC<{
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center p-4 z-10 w-full pt-24">
+      <main className="flex-1 flex items-center justify-center p-4 z-10 w-full pt-4">
         <div className={`w-full max-w-6xl rounded-3xl shadow-2xl backdrop-blur-2xl grid grid-cols-1 lg:grid-cols-12 overflow-hidden border transition-colors duration-300 ${
           themeMode === 'light' ? 'bg-white/90 border-gray-200' : 'bg-slate-950/80 border-slate-800'
         }`}>
