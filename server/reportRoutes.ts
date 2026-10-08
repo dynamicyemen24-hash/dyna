@@ -13,6 +13,7 @@ export function registerReportRoutes(app: Express) {
    * BI screens receive a ready-to-use structure.
    */
   app.get('/api/db/transactions', asyncRoute(async (req, res) => {
+    res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=86400');
     const tenantId = tenantOf(req);
     const branchId = req.query.branchId as string | undefined;
     const limit = Math.min(Number(req.query.limit) || 300, 1000);
@@ -57,6 +58,7 @@ export function registerReportRoutes(app: Express) {
 
   /** KPI block that fills the dashboard tiles. */
   app.get('/api/db/dashboard', asyncRoute(async (req, res) => {
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
     const tenantId = tenantOf(req);
     const branchId = req.query.branchId as string | undefined;
 
@@ -117,6 +119,7 @@ export function registerReportRoutes(app: Express) {
  * round-trip and normalises it to the shape the client's queue engine scores.
  */
   app.get('/api/db/work-queue', asyncRoute(async (req, res) => {
+    res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=86400');
     const tenantId = tenantOf(req);
     const branchId = req.query.branchId as string | undefined;
 
@@ -206,6 +209,7 @@ export function registerReportRoutes(app: Express) {
 
   /** Daily sales series for the trend chart. */
   app.get('/api/db/reports/daily-sales', asyncRoute(async (req, res) => {
+    res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=86400');
     const tenantId = tenantOf(req);
     const days = Math.min(Number(req.query.days) || 14, 90);
     const result = await pool.query(
@@ -228,6 +232,7 @@ export function registerReportRoutes(app: Express) {
 
   /** Revenue split by payment method, for the pie chart. */
   app.get('/api/db/reports/payment-methods', asyncRoute(async (req, res) => {
+    res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=86400');
     const tenantId = tenantOf(req);
     const result = await pool.query(
       `SELECT payment_method, COALESCE(SUM(total),0)::numeric AS value,
@@ -242,6 +247,7 @@ export function registerReportRoutes(app: Express) {
 
   /** Best sellers, aggregated from the invoice line items. */
   app.get('/api/db/reports/top-products', asyncRoute(async (req, res) => {
+    res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=86400');
     const tenantId = tenantOf(req);
     const limit = Math.min(Number(req.query.limit) || 8, 50);
     const result = await pool.query(
@@ -261,6 +267,7 @@ export function registerReportRoutes(app: Express) {
 
   /** Sales grouped by branch. */
   app.get('/api/db/reports/by-branch', asyncRoute(async (req, res) => {
+    res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=86400');
     const tenantId = tenantOf(req);
     const result = await pool.query(
       `SELECT i.branch_id,
@@ -278,6 +285,7 @@ export function registerReportRoutes(app: Express) {
 
   /** Sales grouped by product category. */
   app.get('/api/db/reports/by-category', asyncRoute(async (req, res) => {
+    res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=86400');
     const tenantId = tenantOf(req);
     const result = await pool.query(
       `SELECT COALESCE(p.category, 'عام') AS name,

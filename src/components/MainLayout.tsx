@@ -273,7 +273,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                 D
               </div>
               <div className="leading-tight min-w-0">
-                <p className="text-sm font-semibold text-ink truncate">DyPOS</p>
+                <p className="text-sm font-semibold text-ink truncate">منصة التجارة</p>
                 <p className="text-2xs text-faint truncate">{tenant?.name || activeProfile.name_ar}</p>
               </div>
             </div>

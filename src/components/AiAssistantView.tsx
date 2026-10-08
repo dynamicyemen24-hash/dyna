@@ -12,7 +12,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({ products, tran
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([
     {
       role: 'assistant',
-      content: 'أهلاً بك يا فندم! أنا مساعد Gemini الذكي لنظام DyPOS. يمكنني تحليل مستويات المخزون، التنبؤ بالمنتجات الأكثر طلباً، تقديم استراتيجيات تسعير، أو الإجابة على أي استفسارات مالية. كيف يمكنني مساعدتك اليوم؟',
+      content: 'أهلاً بك يا فندم! أنا مساعد Gemini الذكي لنظام التجارة الذكية. يمكنني تحليل مستويات المخزون، التنبؤ بالمنتجات الأكثر طلباً، تقديم استراتيجيات تسعير، أو الإجابة على أي استفسارات مالية. كيف يمكنني مساعدتك اليوم؟',
     },
   ]);
   const [input, setInput] = useState('');

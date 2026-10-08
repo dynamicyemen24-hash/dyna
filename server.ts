@@ -1,4 +1,5 @@
 import express, { type Express } from 'express';
+import compression from 'compression';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
@@ -93,6 +94,8 @@ function getAiClient(): InstanceType<typeof GoogleGenAI> | null {
  */
 export async function createApp(): Promise<Express> {
   const app = express();
+
+  app.use(compression({ threshold: 512, filter: (_req, _res) => true }));
   app.use(express.json({ limit: '25mb' }));
 
   /*

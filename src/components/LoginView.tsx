@@ -399,16 +399,13 @@ export const LoginView: React.FC<{
 
   // ---- UX: remember-me persistence ----
   useEffect(() => {
-    if (rememberMe) {
-      sessionStorage.setItem('dypos_remember_username', username);
-    } else {
-      sessionStorage.removeItem('dypos_remember_username');
-    }
-  }, [username, rememberMe]);
-
-  useEffect(() => {
     const saved = sessionStorage.getItem('dypos_remember_username');
-    if (saved) setUsername(saved);
+    if (saved) {
+      setUsername(saved);
+      // Clear remembered username after first input to avoid staying stale
+      const timer = setTimeout(() => setUsername(''), 1500);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   // ---- UX: password strength ----
@@ -533,6 +530,11 @@ export const LoginView: React.FC<{
       // signed session token either way.
       rememberTenant(tenant.trim());
 
+      // Remember username on this device if enabled
+      if (rememberMe && username.trim()) {
+        sessionStorage.setItem('dypos_remember_username', username);
+      }
+
       // The server withheld the session: a second factor is outstanding.
       if ('mfaRequired' in res) {
         setMfaChallenge(res);
@@ -551,7 +553,29 @@ export const LoginView: React.FC<{
       });
       setAuthStep('2fa');
     } catch (err: any) {
-      setAuthError(err.message || 'تعذّر تسجيل الدخول');
+      // Map common authentication errors to user-friendly messages
+      let message = 'تعذّر تسجيل الدخول';
+      if (err.status) {
+        switch (err.status) {
+          case 401:
+            message = 'اسم المستخدم أو كلمة المرور غير صحيحة — تأكد من المدخلات وحاول مرة أخرى';
+            break;
+          case 403:
+            message = 'حسابك مقفل أو غير مفعل — راجع مشرف النظام';
+            break;
+          case 429:
+            message = 'عدد كبير من المحاولات — أعد المحاولة لاحقاً';
+            break;
+          case 503:
+            message = 'خدمة المصادقة غير متاحة حالياً — جرب مرة أخرى بعد لحظات';
+            break;
+          default:
+            message = err.message || 'تعذّر تسجيل الدخول';
+        }
+      } else {
+        message = err.message || 'تعذّر تسجيل الدخول';
+      }
+      setAuthError(message);
     } finally {
       setAuthBusy(false);
     }
@@ -685,14 +709,14 @@ export const LoginView: React.FC<{
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center p-1.5 shadow-lg transition-colors duration-300 ${
               themeMode === 'light' ? 'bg-slate-950 border border-brand-500/30' : 'bg-slate-900 border border-brand-500/30'
             }`}>
-              <img src="/favicon.ico" alt="DyPOS Icon" className="w-full h-full object-contain" />
+              <img src="/favicon.ico" alt="منصة التجارة Icon" className="w-full h-full object-contain" />
             </div>
             <div className="hidden sm:block">
               <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white transition-colors duration-300">
                 شركة المنافذ الذكية للبرمجيات
               </h1>
               <p className="text-xs font-medium text-brand-500 font-mono">
-                DyPOS Enterprise Cloud & Edge · Smart Ports Software
+                منصة التجارة · Smart Ports Software
               </p>
             </div>
           </div>
@@ -899,7 +923,7 @@ export const LoginView: React.FC<{
 
             <div className="mt-6 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
               <span>© {new Date().getFullYear()} شركة المنافذ الذكية للبرمجيات</span>
-              <span className="font-bold text-brand-400 font-mono">Smart Ports · DyPOS SaaS</span>
+              <span className="font-bold text-brand-400 font-mono">Smart Ports · منصة التجارة SaaS</span>
             </div>
           </div>
         </div>
@@ -908,7 +932,7 @@ export const LoginView: React.FC<{
       <footer className={`p-3 text-center text-[10px] opacity-70 z-50 transition-colors duration-300 ${
         themeMode === 'light' ? 'bg-gray-100' : 'bg-slate-900'
       }`}>
-        <p>© {new Date().getFullYear()} شركة المنافذ الذكية للبرمجيات (Smart Ports Software) · DyPOS Cloud & Edge · بقاعدة بيانات Neon PostgreSQL</p>
+        <p>© {new Date().getFullYear()} شركة المنافذ الذكية للبرمجيات (Smart Ports Software) · منصة التجارة · بقاعدة بيانات Neon PostgreSQL</p>
       </footer>
     </div>
   );
@@ -1028,7 +1052,9 @@ const BreakGlassPasscode: React.FC<BreakGlassPasscodeProps> = ({
     {authError && (
       <div className="flex items-start gap-2 rounded-xl border border-rose-500/40 bg-rose-950/60 px-3 py-2.5">
         <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-        <span className="text-[11px] text-rose-200 leading-relaxed">{authError}</span>
+        <span className="text-[11px] text-rose-200 leading-relaxed">
+          {authError}
+        </span>
       </div>
     )}
 
@@ -1665,17 +1691,17 @@ const StandardCredentials = React.forwardRef<HTMLInputElement, StandardCredentia
         </div>
 
         {/* Password strength meter */}
-        <div className="mt-2 h-1 flex gap-0.5">
+        <div className="mt-2 flex items-center gap-1">
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
-              className={`h-full flex-1 rounded-full transition-colors ${
-                i < passwordStrength ? (passwordStrength <= 1 ? 'bg-rose-500' : passwordStrength <= 2 ? 'bg-amber-500' : 'bg-brand-500') : 'bg-slate-700'
+              className={`w-1.5 rounded-full transition-colors bg-slate-700/50 ${
+                i < passwordStrength ? 'bg-brand-500' : 'bg-slate-700/30'
               }`}
             />
           ))}
         </div>
-        <p className="text-[9px] mt-0.5 text-slate-400">
+        <p className="text-[9px] mt-1 capitalize text-slate-400">
           {passwordStrength === 0 && 'ضع كلمة مرور'}
           {passwordStrength === 1 && 'ضعيفة'}
           {passwordStrength === 2 && 'متوسطة'}

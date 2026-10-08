@@ -1062,7 +1062,7 @@ export const POSView: React.FC<POSViewProps> = ({
              * The fiscal header comes from `dypos.tenants` and `dypos.branches`,
              * not from a literal in this file.
              *
-             * It used to read "شركة رويال العالمية - DyPOS / فرع الرياض الرئيسي /
+             * It used to read "شركة رويال العالمية - منصة التجارة / فرع الرياض الرئيسي /
              * 300123456700003" as three JSX text nodes. On a VAT invoice the tax
              * number is a legal assertion, so a compiled-in one means this build
              * cannot be issued to a second customer — it would print that

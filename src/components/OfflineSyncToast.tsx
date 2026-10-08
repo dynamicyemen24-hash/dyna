@@ -19,21 +19,23 @@ import {
   Sliders,
   SendHorizontal
 } from 'lucide-react';
-import {
-  offlineSyncService,
-  OfflineSyncState,
-  OfflineQueueItem,
-} from '../services/offlineSyncService';
+import { offlineSyncService, OfflineSyncState } from '../services/offlineSyncService';
+import NotificationBar from './NotificationBar';
 
 interface OfflineSyncToastProps {
   onForceSync?: () => Promise<boolean>;
 }
 
+/**
+ * OfflineSyncToast — now built on top of the reusable NotificationBar component.
+ * Provides the same offline sync status UX but using the expert-designed
+ * NotificationBar system for consistency across the entire system.
+ */
 export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync }) => {
   const [state, setState] = useState<OfflineSyncState>(offlineSyncService.getState());
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSyncingLocal, setIsSyncingLocal] = useState(false);
-  const pillRef = React.useRef<HTMLButtonElement | null>(null);
+  const pillRef = React.useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const unsub = offlineSyncService.subscribe((newState) => {
@@ -42,8 +44,6 @@ export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync 
     return () => unsub();
   }, []);
 
-  // Escape closes the detail card and returns focus to the status pill that
-  // opened it, so a keyboard operator is not dropped into the page body.
   useEffect(() => {
     if (!isExpanded) return;
     const onKey = (e: KeyboardEvent) => {
@@ -62,7 +62,7 @@ export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync 
     pillRef.current?.focus();
   };
 
-  // Auto-dismiss transient success notification after 5 seconds
+  // Auto-dismiss success notifications after 5 seconds
   useEffect(() => {
     if (state.notification && state.notification.type === 'success') {
       const timer = setTimeout(() => {
@@ -86,94 +86,44 @@ export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync 
 
   const isBusy = isSyncingLocal || state.syncStatus === 'syncing';
 
+  // Map internal notification types to NotificationBar variants
+  const variantMap: Record<string, 'success' | 'error' | 'warning' | 'info'> = {
+    offline: 'error',
+    online: 'success',
+    syncing: 'warning',
+    success: 'success',
+    error: 'error',
+  };
+
+  const variant = (state.notification && variantMap[state.notification.type]) || 'info';
+
+  // Build title and message from notification
+  const notificationTitle = state.notification?.title || 'تنبيه النظام';
+  const notificationMessage = state.notification
+    ? `${state.notification.message} ${state.pendingCount > 0 ? `· ${state.pendingCount} عملية مجدولة` : ''}`
+    : 'لا توجد تنبيهات';
+
   return (
     <div
       dir="rtl"
       className="fixed bottom-10 left-4 z-50 font-['Cairo',sans-serif] flex flex-col items-start gap-2 max-w-sm sm:max-w-md select-none transition-all duration-300 pointer-events-auto"
     >
-      {/* 1. Floating Instant Notification Toast (Appears upon network events or sync completions) */}
+      {/* 1. Instant Notification using NotificationBar */}
       {state.notification && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="w-full p-3.5 rounded-2xl border shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom-3 duration-300 flex items-start gap-3 relative bg-surface border-hairline text-ink"
-        >
-          <div className="shrink-0 mt-0.5">
-            {state.notification.type === 'offline' && (
-              <div className="w-8 h-8 rounded-xl bg-rose-500/15 border border-rose-500/40 flex items-center justify-center text-rose-600 dark:text-rose-400">
-                <WifiOff className="w-4 h-4 animate-pulse" />
-              </div>
-            )}
-            {state.notification.type === 'online' && (
-              <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/40 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                <Wifi className="w-4 h-4" />
-              </div>
-            )}
-            {state.notification.type === 'syncing' && (
-              <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              </div>
-            )}
-            {state.notification.type === 'success' && (
-              <div className="w-8 h-8 rounded-xl bg-brand-500/15 border border-brand-500/40 flex items-center justify-center text-brand-600 dark:text-brand-400">
-                <CheckCircle2 className="w-4 h-4" />
-              </div>
-            )}
-            {state.notification.type === 'error' && (
-              <div className="w-8 h-8 rounded-xl bg-rose-500/15 border border-rose-500/40 flex items-center justify-center text-rose-600 dark:text-rose-400">
-                <AlertTriangle className="w-4 h-4" />
-              </div>
-            )}
-          </div>
-
-          <div className="flex-1 min-w-0 pr-1">
-            <h4 className="text-xs font-black tracking-tight leading-tight flex items-center gap-1.5">
-              <span>{state.notification.title}</span>
-              {state.pendingCount > 0 && (
-                <span className="bg-subtle border border-hairline px-1.5 py-0.5 rounded text-[10px] font-mono font-bold text-muted">
-                  {state.pendingCount} مجدولة
-                </span>
-              )}
-            </h4>
-            <p className="text-[11px] leading-relaxed text-muted mt-1">
-              {state.notification.message}
-            </p>
-
-            {/* Quick action button inside the toast */}
-            <div className="mt-2 flex items-center gap-2">
-              {state.isOnline && state.pendingCount > 0 && (
-                <button
-                  type="button"
-                  onClick={handleManualSync}
-                  disabled={isBusy}
-                  className="px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-                >
-                  <SendHorizontal className="w-3 h-3" />
-                  <span>مزامنة العمليات الآن</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setIsExpanded(true)}
-                className="px-2.5 py-1 rounded-lg bg-subtle border border-hairline hover:bg-surface text-muted hover:text-ink text-[10px] font-bold transition flex items-center gap-1 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-              >
-                <Settings2 className="w-3 h-3" />
-                <span>إعدادات الجدولة</span>
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => offlineSyncService.dismissNotification()}
-            className="text-muted hover:text-ink p-1 rounded-lg transition shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-            title="إغلاق التنبيه"
-            aria-label="إغلاق التنبيه"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        <NotificationBar
+          key={state.notification.id || 'sync-notif-' + Date.now()}
+          title={notificationTitle}
+          message={notificationMessage}
+          variant={variant}
+          persistent={state.notification.type === 'error'}
+          timeout={state.notification.type === 'success' ? 5000 : undefined}
+          onDismiss={() => offlineSyncService.dismissNotification()}
+          onAction={() => {
+            if (state.notification?.type === 'success' && state.pendingCount > 0) {
+              setIsExpanded(true);
+            }
+          }}
+        />
       )}
 
       {/* 2. Expanded Detail Card / Schedule Settings Modal */}
@@ -353,7 +303,7 @@ export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync 
         </div>
       )}
 
-      {/* 3. Persistent Floating Status Pill (Always visible, sleek, unobtrusive) */}
+      {/* 3. Persistent Floating Status Pill */}
       <button
         ref={pillRef}
         type="button"

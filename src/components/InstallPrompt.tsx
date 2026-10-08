@@ -29,10 +29,10 @@ import {
 type Platform = ReturnType<typeof detectPlatform>;
 
 const SHARE_TITLE =
-  'نظام إدارة الأعمال والمبيعات — DyPOS';
+  'منصة التجارة';
 
 const SHARE_TEXT =
-  'افتح DyPOS للوصول إلى نظام إدارة الأعمال والمبيعات.';
+  'افتح منصة التجارة للوصول إلى نظام إدارة الأعمال والمبيعات.';
 
 const COPY_FEEDBACK_MS = 2200;
 
@@ -372,7 +372,7 @@ const InstallPrompt: React.FC = () => {
                   text-slate-900
                 "
               >
-                ثبّت DyPOS على جهازك
+                ثبّت منصة التجارة على جهازك
               </h2>
 
               <p
@@ -443,7 +443,7 @@ const InstallPrompt: React.FC = () => {
               leading-5
               text-slate-400
             ">
-              يمكنك تجاهل هذه الرسالة — سيستمر DyPOS
+              يمكنك تجاهل هذه الرسالة — سيستمر منصة التجارة
               في العمل بشكل طبيعي.
             </p>
           </section>
@@ -561,7 +561,7 @@ const NativeInstall: React.FC<NativeInstallProps> = ({
               size={15}
               aria-hidden="true"
             />
-            تثبيت DyPOS الآن
+            تثبيت منصة التجارة الآن
           </>
         )}
       </button>
@@ -571,7 +571,7 @@ const NativeInstall: React.FC<NativeInstallProps> = ({
 
 const IOSInstallGuide: React.FC = () => (
   <ol
-    aria-label="خطوات تثبيت DyPOS على iPhone أو iPad"
+    aria-label="خطوات تثبيت منصة التجارة على iPhone أو iPad"
     className="space-y-3"
   >
     {[

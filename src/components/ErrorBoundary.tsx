@@ -29,7 +29,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     // Kept server-side too, so a crash report names the screen that failed.
-    console.error('[dypos] render error', error, info.componentStack);
+    console.error('[نظام التجارة الذكية] render error', error, info.componentStack);
     this.setState({ info: (info.componentStack || '').split('\n').slice(1, 4).join(' ').trim() });
   }
 

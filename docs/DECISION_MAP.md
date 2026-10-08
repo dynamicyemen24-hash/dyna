@@ -312,3 +312,60 @@ scan of the running app would ever have found it.
 5. A receipt is rendered from what the server recorded, never from invented values.
 6. A lockout is never a bypass.
 7. A figure a system cannot read is never displayed as a number.
+## Catalogue numbers moved to the server — the four `TODO(server-allocated)` (P10)
+
+Inventory, purchases and accounting each issued their own document numbers in
+the browser. A barcode, a `JE-TMP-<uuid>` journal id and a `PO-...` purchase
+number were therefore unique *per tab*: two tills could stamp the same number,
+every number vanished on reload, and the create that "succeeded" was never on
+the server. The edge made it worse by answering `GET /api/db/products` with
+`{products}` only while the client read `items` — the production inventory list
+rendered empty with a healthy-looking page — and `GET /api/db/journal-entries`
+was a plain **404**.
+
+Both runtimes now expose the identical contract (byte for byte):
+
+| Route | What the server owns |
+|---|---|
+| `GET /api/db/products` | `{ items, products, count }` — old clients keep working, new ones get `items` |
+| `POST /api/db/products` | an EAN-13 barcode (`628` + 9-digit serial + mod-10) when the operator did not type one |
+| `GET/POST /api/db/journal-entries` | `JRN-YYYY-NNNNNN` plus the two `dypos.ledger` legs parsed from the `(code)` suffixes |
+| `GET/POST /api/db/purchase-orders` | `PO-YYYY-NNNNNN`, lines in `dypos.purchase_order_lines` (v151) |
+
+`purchase_order_items` could not hold those lines: its `product_id` is a
+NOT NULL foreign key to `products`, so a free-text order line has nowhere to
+live. v151 adds the table rather than relaxing that constraint.
+
+The client no longer fabricates either: the create handlers await the POST and
+re-throw, and a refused write shows the server's Arabic message inline instead
+of a number the server never issued.
+
+Proof: `npx tsx scripts/test-catalog-writes.ts` (57 assertions against the live
+database, throwaway tenant, verified deleted) plus the post-deploy probe
+`npx tsx scripts/release-e2e-probe.mts` (39 assertions against the real URL:
+envelope, 400-without-write, three real creates read back, two ledger legs,
+one PO line, anonymous writes still 401, table counts returned to baseline).
+
+## `auth_events` rejected its own audit rows — the 500-oracle, second instance (P11)
+
+Exactly the shape of P7b, one migration later. The `event_type` CHECK was
+written in v135 for seven credential events and widened in v138 for MFA, but
+the code grew five more: `identity_conflict`, `identity_pending_verification`,
+`provision_failed`, `shift_open`, `shift_close`. `server/authRoutes.ts` awaits
+the audit row *before* returning its verdict, so an unknown username that
+resolved to an identity decision raised **23514** and the route answered
+**500** — refusing the merchant and telling an attacker that the account does
+not exist, which is the disclosure `GENERIC_AUTH_ERROR` exists to prevent.
+`identity_pending_verification` is also 29 characters against a `VARCHAR(24)`,
+so widening only the CHECK would have traded the 23514 for a 22003 on the same
+request.
+
+Fixed additively by **`v152_auth_event_types.sql`** (`VARCHAR(32)` + an
+idempotent DROP/ADD of the constraint with all 18 events the code emits), and
+by giving Express the contract the edge already had: `audit()` logs a failure
+loudly and returns, and `reason` is sliced to the column width — a failure to
+record evidence must never become a failure to sign in.
+
+Proof: `npm run test:rate-limit` (27 assertions, the suite that found both this
+and P7b), `npm run test:migration-preflight` (191), and the live probe's
+"sign-in attempts were audited" check against the production table.
