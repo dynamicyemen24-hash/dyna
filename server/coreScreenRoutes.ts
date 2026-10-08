@@ -1,4 +1,4 @@
-﻿/**
+/**
  * API routes backing the seven end-to-end screens:
  *   services, appointments, production, batches, serials,
  *   commissions, delivery.
@@ -29,13 +29,33 @@ import {
 export function registerCoreScreenRoutes(app: Express) {
   /** Branch list for the login screen — public within the tenant. */
   app.get('/api/db/branches', asyncRoute(async (_req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, name, city, phone, location AS address, '' AS manager
+         FROM dypos.branches WHERE tenant_id = $1 AND is_active = TRUE
+         ORDER BY name`,
+        [DEFAULT_TENANT],
+      );
+      res.json({ items: rows, branches: rows, count: rows.length, degraded: false });
+    } catch (err: any) {
+      // DB unreachable: degrade gracefully — the POS operates offline on
+      // cached data and syncs when connectivity returns.
+      console.error('[coreScreenRoutes] /api/db/branches DB error:', err?.message ?? err);
+      res.json({ items: [], branches: [], count: 0, degraded: true });
+    }
+  }));
+
+  app.post('/api/db/branches', attachPrincipal, asyncRoute(async (req, res) => {
+    const tenant = tenantOf(req);
+    const body = req.body || {};
+    const name = String(body.name || '').trim();
+    if (!name) return fail(res, 400, 'اسم الفرع مطلوب');
     const { rows } = await pool.query(
-      `SELECT id, name, city, phone, location AS address, '' AS manager
-       FROM dypos.branches WHERE tenant_id = $1 AND is_active = TRUE
-       ORDER BY name`,
-      [DEFAULT_TENANT],
+      `INSERT INTO dypos.branches (id, tenant_id, name, city, phone, location, is_active)
+       VALUES ($1,$2,$3,$4,$5,$6,TRUE) RETURNING id, name, city, phone, location AS address, '' AS manager`,
+      [makeId('br'), tenant, name, body.city ?? null, body.phone ?? null, body.address ?? null],
     );
-    res.json({ items: rows, branches: rows, count: rows.length });
+    res.status(201).json({ item: rows[0] });
   }));
 
   /**

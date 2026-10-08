@@ -19,12 +19,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   RefreshCw, Copy, Check, AlertTriangle, XCircle, HelpCircle,
-  ShieldCheck, ChevronDown,
+  ShieldCheck, ChevronDown, Zap, Wrench,
 } from 'lucide-react';
 import {
   runDeviceDiagnostics, formatReport, copyText,
   type DiagnosticReport, type DiagnosticCheck, type CheckStatus,
 } from '../../services/deviceDiagnostics';
+import { fetchHardwareAnomalies, executeSelfHealing, type HardwareAnomaly } from '../../services/telemetryClient';
 import { ToolShell, useTools } from '../../contexts/ToolsContext';
 
 const STATUS_META: Record<CheckStatus, {
@@ -53,18 +54,35 @@ const ALL_STATUSES: CheckStatus[] = ['pass', 'warn', 'fail', 'unknown'];
 export const DiagnosticsTool: React.FC = () => {
   const { close } = useTools();
   const [report, setReport] = useState<DiagnosticReport | null>(null);
+  const [anomalies, setAnomalies] = useState<HardwareAnomaly[]>([]);
   const [running, setRunning] = useState(true);
+  const [healingId, setHealingId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const run = useCallback(async () => {
     setRunning(true);
-    // A probe that throws must not leave the panel blank — the failure mode
-    // of every diagnostic tool that only ever has two states.
-    setReport(await runDeviceDiagnostics().catch(() => null));
+    const [rep, anom] = await Promise.all([
+      runDeviceDiagnostics().catch(() => null),
+      fetchHardwareAnomalies().catch(() => []),
+    ]);
+    setReport(rep);
+    setAnomalies(anom);
     setRunning(false);
   }, []);
+
+  const handleHeal = async (anom: HardwareAnomaly) => {
+    setHealingId(anom.id);
+    const actionType =
+      anom.component === 'memory' ? 'clear_cache' :
+      anom.component === 'storage' ? 'optimize_storage' :
+      anom.component === 'network' ? 'flush_offline_queue' : 'reset_serial_bridge';
+    await executeSelfHealing(anom.id, actionType, anom.component).catch(() => {});
+    const updated = await fetchHardwareAnomalies().catch(() => []);
+    setAnomalies(updated);
+    setHealingId(null);
+  };
 
   useEffect(() => { void run(); }, [run]);
 
@@ -194,6 +212,44 @@ export const DiagnosticsTool: React.FC = () => {
                   <span className="font-bold text-ink">{c.label}</span>
                   <span className="text-muted"> — {c.value}</span>
                   {c.fix && <span className="block text-muted mt-0.5">الحل: {c.fix}</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* Predictive Self-Healing Anomaly Alerts */}
+        {anomalies.length > 0 && (
+          <section aria-labelledby="healing-h" className="surface-card border-amber-300 p-4 bg-amber-50/40">
+            <h4 id="healing-h" className="text-sm font-bold text-amber-900 flex items-center gap-2 mb-2">
+              <Zap size={16} className="text-amber-600" aria-hidden="true" />
+              التنبؤ بالأعطال والإصلاح الذاتي ({anomalies.length})
+            </h4>
+            <p className="text-xs text-muted mb-3">
+              رصدت محرك التنبؤ الآلي استباقياً بعض المخاطر أو التعطلات المحتملة. انقر على "إصلاح ذاتي" للمعالجة الفورية.
+            </p>
+            <ul className="space-y-2.5">
+              {anomalies.map((anom) => (
+                <li key={anom.id} className="bg-surface p-3 rounded-lg border border-amber-200 flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-2xs font-bold uppercase">
+                        {anom.component} · {anom.severity}
+                      </span>
+                      <span className="text-xs font-bold text-ink">{anom.anomaly_type}</span>
+                      <span className="text-2xs text-muted font-mono">الثقة: {Math.round(anom.confidence_score * 100)}%</span>
+                    </div>
+                    <p className="text-xs text-muted mt-1 leading-relaxed">{anom.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleHeal(anom)}
+                    disabled={healingId === anom.id}
+                    className="px-3 py-1.5 rounded-lg bg-brand text-white text-xs font-bold hover:opacity-90 disabled:opacity-50 transition-opacity inline-flex items-center gap-1.5 shrink-0"
+                  >
+                    <Wrench size={13} className={healingId === anom.id ? 'animate-spin' : ''} />
+                    {healingId === anom.id ? 'جاري الإصلاح…' : 'إصلاح ذاتي'}
+                  </button>
                 </li>
               ))}
             </ul>

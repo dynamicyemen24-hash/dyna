@@ -189,6 +189,52 @@ check(
 check('the control-character class matches the injected ESC', CONTROL_RE.test(CONTROL_INJECT));
 check('a clean Arabic name contains no control characters', !CONTROL_RE.test('محمد الأحمد'));
 
+section('8. the login screen contains no mojibake');
+
+const loginView = fs.readFileSync('src/components/LoginView.tsx', 'utf8');
+const apiClient = fs.readFileSync('src/services/dyposApi.ts', 'utf8');
+const toolsContext = fs.readFileSync('src/contexts/ToolsContext.tsx', 'utf8');
+check(
+  'login labels, errors and helper text are valid UTF-8 text',
+  !/[\u00d8\u00d9\u00c3\u00ef\ufffd]|\u00e2\u20ac|\u00f0\u0178/u.test(loginView),
+  'common Windows-1252/UTF-8 mojibake markers must not ship in the login UI',
+);
+check(
+  'blank login tenant cannot be replaced by stale local storage',
+  /\{\s*tenant:\s*false\s*\}/.test(loginView)
+    && /opts\?\.tenant\s*===\s*false/.test(apiClient)
+    && /requestedTenant\s*=\s*tenant\.trim\(\)\s*\|\|\s*\(TENANT_IS_PINNED\s*\?\s*tenantId\(\)\s*:\s*''\)/.test(loginView),
+  'login should use the explicit field or build-pinned tenant, never a remembered header',
+);
+check(
+  'login does not offer inert role or workstation selectors',
+  !loginView.includes('الصلاحية الوظيفية:') && !loginView.includes('نوع منفذ العمل:'),
+  'authorization comes from the server and workstation mode is not yet wired',
+);
+check(
+  'device diagnostics use one global portal, not a fixed login panel',
+  /tool="devices"/.test(loginView)
+    && /tool="devices"/.test(fs.readFileSync('src/components/MainLayout.tsx', 'utf8'))
+    && /current === 'devices' && <DiagnosticsTool/.test(toolsContext)
+    && /lazy\(/.test(toolsContext)
+    && !/Math\.random\s*\(/.test(loginView),
+  'both login and workspace should open the same lazily-loaded diagnostics report',
+);
+check(
+  'login does not promise unconfigured SSO or account recovery',
+  !/SSOButtonGroup/.test(loginView)
+    && !/تم إرسال رمز فك القفل بنجاح/.test(loginView)
+    && /mailto:support@smartports\.sa/.test(loginView),
+  'unsupported identity providers and recovery actions must not simulate success',
+);
+check(
+  'company identity image keeps a stable non-cropped frame',
+  /company-board\.jpg/.test(loginView)
+    && /aspect-\[16\/9\]/.test(loginView)
+    && /object-contain/.test(loginView),
+  'the company image should preserve its full identity artwork across viewports',
+);
+
 // ── Report ─────────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);
 

@@ -23,7 +23,7 @@
  */
 import { pool } from './neonDb.js';
 
-export type DocumentType = 'invoice' | 'purchase_order' | 'work_order' | 'journal';
+export type DocumentType = 'invoice' | 'purchase_order' | 'work_order' | 'journal' | 'barcode';
 
 /** Default prefix per document type. Tenant-configurable via the `prefix` column. */
 const DEFAULT_PREFIX: Record<DocumentType, string> = {
@@ -31,6 +31,11 @@ const DEFAULT_PREFIX: Record<DocumentType, string> = {
   purchase_order: 'PO',
   work_order: 'WO',
   journal: 'JRN',
+  // '628' is the GS1 country prefix for Saudi Arabia: it is the first three
+  // digits of every EAN-13 issued there, so a barcode allocated from this
+  // counter is structurally a Saudi GS1 article number rather than a number
+  // that merely happens to be 13 digits long.
+  barcode: '628',
 };
 
 /**
@@ -105,4 +110,58 @@ export async function allocateDocumentNumber(
   const prefix = String(rows[0].prefix || DEFAULT_PREFIX[docType] || 'DOC');
 
   return `${prefix}-${periodKey}-${String(issued).padStart(6, '0')}`;
+}
+
+/**
+ * Allocates the next product barcode as a GS1 EAN-13, from the SAME counter
+ * machinery as every other document number.
+ *
+ * ── Why a check digit, and why server-side ──────────────────────────────────
+ * The client used to emit `628` followed by 12 random digits — 13 digits that
+ * LOOK like an EAN-13 but are not one, because the final digit does not satisfy
+ * the modulus-10 check. A scanner validates that digit before it decodes
+ * anything else, so a wrong check digit means the barcode does not scan at all:
+ * it fails at the till, at goods-in, and on any handheld — and it fails for a
+ * number the client invented with no way to detect the collision, because two
+ * terminals drawing at random will, given enough products, eventually draw the
+ * same one.
+ *
+ * Here the serial comes from the same `document_sequences` row the document
+ * numbers use (`doc_type = 'barcode'`), so it is unique per tenant and period
+ * by the same `UPDATE … RETURNING` row lock, and the check digit is computed
+ * from the digits that were actually issued — which is the only way it can be
+ * correct.
+ *
+ * ── The EAN-13 check digit ─────────────────────────────────────────────────
+ * body12 = '628' + serial padded to 9 digits (12 digits total).
+ * Weights run 1,3,1,3,… left→right over those 12 digits:
+ *
+ *     sum   = Σ digit × weight
+ *     check = (10 - (sum % 10)) % 10
+ *
+ * Returns the 13-digit string with no separators.
+ */
+export async function allocateBarcode(
+  tenantId: string,
+  client?: { query: (sql: string, values?: unknown[]) => Promise<{ rows: SequenceRow[] }> },
+): Promise<string> {
+  // Reuses the counter, the period key, the row lock and the seed/retry — a
+  // second allocator here would be a second thing to keep correct.
+  const issued = await allocateDocumentNumber(tenantId, 'barcode', new Date(), client);
+  const serial = Number(issued.slice(issued.lastIndexOf('-') + 1));
+
+  const body12 = `${DEFAULT_PREFIX.barcode}${String(serial).padStart(9, '0')}`;
+  if (body12.length !== 12) {
+    // More than 9 digits of serial would overflow the EAN-13 body. Refusing is
+    // the honest outcome: a 14-digit "EAN-13" does not scan either.
+    throw new Error('تعذّر توليد الباركود: تسلسل الأرقام تجاوز طول EAN-13');
+  }
+
+  let sum = 0;
+  for (let i = 0; i < 12; i += 1) {
+    sum += Number(body12[i]) * (i % 2 === 0 ? 1 : 3);
+  }
+  const check = (10 - (sum % 10)) % 10;
+
+  return `${body12}${check}`;
 }

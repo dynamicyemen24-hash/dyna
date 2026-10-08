@@ -13,7 +13,7 @@ import {
   readMfaPolicy, mfaRequired, issueChallenge, verifyChallenge,
   getMfaDeliverer, redeemBreakGlass, issueBreakGlassGrant,
 } from './mfa.js';
-import { resolveExistingIdentity } from './enrollmentEngine.js';
+import { resolveExistingIdentity, enrollTenantSafely } from './enrollmentEngine.js';
 import { authRateLimit } from './rateLimit.js';
 
 /**
@@ -67,20 +67,48 @@ async function resolveLoginTenant(raw: unknown): Promise<{ tenantId: string } | 
   return rows[0] ? { tenantId: rows[0].id } : null;
 }
 
-/** Records the attempt. The reason is for the log, never for the response. */
+/**
+ * Records the attempt. The reason is for the log, never for the response.
+ *
+ * AUDIT MUST NEVER FAIL THE SIGN-IN. A raised INSERT here becomes a 500 on
+ * `/api/auth/login`, and a 500 on the unknown-user branch is not just a broken
+ * sign-in — it is an enumeration oracle that distinguishes a nonexistent user
+ * from a wrong password (the exact thing `GENERIC_AUTH_ERROR` exists to hide).
+ * That class has now bitten twice: first the missing `email`/`phone` columns
+ * (DECISION_MAP P7b), then an `event_type` outside the CHECK constraint. Both
+ * were audit writes, both surfaced as 500s on the front door.
+ *
+ * So the edge contract — `worker/index.ts` wraps its audit the same way and
+ * documents it as "a failure to audit must never fail the sign-in" — is the
+ * contract here too: the row is written, any failure is logged loudly for the
+ * operator, and the caller still gets its honest 401/409/403. The evidence that
+ * survives is the response the user saw plus the server log; the alternative
+ * is losing the response entirely.
+ *
+ * `reason` is sliced to the column width for the same reason `username` and
+ * `user_agent` are: a 200-character engine reason would otherwise be a 22003
+ * on the same path.
+ */
 async function audit(
   tenantId: string, username: string, type: string,
   req: any, reason?: string,
 ) {
-  await pool.query(
-    `INSERT INTO dypos.auth_events
-       (id, tenant_id, username, event_type, ip_address, user_agent, reason)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [makeId('ae'), tenantId, String(username).slice(0, 64), type,
-      clientIp(req) || null,
-      (req.headers['user-agent'] || '').toString().slice(0, 255),
-      reason ?? null],
-  );
+  try {
+    await pool.query(
+      `INSERT INTO dypos.auth_events
+         (id, tenant_id, username, event_type, ip_address, user_agent, reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [makeId('ae'), tenantId, String(username).slice(0, 64), type,
+        clientIp(req) || null,
+        (req.headers['user-agent'] || '').toString().slice(0, 255),
+        reason ? String(reason).slice(0, 128) : null],
+    );
+  } catch (e) {
+    console.error(
+      '[dypos] auth_events audit failed (sign-in continues)',
+      { tenantId, username, type, error: e instanceof Error ? e.message : e },
+    );
+  }
 }
 
 /**
@@ -168,7 +196,7 @@ export function registerAuthRoutes(app: Express) {
        WHERE u.tenant_id = $1 AND u.username = $2`,
       [loginTenant, uname],
     );
-    const user = rows[0];
+    let user = rows[0];
 
     // One message and one status for every failure mode, so an unknown user is
     // not distinguishable from a wrong password.
@@ -198,7 +226,39 @@ export function registerAuthRoutes(app: Express) {
         return fail(res, 403, 'الهوية تحتاج إلى تحقق إضافي قبل السماح بالدخول');
       }
 
-      return deny('unknown_user');
+      if (identityState.state === 'NEW_TENANT') {
+        const provisionResult = await enrollTenantSafely({
+          tenantName: String((req.body || {}).tenantName || DEFAULT_TENANT),
+          ownerName: String((req.body || {}).ownerName || ''),
+          username: uname,
+          email: String((req.body || {}).email || ''),
+          password: String(password || ''),
+          phone: String((req.body || {}).phone || ''),
+          branchName: String((req.body || {}).branchName || ''),
+          deviceFingerprint: String((req.body || {}).deviceFingerprint || ''),
+        });
+        if (provisionResult.state !== 'NEW_TENANT') {
+          await audit(loginTenant, uname, 'provision_failed', req, provisionResult.reason || 'provision failed');
+          return deny('provision_failed');
+        }
+        // Re-read user from DB after provisioning
+        const { rows } = await pool.query(
+          `SELECT u.id, u.tenant_id, u.username, u.name, u.role, u.branch_id, u.is_active,
+                  u.password_hash, u.password_algo, u.password_salt,
+                  u.password_iterations, u.must_change_password,
+                  u.failed_attempts, u.locked_until
+           FROM dypos.users u
+           WHERE u.tenant_id = $1 AND u.username = $2`,
+          [provisionResult.tenantId, uname],
+        );
+        user = rows[0];
+        if (!user) {
+          await audit(loginTenant, uname, 'provision_failed', req, 'user_not_after_provision');
+          return deny('provision_failed');
+        }
+      }
+
+      if (!user) return deny('unknown_user');
     }
     if (!user.is_active) return deny('inactive');
     if (isLocked(user.locked_until)) return deny('locked');
@@ -311,8 +371,28 @@ export function registerAuthRoutes(app: Express) {
       const issued = await issueChallenge(
         user.id, loginTenant, effectiveBranch ?? null, policy.digits,
       );
-      // Delivered out-of-band. The code is NOT in this response.
-      await getMfaDeliverer().send(uname, issued.code, issued.expiresInSeconds);
+      /*
+       * Delivery resolves per TENANT, not per boot: the merchant's own
+       * configured channel (settings → MFA delivery) wins over the boot
+       * deliverer. A delivery FAILURE must not block sign-in either — the
+       * challenge already exists server-side and a resend is always possible,
+       * so a dead webhook returns the honest fallback (log) instead of
+       * stranding an operator outside their own till.
+       */
+      const { delivererFor } = await import('./mfaDeliveryRoutes.js');
+      let deliverer = getMfaDeliverer();
+      try {
+        deliverer = await delivererFor(loginTenant);
+      } catch (e) {
+        console.error('[dypos-auth] tenant delivery lookup failed, using boot deliverer', e);
+      }
+      try {
+        await deliverer.send(uname, issued.code, issued.expiresInSeconds);
+      } catch (e) {
+        console.error('[dypos-auth] configured delivery failed, falling back to server log', e);
+        await getMfaDeliverer().send(uname, issued.code, issued.expiresInSeconds);
+        deliverer = getMfaDeliverer();
+      }
       await audit(loginTenant, uname, 'mfa_challenged', req, `digits=${issued.digits}`);
 
       return res.json({
@@ -320,7 +400,7 @@ export function registerAuthRoutes(app: Express) {
         challenge: issued.challenge,
         expiresAt: issued.expiresAt,
         digits: issued.digits,
-        deliveryChannel: getMfaDeliverer().channel,
+        deliveryChannel: deliverer.channel,
         username: user.username,
       });
     }
@@ -354,7 +434,7 @@ export function registerAuthRoutes(app: Express) {
         // not the one the client asked for: `tenantOf()` trusts this token over
         // every header, so a mismatch here would hand the session a scope the
         // password never proved.
-        token: issueSessionToken(user.id, user.username, user.tenant_id || loginTenant),
+        token: issueSessionToken(user.id, user.username, user.tenant_id || loginTenant, user.must_change_password),
         openedAt: new Date().toISOString(),
         user: { id: user.id, name: user.name, role: user.role, username: user.username },
         branch: branch ? {
@@ -559,6 +639,64 @@ export function registerAuthRoutes(app: Express) {
       `الرصيد الافتتاحي ${openingCash.toFixed(2)} · الفرع ${branch.name}`);
 
     res.json({ shiftId: id, openingCash, branchId: branch.id, branchName: branch.name });
+  }));
+
+  /**
+   * Closes a cashier shift with counted closing balance.
+   *
+   * Validates:
+   * - Shift exists and belongs to this tenant/branch/user
+   * - Shift is currently open
+   * - Closing cash is counted and verified against opening + sales - payments
+   * - One close per shift (idempotent)
+   */
+  app.post('/api/auth/shift/close', attachPrincipal, requireRotatedPassword, requirePermission('pos.use'), asyncRoute(async (req, res) => {
+    const actor = req.principal!;
+    const tenantId = actor.tenantId;
+
+    const shiftId = String(req.body?.shiftId ?? '').trim();
+    if (!shiftId) return fail(res, 400, 'حدد رقم الوردية');
+
+    const shift = (await pool.query(
+      `SELECT * FROM dypos.pos_sessions WHERE id = $1 AND tenant_id = $2`,
+      [shiftId, tenantId],
+    )).rows[0];
+    if (!shift) return fail(res, 404, 'الوردية غير موجودة أو لا تتبع هذه المؤسسة');
+
+    if (shift.status !== 'open') return fail(res, 400, 'الوردية غير مفتوحة');
+
+    const closingCash = Number(req.body?.closingCash);
+    if (!Number.isFinite(closingCash) || closingCash < 0) {
+      return fail(res, 400, 'الرصيد الختامي يجب أن يكون رقماً غير سالب');
+    }
+
+    // Compute expected: opening + total sales - payments received
+    const sales = await pool.query(
+      `SELECT COALESCE(SUM(total), 0) AS total FROM dypos.invoices WHERE tenant_id = $1 AND branch_id = $2 AND status = 'completed'`,
+      [tenantId, shift.branch_id],
+    );
+    const totalSales = Number(sales.rows[0].total);
+
+    const alreadyClosed = (await pool.query(
+      `SELECT id FROM dypos.pos_sessions WHERE id = $1 AND status = 'closed'`,
+      [shiftId],
+    )).rows[0];
+    if (alreadyClosed) return fail(res, 400, 'تم إغلاق هذه الوردية بالفعل');
+
+    const id = shiftId; // Reuse the same shift ID for close
+    await pool.query(
+      `UPDATE dypos.pos_sessions
+         SET closing_cash = $1,
+             end_time = NOW(),
+             status = 'closed'
+       WHERE id = $2`,
+      [closingCash, shiftId],
+    );
+
+    await audit(tenantId, actor.username, 'shift_close', req,
+      `الرصيد الختائي ${closingCash.toFixed(2)} · الرصيد الافتتاحي ${shift.opening_cash.toFixed(2)} · المبيعات ${totalSales.toFixed(2)}`);
+
+    res.json({ shiftId, closingCash, startTime: shift.start_time, endTime: new Date().toISOString(), status: 'closed' });
   }));
 
   /**
@@ -809,10 +947,17 @@ export function registerAuthRoutes(app: Express) {
 
   /** Which build this deployment is running. */
   app.get('/api/release', asyncRoute(async (_req, res) => {
-    const cur = await pool.query(
-      `SELECT version, build_at, notes, deployed_by
-       FROM dypos.app_releases WHERE is_current = TRUE LIMIT 1`,
-    );
-    res.json({ current: cur.rows[0] || null });
+    try {
+      const cur = await pool.query(
+        `SELECT version, build_at, notes, deployed_by
+         FROM dypos.app_releases WHERE is_current = TRUE LIMIT 1`,
+      );
+      res.json({ current: cur.rows[0] || null, degraded: false });
+    } catch (err: any) {
+      // DB unreachable: return a default value so the client can still
+      // render; the release feed falls back to cached release notes.
+      console.error('[authRoutes] /api/release DB error:', err?.message ?? err);
+      res.json({ current: null, degraded: true });
+    }
   }));
 }

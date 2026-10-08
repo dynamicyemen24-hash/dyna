@@ -4,7 +4,14 @@ import { BookOpen, DollarSign, FileText, Plus, ShieldCheck, CheckCircle, X } fro
 
 interface AccountingViewProps {
   journalEntries: JournalEntry[];
-  onAddJournalEntry: (entry: JournalEntry) => void;
+  /**
+   * Creates the entry on the server and resolves with the row it recorded.
+   *
+   * The payload deliberately carries no `id` or `entryNumber`: both are
+   * allocated server-side (`JRN-2026-000001`), which is what keeps two tills
+   * from issuing the same number for different entries.
+   */
+  onAddJournalEntry: (entry: Omit<JournalEntry, 'id' | 'entryNumber'>) => Promise<JournalEntry>;
 }
 
 export const AccountingView: React.FC<AccountingViewProps> = ({ journalEntries, onAddJournalEntry }) => {
@@ -13,28 +20,39 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ journalEntries, 
   const [accountDebit, setAccountDebit] = useState('الصندوق الرئيسي (1101)');
   const [accountCredit, setAccountCredit] = useState('إيرادات المبيعات (4101)');
   const [amount, setAmount] = useState('');
+  // A refused posting keeps the modal open with the server's Arabic reason;
+  // closing it would tell the operator the entry was recorded when it was not.
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const totalDebits = journalEntries.reduce((sum, je) => sum + je.amount, 0);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!description || !amount) return;
 
-    const newEntry: JournalEntry = {
-      id: `je-${Date.now()}`,
-      entryNumber: `JE-2026-${Math.floor(100 + Math.random() * 900)}`,
-      date: new Date().toISOString().split('T')[0],
-      description,
-      accountDebit,
-      accountCredit,
-      amount: Number(amount),
-      status: 'posted',
-    };
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      // No `id`, no `entryNumber`: the server allocates both and returns them.
+      const payload: Omit<JournalEntry, 'id' | 'entryNumber'> = {
+        date: new Date().toISOString().split('T')[0],
+        description,
+        accountDebit,
+        accountCredit,
+        amount: Number(amount),
+        status: 'posted',
+      };
 
-    onAddJournalEntry(newEntry);
-    setIsModalOpen(false);
-    setDescription('');
-    setAmount('');
+      await onAddJournalEntry(payload);
+      setIsModalOpen(false);
+      setDescription('');
+      setAmount('');
+    } catch (err: any) {
+      setSubmitError(err?.message || 'تعذّر ترحيل القيد على الخادم — تحقق من الاتصال وحاول مرة أخرى');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -49,7 +67,7 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ journalEntries, 
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => { setSubmitError(''); setIsModalOpen(true); }}
           className="bg-brand-600 hover:bg-brand-500 text-white px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-brand-600/30 transition-all"
         >
           <Plus className="w-4 h-4" />
@@ -186,11 +204,20 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ journalEntries, 
                 >
                   إلغاء
                 </button>
+                {submitError && (
+                  <p
+                    role="alert"
+                    className="flex-1 text-right text-[11px] leading-relaxed font-semibold text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2"
+                  >
+                    {submitError}
+                  </p>
+                )}
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl text-xs font-bold bg-brand-600 text-white shadow-lg shadow-brand-600/30"
+                  disabled={submitting}
+                  className="px-6 py-2.5 rounded-xl text-xs font-bold bg-brand-600 text-white shadow-lg shadow-brand-600/30 disabled:opacity-60"
                 >
-                  ترحيل القيد المحاسبي
+                  {submitting ? 'جارٍ الترحيل…' : 'ترحيل القيد المحاسبي'}
                 </button>
               </div>
             </form>

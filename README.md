@@ -1,5 +1,5 @@
 # DyPOS Enterprise Cloud & Edge 🚀
-### Global Production ERP & POS Engine v1.36.0
+### Global Production ERP & POS Engine v1.37.0 — Final Smart Update
 
 DyPOS is a production-grade, offline-first, enterprise ERP and POS system designed for high-availability environments. It combines the power of cloud serverless PostgreSQL (Neon) with an edge-ready architecture for seamless operation in retail, hospitality, and service industries.
 
@@ -98,7 +98,7 @@ npm install
 The system automatically initializes the schema on the first run. You can manually trigger it via:
 ```bash
 # Via API (POST)
-curl -X POST http://localhost:3000/api/db/init
+curl -X POST/api/db/init
 ```
 
 ### 4. Development

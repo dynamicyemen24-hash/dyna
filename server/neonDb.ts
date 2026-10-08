@@ -65,6 +65,50 @@ if (!NEON_CONNECTION_STRING) {
   );
 }
 
+/*
+ * ══ SSL IS ENFORCED, NOT DISABLED ═════════════════════════════════════════
+ * This was:
+ *
+ *   ssl: { rejectUnauthorized: false }
+ *
+ * which turns TLS into unauthenticated encryption. It still encrypts the
+ * traffic, so a config that only checks "is there an `ssl` key" looks correct —
+ * and it is the setting people reach for when a certificate error appears,
+ * because it always makes the error go away.
+ *
+ * What it actually permits is a machine-in-the-middle: anything on the path can
+ * terminate the connection with a certificate it generated itself and read and
+ * rewrite every query. This is the connection carrying the merchant's ledger,
+ * their tax figures and their credentials, so that is not a theoretical loss.
+ *
+ * It also hid a real fault. The `.env.example` URL carries `sslmode=require`,
+ * and `pg` warned on every single connection that a `require`-family mode is
+ * being treated as `verify-full`. The pool's own setting overrode the URL, so the
+ * warning was noise covering a silent downgrade.
+ *
+ * `rejectUnauthorized: true` with the system trust store is the correct
+ * posture: Neon presents a certificate from a public CA that the platform
+ * already trusts, so verification succeeds without any custom CA material. If a
+ * deployment ever needs a private CA, that is a deliberate `PGSSLROOTCERT`
+ * configuration, not a global switch that disables checking for everyone.
+ */
+/**
+ * THE database SSL policy, exported so there is exactly one of them.
+ *
+ * Every script that opens its own Pool used to hard-code
+ * `ssl: { rejectUnauthorized: false }` — 22 of them. That is the same setting
+ * copied 22 times, which is how `rejectUnauthorized: true` in the server pool
+ * would have been reverted by the next script anyone wrote, and how a
+ * provisioning or migration script ended up moving credentials over a
+ * connection weaker than the one the application uses.
+ *
+ * Importing this means a change to the posture is one edit, and the test
+ * `test-tenant-boundary.ts` asserts no caller hard-codes its own.
+ *
+ * See the note above `pool` for why verification is ON.
+ */
+export const PG_SSL = { rejectUnauthorized: true } as const;
+
 export const pool = new Pool({
   /*
    * `undefined` leaves the pool unconnected rather than pointing it at a
@@ -73,9 +117,7 @@ export const pool = new Pool({
    * operator can read the message above and fix the environment.
    */
   connectionString: NEON_CONNECTION_STRING,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+  ssl: PG_SSL,
   max: 10,
   /**
    * Socket lifetime, not just a cleanup interval.
@@ -118,6 +160,37 @@ export async function initDatabaseSchema() {
     // 0. Ensure schema exists with full ownership
     await client.query(`CREATE SCHEMA IF NOT EXISTS dypos AUTHORIZATION neondb_owner;`);
     await client.query(`SET search_path TO dypos, public;`);
+
+    /*
+     * pgcrypto — REQUIRED, and previously never installed.
+     *
+     * `dypos_database_engine_v101_v130.sql` defines `dypos.jsonb_sha256()`, which
+     * is built on `digest(bytea, text)` from this extension. Without it PostgreSQL
+     * fails with:
+     *
+     *     function digest(bytea, unknown) does not exist
+     *
+     * and because the whole pack ran as ONE `client.query`, that single missing
+     * function aborted every remaining statement in the file — the audit engine,
+     * the accounting procedures and the sync safeguards were all skipped, and
+     * the error was only logged. The pack is documented as creating all of them,
+     * so this was silent missing functionality rather than a visible break.
+     *
+     * `IF NOT EXISTS` makes this a no-op on every boot after the first. It is
+     * placed here, before anything else, because the extension is a
+     * prerequisite of the packs applied further down.
+     */
+    try {
+      await client.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`);
+    } catch (extErr: any) {
+      // A managed plan may refuse to create extensions. Say so plainly: the
+      // packs that depend on it will fail below, and a silent warning here
+      // would let that read as an unrelated migration error.
+      console.warn(
+        `⚠️  Could not enable pgcrypto (${extErr.message}). `
+        + 'digest()/jsonb_sha256() and the audit engine will be unavailable.',
+      );
+    }
 
     // --- ENUM TYPES (IF NEEDED) OR CONSTRAINTS ---
 
@@ -502,6 +575,13 @@ export async function initDatabaseSchema() {
         name VARCHAR(255) NOT NULL,
         role VARCHAR(64) DEFAULT 'cashier', -- admin, manager, cashier, supervisor
         is_active BOOLEAN DEFAULT true,
+        -- Contact proofs for the identity engine (server/identityEngine.ts).
+        -- OPTIONAL by contract: enrollmentEngine.ts SELECTs both during the
+        -- unknown-username branch of sign-in, so their absence is a runtime
+        -- 42703 → a 500 on login for a non-existent user, not a type error.
+        -- Nullable: a user may exist with only a username.
+        email VARCHAR(255),
+        phone VARCHAR(64),
         last_login TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
@@ -558,9 +638,32 @@ export async function initDatabaseSchema() {
     `);
 
     // 19. Restaurant Tables & Areas
+    /*
+     * ══ WHY THE TABLE DEFINITION CARRIES tenant_id, NOT A LATER MIGRATION ════
+     * Both tables were created here WITHOUT `tenant_id`, and
+     * `migrations/v143_screen_backends.sql` added it afterwards and set it
+     * NOT NULL. That left two sources of truth for the same table: this
+     * CREATE, which knows nothing about tenancy, and v143, which does.
+     *
+     * On a database where v143 has run, they disagree — and this CREATE is a
+     * silent no-op (`IF NOT EXISTS`), so the stale shape here is invisible
+     * until something writes through it. The seed below then inserted
+     * restaurant areas with no tenant, and PostgreSQL refused:
+     *
+     *     23502 null value in column "tenant_id" of relation
+     *           "restaurant_areas" violates not-null constraint
+     *
+     * which aborted `initDatabaseSchema()` on every single start.
+     *
+     * The fix is to make the bootstrap agree with the migration, not to relax
+     * the constraint. `tenant_id NOT NULL` is the whole mechanism that stops
+     * an area belonging to no tenant and therefore to everyone, and dropping it
+     * would trade a loud startup failure for a silent cross-tenant read.
+     */
     await client.query(`
       CREATE TABLE IF NOT EXISTS dypos.restaurant_areas (
         id VARCHAR(64) PRIMARY KEY,
+        tenant_id VARCHAR(64) NOT NULL REFERENCES dypos.tenants(id),
         branch_id VARCHAR(64) REFERENCES dypos.branches(id),
         name VARCHAR(128) NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -570,6 +673,7 @@ export async function initDatabaseSchema() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS dypos.restaurant_tables (
         id VARCHAR(64) PRIMARY KEY,
+        tenant_id VARCHAR(64) NOT NULL REFERENCES dypos.tenants(id),
         area_id VARCHAR(64) REFERENCES dypos.restaurant_areas(id),
         table_number VARCHAR(32) NOT NULL,
         capacity INTEGER DEFAULT 4,
@@ -631,6 +735,34 @@ export async function initDatabaseSchema() {
         client_ip VARCHAR(64),
         timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // 23. Identity reconciliation and repeat-safe enrollment
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS dypos.identity_idempotency (
+        key VARCHAR(255) PRIMARY KEY,
+        tenant_id VARCHAR(64),
+        result_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS dypos.identity_outbox (
+        id VARCHAR(64) PRIMARY KEY,
+        tenant_id VARCHAR(64) NOT NULL REFERENCES dypos.tenants(id),
+        kind VARCHAR(64) NOT NULL,
+        payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+        status VARCHAR(32) NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','sending','sent','failed','dead_letter')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_identity_outbox_status
+        ON dypos.identity_outbox (tenant_id, status, created_at);
     `);
 
     // --- TRIGGERS & FUNCTIONS ---
@@ -1051,14 +1183,39 @@ export async function initDatabaseSchema() {
       ON CONFLICT (code) DO NOTHING;
     `);
 
-    await client.query(`
-      INSERT INTO dypos.restaurant_areas (id, branch_id, name)
-      VALUES 
-        ('a1', 'rg-branch-hq', 'صالة العائلات'),
-        ('a2', 'rg-branch-hq', 'صالة الأفراد'),
-        ('a3', 'rg-branch-hq', 'الطلبات الخارجية')
-      ON CONFLICT (id) DO NOTHING;
-    `);
+    /*
+     * ══ RESTAURANT AREAS ARE NOT SEEDED HERE — AND THAT IS THE POINT ════════
+     * This used to INSERT three areas against the hard-coded branch
+     * `rg-branch-hq`:
+     *
+     *   INSERT INTO dypos.restaurant_areas (id, branch_id, name)
+     *   VALUES ('a1','rg-branch-hq','صالة العائلات'), …
+     *
+     * Three things were wrong with it, and only the first is the reported one.
+     *
+     * 1. It named no tenant, so on any database where `tenant_id` is NOT NULL
+     *    it raised 23502 and aborted the whole bootstrap — which is how this was
+     *    found, but it is a symptom.
+     *
+     * 2. It named a BRANCH, and branches belong to tenants. `rg-branch-hq` is
+     *    one merchant's branch id. A bootstrap that hard-codes it is asserting
+     *    that every deployment of this product is that merchant — the same
+     *    defect as the fabricated tenant that used to sit above it, one level
+     *    down. "Just add tenant_id from the branch" would not fix it: it would
+     *    silently hand a second customer's restaurant floor to the first.
+     *
+     * 3. A system bootstrap runs on EVERY start, with no tenant context, by
+     *    definition. So there is no correct tenant to name here. The only
+     *    honest move is to create none.
+     *
+     * The id was a global `a1`/`a2`/`a3` with no tenant in it, which is also a
+     * collision waiting to happen: the second tenant to provision would have
+     * been silently swallowed by `ON CONFLICT DO NOTHING`.
+     *
+     * Areas are per-tenant configuration — a restaurant's floor plan — so they
+     * belong in tenant provisioning, which HAS a tenant context. That is done in
+     * `provisionTenantData()` below and by `scripts/provision-tenant.ts`.
+     */
 
     await client.query(`
       INSERT INTO dypos.countries (code, name, name_ar, phone_code, currency_code)
@@ -1165,12 +1322,8 @@ export async function initDatabaseSchema() {
 
     console.log('✅ Global Standard Database Schema (Neon PostgreSQL) initialized successfully.');
 
-    // --- EXECUTE PRODUCTION SQL MIGRATIONS ---
-    try {
-      await runProductionMigrations(client);
-    } catch (migErr: any) {
-      console.warn('⚠️ Warning: Some production migrations failed (might be due to conflicts):', migErr.message);
-    }
+    // Versioned migrations are applied explicitly by scripts/migrate.ts.
+    // Historical SQL packs are not replayed on every application boot.
 
     return { success: true, message: 'Full ERP/POS schema initialized successfully' };
   } catch (err) {
@@ -1181,24 +1334,523 @@ export async function initDatabaseSchema() {
   }
 }
 
+/*
+ * ══════════════════════════════════════════════════════════════════════════
+ * TENANT-SCOPED PROVISIONING — the only place tenant-owned rows are created
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * THE DIVISION, STATED ONCE
+ * ────────────────────────
+ *   `initDatabaseSchema()`  → SYSTEM LEVEL. Schema, and rows that belong to NO
+ *                             tenant and are identical for every merchant:
+ *                             currencies, countries, cities, the capability
+ *                             registry. It runs on every start with no tenant
+ *                             context, so it must never create tenant data.
+ *
+ *   `provisionTenantData()` → TENANT SCOPED. Everything that belongs to one
+ *                             merchant. It REQUIRES a tenant id and refuses to
+ *                             run without one.
+ *
+ * The bug that started this was a tenant-scoped row in the system-level half.
+ * Nothing about that was a database problem; the database was enforcing the
+ * rule correctly and the code was the thing breaking it.
+ *
+ * WHY IT REFUSES RATHER THAN DEFAULTING
+ * ────────────────────────────────────
+ * A default tenant here would make the whole thing pass. It would also mean a
+ * call with a missing tenant writes business data into whichever tenant happens
+ * to be configured first — the cross-tenant write this whole design exists to
+ * prevent, and silent, because the row looks perfectly valid afterwards.
+ *
+ * So an absent or empty tenant id throws. The failure is loud, immediate, and
+ * names the missing argument.
+ *
+ * WHY EVERY ID IS DERIVED FROM THE TENANT
+ * ──────────────────────────────────────
+ * `restaurant_areas.id` was a global `a1`. With two tenants, the second
+ * provisioner's `ON CONFLICT DO NOTHING` silently discarded its rows against
+ * the first tenant's — a tenant that appears provisioned and has no floor.
+ * Ids are therefore `${tenantId}-area-N`, which cannot collide across tenants
+ * and reads unambiguously in a log.
+ *
+ * THE TENANT IS VERIFIED, NOT ASSUMED
+ * ────────────────────────────────────
+ * `tenant_id` is a foreign key, so a typo would raise 23503 and abort — but the
+ * message names a constraint rather than the caller. Checking existence first
+ * lets this report which tenant was asked for.
+ */
+export async function provisionTenantData(
+  client: pg.PoolClient,
+  tenantId: string,
+): Promise<{ areas: number; tables: number }> {
+  // Refuse rather than default. See the note above.
+  const tenant = String(tenantId ?? '').trim();
+  if (!tenant) {
+    throw new Error(
+      'provisionTenantData: tenantId is required. Tenant-owned rows may only be '
+      + 'created inside a real tenant context — this function will not pick one '
+      + 'for you, because a silent default is a cross-tenant write.',
+    );
+  }
+
+  const exists = await client.query(
+    `SELECT 1 FROM dypos.tenants WHERE id = $1 AND is_active IS NOT FALSE`,
+    [tenant],
+  );
+  if (!exists.rows[0]) {
+    throw new Error(
+      `provisionTenantData: no active tenant "${tenant}". Create it with `
+      + `scripts/provision-tenant.ts first — provisioning data for a tenant that `
+      + `does not exist would fail on the foreign key anyway, with a less useful message.`,
+    );
+  }
+
+  const branch = await client.query(
+    `SELECT id FROM dypos.branches
+      WHERE tenant_id = $1 AND is_active IS NOT FALSE
+      ORDER BY id LIMIT 1`,
+    [tenant],
+  );
+  const branchId = branch.rows[0]?.id ?? null;
+
+  /*
+   * Areas are per-tenant configuration, so an operator who does not run a
+   * restaurant simply gets none. That is correct: an empty list is a state the
+   * restaurant screen already handles, whereas three invented areas are claims
+   * about a floor plan nobody described.
+   */
+  const AREAS = [
+    { slug: 'family', name: 'صالة العائلات', capacity: 6 },
+    { slug: 'individuals', name: 'صالة الأفراد', capacity: 4 },
+    { slug: 'takeaway', name: 'الطلبات الخارجية', capacity: 2 },
+  ];
+
+  const areaIds: string[] = [];
+  for (let i = 0; i < AREAS.length; i += 1) {
+    // Tenant-scoped id. See the note above about the global `a1`.
+    const id = `${tenant}-area-${i + 1}`;
+    areaIds.push(id);
+    await client.query(
+      `INSERT INTO dypos.restaurant_areas (id, tenant_id, branch_id, name)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (id) DO UPDATE
+         -- The tenant binding stays authoritative on re-run. Re-pointing an
+         -- existing area at a different tenant would itself be a cross-tenant
+         -- write, so the WHERE makes that a no-op rather than an overwrite.
+         SET name = EXCLUDED.name
+       WHERE dypos.restaurant_areas.tenant_id = EXCLUDED.tenant_id`,
+      [id, tenant, branchId, AREAS[i].name],
+    );
+  }
+
+  let tables = 0;
+  for (let i = 0; i < areaIds.length; i += 1) {
+    for (let n = 1; n <= AREAS[i].capacity; n += 1) {
+      await client.query(
+        `INSERT INTO dypos.restaurant_tables
+           (id, tenant_id, area_id, table_number, capacity)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          `${tenant}-t-${i + 1}-${n}`,
+          tenant,
+          areaIds[i],
+          `${i + 1}-${n}`,
+          AREAS[i].capacity,
+        ],
+      );
+      tables += 1;
+    }
+  }
+
+  return { areas: areaIds.length, tables };
+}
+
+/**
+ * ══════════════════════════════════════════════════════════════════════════
+ * THE LEGACY PACKS — NOT DEAD CODE, AND NOT SAFE AS-IS
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * Three hand-written SQL packs from the v24–v130 era. They must NOT be deleted:
+ * the numbered migrations in `server/migrations` are layered ON TOP of them and
+ * reference their objects directly —
+ *
+ *     v131_core_screens.sql    → REFERENCES dypos.product_recipes(id)
+ *     v132_enterprise_core.sql → ALTER TABLE dypos.chart_of_accounts
+ *
+ * So the packs are the FOUNDATION; the numbered migrations are the refinement.
+ *
+ * THE DEFECT THEY WERE CARRYING
+ * -----------------------------
+ * Nine tables are declared by BOTH a pack and a numbered migration, with
+ * incompatible column sets:
+ *
+ *     cash_movements    pack: shift_id, movement_type, direction IN('IN','OUT')
+ *                      v137 : section, occurred_on, direction IN('in','out')
+ *     units_of_measure  pack: PK(code), global, no tenant
+ *                      v132 : PK(id), tenant-scoped, UNIQUE(tenant_id, code)
+ *
+ * `CREATE TABLE IF NOT EXISTS` means whichever side runs FIRST silently wins and
+ * the other becomes a no-op. That is a coin toss decided by execution order,
+ * and the loser's columns are then missing while live code
+ * (`financialRoutes.ts`, `uomRoutes.ts`) queries them by name. The failure
+ * surfaces at request time as "column does not exist", far from its cause.
+ *
+ * WHY IT WAS SILENT
+ * -----------------
+ * Each file ran as ONE `client.query(sql)`. PostgreSQL aborts the batch on the
+ * first error, so the pack's remaining statements — including ones that create
+ * tables nothing else provides — never ran. The error was logged and the boot
+ * continued, which is why this read as three unrelated warnings rather than one
+ * root cause.
+ *
+ * WHAT IS DONE HERE
+ * -----------------
+ * Conflicting declarations are neutralised so the numbered migrations become the
+ * single authority, and each pack is applied statement-by-statement so one bad
+ * statement cannot silently skip the rest. Nothing is dropped and no data is
+ * touched: the conflict is resolved by NOT making the losing declaration.
+ */
 async function runProductionMigrations(client: pg.PoolClient) {
   const migrations = [
     'dypos_schema_complement_v24_v40.sql',
     'dypos_final_global_production_complement_v41_v100.sql',
-    'dypos_database_engine_v101_v130.sql'
+    'dypos_database_engine_v101_v130.sql',
   ];
 
   for (const file of migrations) {
     const filePath = path.join(__dirname, file);
-    if (fs.existsSync(filePath)) {
-      const sql = fs.readFileSync(filePath, 'utf8');
+    if (!fs.existsSync(filePath)) {
+      console.warn(`⚠️  Production migration ${file} is missing from the bundle — skipped.`);
+      continue;
+    }
+
+    const sql = neutraliseSupersededDeclarations(fs.readFileSync(filePath, 'utf8'));
+    const statements = splitSqlStatements(sql);
+    const failed: string[] = [];
+    let applied = 0;
+
+    for (const stmt of statements) {
       try {
-        console.log(`🚀 Executing production migration: ${file}...`);
-        await client.query(sql);
-        console.log(`✅ Production migration ${file} applied.`);
+        await client.query(stmt);
+        applied += 1;
       } catch (err: any) {
-        console.error(`❌ Failed to apply production migration ${file}:`, err.message);
+        failed.push(`${err.message}  ⟵  ${firstLine(stmt)}`);
       }
     }
+
+    if (failed.length === 0) {
+      console.log(`✅ Production migration ${file} applied (${applied} statements).`);
+    } else {
+      console.error(
+        `❌ Production migration ${file}: ${failed.length}/${statements.length} statements failed.`,
+      );
+      for (const f of failed.slice(0, 5)) console.error(`     · ${f}`);
+      if (failed.length > 5) console.error(`     · …and ${failed.length - 5} more`);
+    }
   }
+}
+
+/**
+ * Removes the CREATE TABLE declarations the numbered migrations own.
+ *
+ * Only the statement is neutralised. A table that genuinely does not exist yet
+ * is still created by its numbered migration (v131–v147), the sanctioned path —
+ * so nothing is lost, and the winner of every collision stops depending on
+ * execution order.
+ */
+function neutraliseSupersededDeclarations(sql: string): string {
+  /*
+   * SCOPE, DELIBERATELY NARROW
+   * --------------------------
+   * Only the three objects that are *proven* to be faults are neutralised. The
+   * collision list is longer — accounting_periods, deliveries, kitchen_tickets,
+   * roles, role_permissions and user_roles are declared twice as well — but they
+   * are NOT neutralised, because each one is the target of a foreign key held by
+   * a table the packs still create:
+   *
+   *     journal_entries      -> accounting_periods
+   *     kitchen_ticket_items -> kitchen_tickets
+   *     user_roles, role_permissions -> roles
+   *
+   * Dropping the parent while the child is still declared turns a silent
+   * `IF NOT EXISTS` conflict into a hard "relation does not exist" failure. Those
+   * collisions are a real debt, but they need the owning migration to add the
+   * missing columns — not a boot-time deletion that could break a paying
+   * merchant's ledger. They are recorded, not acted on.
+   *
+   * These three are safe precisely because nothing else references them.
+   */
+  const superseded = [
+    'cash_movements',
+    'units_of_measure',
+    'unit_conversions',
+  ];
+
+  for (const table of superseded) {
+    sql = sql.replace(
+      new RegExp(
+        `CREATE\\s+TABLE\\s+IF\\s+NOT\\s+EXISTS\\s+(?:dypos\\.)?${table}\\b[\\s\\S]*?\\n\\s*\\);`,
+        'gi',
+      ),
+      `-- [DyPOS] ${table} is owned by server/migrations — conflicting pack declaration omitted.`,
+    );
+  }
+
+  /*
+   * The actual cause of "column shift_id does not exist".
+   *
+   * It is NOT the CREATE TABLE — it is `idx_cash_movements_shift`. On any
+   * database where v137 already ran, `cash_movements` exists WITHOUT `shift_id`
+   * (v137 defines section/occurred_on instead). The pack's CREATE TABLE is a
+   * silent no-op, and then the index below is applied to the pre-existing table,
+   * which has no such column. Omitting the index is the whole fix for that error.
+   */
+  for (const idx of ['idx_cash_movements_shift', 'idx_unit_conversions_pair']) {
+    sql = sql.replace(
+      new RegExp(`CREATE\\s+INDEX\\s+IF\\s+NOT\\s+EXISTS\\s+${idx}\\b[\\s\\S]*?;`, 'gi'),
+      `-- [DyPOS] ${idx} omitted with its table.`,
+    );
+  }
+
+  /*
+     * Objects the packs index but never create, and that no numbered migration
+     * creates either.
+     *
+     * Each of these produced a boot-time failure such as:
+     *
+     *     relation "payments" does not exist  →  CREATE INDEX idx_payments_invoice_created
+     *
+     * Verified against the live database before being treated as safe: none of
+     * `payments`, `sync_log`, `webhook_outbox`, `integration_runs` or
+     * `schema_version` exists, and zero lines of live code (server/ or worker/)
+     * reference any of them. They are leftovers from a design this product did
+     * not ship — the payment path is `payment_transactions`, and the offline
+     * queue is `sync_operations` from the v101–v130 pack itself.
+     *
+     * They are therefore neutralised rather than created: creating an empty
+     * `payments` table would be a new claim about the product, and a table
+     * nothing reads is worse than no table — it advertises a capability.
+     */
+    const deadObjects = [
+      'payments',
+      'sync_log',
+      'webhook_outbox',
+      'integration_runs',
+      'schema_version',
+    ];
+    for (const t of deadObjects) {
+      sql = sql.replace(
+        new RegExp(
+          `(CREATE\\s+(?:INDEX|UNIQUE\\s+INDEX|MATERIALIZED\\s+VIEW|VIEW|TABLE)\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?[\\s\\S]{0,200}?\\b(?:${t})\\b[\\s\\S]*?;)`,
+          'gi',
+        ),
+        `-- [DyPOS] statement over "${t}" omitted: the object does not exist and no live code reads it.`,
+      );
+    }
+
+    /*
+     * `unit_conversions` is neutralised above along with its index, but the
+     * packs also carry two anonymous `DO $$` blocks that iterate over it and
+     * would now fail on a missing relation. The blocks grant RLS on a list of
+     * tables; with the table gone there is nothing to protect, so they are
+     * dropped rather than left to fail on every boot.
+     */
+    sql = sql.replace(
+      /DO\s+\$\$[\s\S]{0,4000}?unit_conversions[\s\S]{0,2000}?END\s+\$\$\s*;/gi,
+      '-- [DyPOS] RLS block over unit_conversions omitted with the table itself.',
+    );
+
+    /*
+     * Column-level mismatches on tables that DO exist.
+     *
+     * `journal_entries` has `date` (see the bootstrap), while two packs index
+     * `entry_date` and `entry_no`, and a third builds a view and a function on
+     * them. Both spellings are absent, so those statements cannot apply.
+     *
+     * This is NOT silently skipped. `entry_date` and `entry_no` are the names
+     * the v101–v130 accounting views are written against, and this project
+     * reports a trial balance from them — so the gap is a real missing feature,
+     * not dead code. They are recorded here rather than fixed in a boot path,
+     * because adding accounting columns needs the owning migration and a
+     * decision about which spelling becomes canonical.
+     */
+    const columnMismatches = [
+      'idx_journal_entries_tenant_date',
+      'idx_promotions_active_window',
+      'ux_mv_daily_accounting_summary',
+    ];
+    for (const idx of columnMismatches) {
+      sql = sql.replace(
+        new RegExp(`CREATE\\s+(?:UNIQUE\\s+)?INDEX\\s+IF\\s+NOT\\s+EXISTS\\s+${idx}\\b[\\s\\S]*?;`, 'gi'),
+        `-- [DyPOS] ${idx} omitted: its column does not exist on the reconciled table.`,
+      );
+    }
+
+    // The ledger view is built on the same missing columns, and the materialised
+    // view depends on the view, so both go with it.
+    sql = sql.replace(
+      /CREATE\s+(?:OR\s+REPLACE\s+)?(?:MATERIALIZED\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?dypos\.(?:v_general_ledger|mv_daily_accounting_summary)\b[\s\S]*?;/gi,
+      '-- [DyPOS] ledger view omitted: built on journal_entries.entry_date/entry_no.',
+    );
+
+    // The accounting function reads je.entry_date in its signature body.
+    sql = sql.replace(
+      /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+dypos\.account_balance\b[\s\S]*?END\s+\$\$\s*;/gi,
+      "-- [DyPOS] account_balance() omitted: reads journal_entries.entry_date.",
+    );
+
+    /*
+     * The last set: indexes over columns that no reconciled table has, and two
+     * INSERTs into bookkeeping tables this product does not use.
+     *
+     * `journal_entries` carries id, tenant_id, entry_number, date, description,
+     * total_amount, status, created_at. It has no `entry_date`, `entry_no`,
+     * `source_type` or `period_id`, and neither `promotions` carries
+     * `conditions_json`/`reward_json`. Verified against the live database, and
+     * zero lines in server/ or worker/ reference any of the five — so these
+     * indexes would only ever describe columns this deployment does not have.
+     *
+     * The two INSERTs are the packs' own migration ledgers. They fail because
+     * each pack declares `schema_migrations` with a different column set (the
+     * v24–v40 pack declares `version, name`; the later two declare
+     * `version, checksum, description`), so the first to run wins and the other
+     * two cannot insert. This project's real ledger is
+     * `dypos.applied_migrations`, written by `scripts/migrate.ts`. Recording a
+     * third, contradictory version history is a liability, not a record.
+     */
+    for (const idx of [
+      'idx_journal_entries_source',
+      'idx_journal_entries_period_status',
+      'idx_promotion_conditions_gin',
+      'idx_promotion_rewards_gin',
+    ]) {
+      sql = sql.replace(
+        new RegExp(`CREATE\\s+(?:UNIQUE\\s+)?INDEX\\s+IF\\s+NOT\\s+EXISTS\\s+${idx}\\b[\\s\\S]*?;`, 'gi'),
+        `-- [DyPOS] ${idx} omitted: its column does not exist and no live code reads it.`,
+      );
+    }
+
+    sql = sql.replace(
+      /INSERT\s+INTO\s+(?:dypos\.)?schema_migrations\b[\s\S]*?;/gi,
+      "-- [DyPOS] INSERT INTO schema_migrations omitted: the authoritative ledger is dypos.applied_migrations.",
+    );
+    sql = sql.replace(
+      /INSERT\s+INTO\s+(?:dypos\.)?schema_version\b[\s\S]*?;/gi,
+      "-- [DyPOS] INSERT INTO schema_version omitted: the table does not exist and no code reads it.",
+    );
+
+    return sql;
+}
+
+/**
+ * Splits a SQL script on statement boundaries.
+ *
+ * A naive `split(';')` would cut inside a `$$ … $$` function body or a quoted
+ * string and emit fragments that are invalid on their own. This tracks
+ * dollar-quoting, single quotes, and both comment forms.
+ */
+function splitSqlStatements(sql: string): string[] {
+  const out: string[] = [];
+  let buf = '';
+  let i = 0;
+  let dollarTag: string | null = null;
+
+  while (i < sql.length) {
+    const rest = sql.slice(i);
+
+    if (dollarTag) {
+      const end = rest.indexOf(dollarTag);
+      if (end === -1) {
+        buf += sql[i];
+        i += 1;
+        continue;
+      }
+      buf += rest.slice(0, end + dollarTag.length);
+      i += end + dollarTag.length;
+      dollarTag = null;
+      continue;
+    }
+
+    const tagMatch = rest.match(/^\$[A-Za-z_0-9]*\$/);
+    if (tagMatch) {
+      dollarTag = tagMatch[0];
+      buf += tagMatch[0];
+      i += tagMatch[0].length;
+      continue;
+    }
+
+    if (rest.startsWith('--')) {
+      const nl = sql.indexOf('\n', i);
+      if (nl === -1) {
+        i = sql.length;
+        continue;
+      }
+      i = nl + 1;
+      continue;
+    }
+
+    // Block comment; PostgreSQL allows these to nest.
+    if (rest.startsWith('/*')) {
+      let depth = 0;
+      let j = i;
+      while (j < sql.length) {
+        if (sql.startsWith('/*', j)) {
+          depth += 1;
+          j += 2;
+        } else if (sql.startsWith('*/', j)) {
+          depth -= 1;
+          j += 2;
+          if (depth === 0) break;
+        } else {
+          j += 1;
+        }
+      }
+      i = j;
+      continue;
+    }
+
+    // Single-quoted literal, with '' escaping.
+    if (sql[i] === "'") {
+      let j = i + 1;
+      while (j < sql.length) {
+        if (sql[j] === "'") {
+          if (sql[j + 1] === "'") {
+            j += 2;
+            continue;
+          }
+          break;
+        }
+        j += 1;
+      }
+      buf += sql.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+
+    if (sql[i] === ';') {
+      const stmt = buf.trim();
+      if (stmt) out.push(stmt);
+      buf = '';
+      i += 1;
+      continue;
+    }
+
+    buf += sql[i];
+    i += 1;
+  }
+
+  const tail = buf.trim();
+  if (tail) out.push(tail);
+  return out;
+}
+
+/** The statement's own first meaningful line, for the failure report. */
+function firstLine(sql: string): string {
+  const line =
+    sql
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l && !l.startsWith('--')) ?? '';
+  return line.length > 90 ? `${line.slice(0, 90)}…` : line;
 }

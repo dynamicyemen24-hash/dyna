@@ -125,6 +125,49 @@ const CLOSED_SHIFT: ShiftInfo = {
   transactionsCount: 0,
 };
 
+type CachedCollections = {
+  categories: Category[];
+  products: Product[];
+  customers: Customer[];
+  suppliers: Supplier[];
+  purchaseOrders: PurchaseOrder[];
+  employees: Employee[];
+  transactions: Transaction[];
+  savedAt: string;
+};
+
+const dataCacheKey = (tenantId: string, username: string) =>
+  `dypos_operational_cache::${tenantId}::${username}`;
+
+const readCachedCollections = (tenantId: string, username: string): CachedCollections | null => {
+  try {
+    const raw = localStorage.getItem(dataCacheKey(tenantId, username));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CachedCollections>;
+    if (!parsed || !Array.isArray(parsed.products)) return null;
+    return {
+      categories: Array.isArray(parsed.categories) ? parsed.categories : [],
+      products: parsed.products,
+      customers: Array.isArray(parsed.customers) ? parsed.customers : [],
+      suppliers: Array.isArray(parsed.suppliers) ? parsed.suppliers : [],
+      purchaseOrders: Array.isArray(parsed.purchaseOrders) ? parsed.purchaseOrders : [],
+      employees: Array.isArray(parsed.employees) ? parsed.employees : [],
+      transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+      savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
+    };
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedCollections = (tenantId: string, username: string, value: Omit<CachedCollections, 'savedAt'>) => {
+  try {
+    localStorage.setItem(dataCacheKey(tenantId, username), JSON.stringify({ ...value, savedAt: new Date().toISOString() }));
+  } catch {
+    // Cache is an acceleration layer; a full or restricted storage must not stop the POS.
+  }
+};
+
 /**
  * Maps a `dypos.products` row onto the `Product` type.
  *
@@ -181,8 +224,13 @@ export const DataProvider: React.FC<{
   children: React.ReactNode;
   /** The signed-in operator, recorded on every audit entry. */
   operator: { username: string; name: string; role: string };
-}> = ({ children, operator }) => {
-  const [branches, setBranches] = useState<Branch[]>([]);
+  /** Branch directory resolved by the cloud entitlement route or its scoped snapshot. */
+  referenceBranches: Branch[];
+  tenantId: string;
+  initialBranchId?: string | null;
+}> = ({ children, operator, referenceBranches, tenantId, initialBranchId }) => {
+  const branchStorageKey = `dypos_branch::${tenantId}::${operator.username}`;
+  const [branches, setBranches] = useState<Branch[]>(referenceBranches);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -192,13 +240,27 @@ export const DataProvider: React.FC<{
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(() => {
+    let savedId = initialBranchId ?? null;
+    try { savedId = localStorage.getItem(branchStorageKey) ?? savedId; } catch { /* storage optional */ }
+    return referenceBranches.find((branch) => branch.id === savedId) ?? null;
+  });
   const [shift, setShiftState] = useState<ShiftInfo>(CLOSED_SHIFT);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
 
   const [status, setStatus] = useState<LoadStatus>('idle');
   const [report, setReport] = useState<LoadReport>({ loaded: [], failed: [] });
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    setBranches(referenceBranches);
+    setSelectedBranch((current) => {
+      let persistedId: string | null = null;
+      try { persistedId = localStorage.getItem(branchStorageKey); } catch { /* storage optional */ }
+      const savedId = current?.id ?? initialBranchId ?? persistedId ?? null;
+      return referenceBranches.find((branch) => branch.id === savedId) ?? null;
+    });
+  }, [referenceBranches, initialBranchId, branchStorageKey]);
 
   /**
    * Loads every collection the session needs.
@@ -215,7 +277,6 @@ export const DataProvider: React.FC<{
     setError('');
 
     const results = await Promise.allSettled([
-      apiGet<{ items: Branch[] }>('/api/db/branches'),
       apiGet<{ items: any[] }>('/api/db/categories'),
       apiGet<{ items: any[] }>('/api/db/products?limit=500'),
       apiGet<{ items: any[] }>('/api/db/customers'),
@@ -223,6 +284,10 @@ export const DataProvider: React.FC<{
       apiGet<{ items: any[] }>('/api/db/purchase-orders'),
       apiGet<{ items: any[] }>('/api/db/employees'),
       apiGet<{ transactions: Transaction[] }>('/api/db/transactions?limit=300'),
+      // 8th entry, appended so positional readers of the first seven stay valid.
+      // Deliberately NOT part of the warm-start cache below: that cache shape
+      // has no journal field, and a stale ledger row would outlive its source.
+      apiGet<{ items: any[] }>('/api/db/journal-entries'),
     ]);
 
     const loaded: string[] = [];
@@ -232,42 +297,67 @@ export const DataProvider: React.FC<{
     const reason = (r: PromiseSettledResult<any>) =>
       (r as PromiseRejectedResult).reason?.message || 'تعذّر الاتصال بالخادم';
 
-    const b = value<{ items: Branch[] }>(results[0]);
-    if (b) { loaded.push('الفروع'); setBranches(b.items || []); }
-    else failed.push({ name: 'الفروع', reason: reason(results[0]) });
+    // Branches are part of the single identity/entitlement snapshot; never
+    // issue a second query that could disagree or lose the offline snapshot.
+    loaded.push('الفروع');
 
-    const c = value<{ items: any[] }>(results[1]);
+    const c = value<{ items: any[] }>(results[0]);
     if (c) {
       loaded.push('التصنيفات');
       // The API returns `category`; the screens expect `{ id, name, icon }`.
       setCategories((c.items || []).map((r: any) => ({
         id: r.id || r.name, name: r.name, icon: r.icon || 'Package',
       })));
-    } else failed.push({ name: 'التصنيفات', reason: reason(results[1]) });
+    } else failed.push({ name: 'التصنيفات', reason: reason(results[0]) });
 
-    const p = value<{ items: any[] }>(results[2]);
+    const p = value<{ items: any[] }>(results[1]);
     if (p) { loaded.push('المنتجات'); setProducts((p.items || []).map(toProduct)); }
-    else failed.push({ name: 'المنتجات', reason: reason(results[2]) });
+    else failed.push({ name: 'المنتجات', reason: reason(results[1]) });
 
-    const cu = value<{ items: any[] }>(results[3]);
+    const cu = value<{ items: any[] }>(results[2]);
     if (cu) { loaded.push('العملاء'); setCustomers((cu.items || []).map(toCustomer)); }
-    else failed.push({ name: 'العملاء', reason: reason(results[3]) });
+    else failed.push({ name: 'العملاء', reason: reason(results[2]) });
 
-    const s = value<{ items: any[] }>(results[4]);
+    const s = value<{ items: any[] }>(results[3]);
     if (s) { loaded.push('الموردون'); setSuppliers((s.items || []).map(toSupplier)); }
-    else failed.push({ name: 'الموردون', reason: reason(results[4]) });
+    else failed.push({ name: 'الموردون', reason: reason(results[3]) });
 
-    const po = value<{ items: any[] }>(results[5]);
+    const po = value<{ items: any[] }>(results[4]);
     if (po) { loaded.push('أوامر الشراء'); setPurchaseOrders(po.items || []); }
-    else failed.push({ name: 'أوامر الشراء', reason: reason(results[5]) });
+    else failed.push({ name: 'أوامر الشراء', reason: reason(results[4]) });
 
-    const e = value<{ items: any[] }>(results[6]);
+    const e = value<{ items: any[] }>(results[5]);
     if (e) { loaded.push('الموظفون'); setEmployees((e.items || []).map(toEmployee)); }
-    else failed.push({ name: 'الموظفون', reason: reason(results[6]) });
+    else failed.push({ name: 'الموظفون', reason: reason(results[5]) });
 
-    const t = value<{ transactions: Transaction[] }>(results[7]);
+    const t = value<{ transactions: Transaction[] }>(results[6]);
     if (t) { loaded.push('الفواتير'); setTransactions(t.transactions || []); }
-    else failed.push({ name: 'الفواتير', reason: reason(results[7]) });
+    else failed.push({ name: 'الفواتير', reason: reason(results[6]) });
+
+    // The ledger reloads with everything else so a journal entry survives a
+    // refresh instead of living only in this tab's memory. The server returns
+    // the entry number it allocated, so the rows here are never placeholders.
+    const je = value<{ items: any[] }>(results[7]);
+    if (je) { loaded.push('قيود اليومية'); setJournalEntries(je.items || []); }
+    else failed.push({ name: 'قيود اليومية', reason: reason(results[7]) });
+
+    // Persist only answered collections. The cache is tenant/user scoped and is
+    // used as a warm start on the next launch; the server remains authoritative.
+    if (loaded.length > 1) {
+      const cached = readCachedCollections(tenantId, operator.username) ?? {
+        categories: [], products: [], customers: [], suppliers: [],
+        purchaseOrders: [], employees: [], transactions: [], savedAt: '',
+      };
+      writeCachedCollections(tenantId, operator.username, {
+        categories: c ? (c.items || []).map((r: any) => ({ id: r.id || r.name, name: r.name, icon: r.icon || 'Package' })) : cached.categories,
+        products: p ? (p.items || []).map(toProduct) : cached.products,
+        customers: cu ? (cu.items || []).map(toCustomer) : cached.customers,
+        suppliers: s ? (s.items || []).map(toSupplier) : cached.suppliers,
+        purchaseOrders: po ? (po.items || []) : cached.purchaseOrders,
+        employees: e ? (e.items || []).map(toEmployee) : cached.employees,
+        transactions: t ? (t.transactions || []) : cached.transactions,
+      });
+    }
 
     // A list the server answered but returned nothing for is a SUCCESS — the
     // tenant has no records. That must not be reported as a failure.
@@ -280,10 +370,44 @@ export const DataProvider: React.FC<{
           : `تعذّر تحميل: ${failed.map((f) => f.name).join('، ')}`,
       );
     }
-  }, []);
+  }, [tenantId, operator.username]);
 
-  // Runs when the session opens — the single hydration point.
-  useEffect(() => { void reload(); }, [reload]);
+  // Warm-start from the last verified tenant/user cache, then reconcile online.
+  // This removes the blank-screen pause without presenting cache as live truth.
+  useEffect(() => {
+    const cached = readCachedCollections(tenantId, operator.username);
+    if (cached) {
+      setCategories(cached.categories);
+      setProducts(cached.products);
+      setCustomers(cached.customers);
+      setSuppliers(cached.suppliers);
+      setPurchaseOrders(cached.purchaseOrders);
+      setEmployees(cached.employees);
+      setTransactions(cached.transactions);
+      setStatus('ready');
+      setReport({ loaded: ['cache محلي'], failed: [] });
+    }
+    void reload();
+  }, [reload, tenantId, operator.username]);
+
+  // Keep the warm cache current after local optimistic work as well as after a
+  // server reload. This is what makes a reopened till recover the catalogue,
+  // customers, suppliers, employees and pending invoice view immediately.
+  useEffect(() => {
+    if (status !== 'ready') return;
+    writeCachedCollections(tenantId, operator.username, {
+      categories, products, customers, suppliers, purchaseOrders, employees, transactions,
+    });
+  }, [status, tenantId, operator.username, categories, products, customers, suppliers, purchaseOrders, employees, transactions]);
+
+  // The Outbox owns delivery; this context owns the displayed invoice state.
+  // Reconcile only after the server accepted (or identified a replay), never on
+  // a business rejection or an unresolved transport error.
+  useEffect(() => {
+    const reconcile = () => { void reload(); };
+    window.addEventListener('dypos:offline-sync-settled', reconcile);
+    return () => window.removeEventListener('dypos:offline-sync-settled', reconcile);
+  }, [reload]);
 
   /**
    * Selects the working branch and opens the shift against it.
@@ -304,8 +428,11 @@ export const DataProvider: React.FC<{
      * Opening a shift is a deliberate act with a counted float — see
      * `ShiftOpeningDialog`. Selecting where you work is not that act.
      */
-    setSelectedBranch(branch);
-  }, []);
+    const authorized = branches.find((candidate) => candidate.id === branch.id);
+    if (!authorized) return;
+    setSelectedBranch(authorized);
+    try { localStorage.setItem(branchStorageKey, authorized.id); } catch { /* in-memory selection remains */ }
+  }, [branches, branchStorageKey]);
 
   const setShift = useCallback((updater: (s: ShiftInfo) => ShiftInfo) => {
     setShiftState(updater);

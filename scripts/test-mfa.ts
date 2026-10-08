@@ -16,6 +16,7 @@
  * It never touches invoices, stock or ledger data.
  */
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import pg from 'pg';
 import { makeId } from '../server/apiHelpers.ts';
 import {
@@ -29,7 +30,7 @@ dotenv.config();
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 2,
 });
 

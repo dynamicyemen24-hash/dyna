@@ -266,6 +266,24 @@ section('6b. the queue actually has a transport');
     /id:\s*item\.id/.test(transport));
 }
 
+section('6c. a clean service-worker install caches the complete build');
+
+{
+  const vite = fs.readFileSync(path.join(process.cwd(), 'vite.config.ts'), 'utf8');
+  const worker = fs.readFileSync(path.join(process.cwd(), 'public/sw.js'), 'utf8');
+  check('the updated install strategy uses a new cache version',
+    /dypos-offline-v\d+\.0/.test(worker));
+  check('the build emits a manifest from every generated asset',
+    /fileName:\s*'dypos-precache\.json'/.test(vite)
+      && /fileName\.startsWith\('assets\/'\)/.test(vite));
+  check('the service worker requires and validates that manifest',
+    /fetch\('\/dypos-precache\.json'/.test(worker)
+      && /assets\.some\(\(asset\)/.test(worker));
+  check('all generated bundles are cached before worker activation',
+    /await cache\.addAll\(assets\)/.test(worker)
+      && !/Pre-caching non-fatal warning/.test(worker));
+}
+
 section('7. the handler contract can express a conflict at all');
 
 {

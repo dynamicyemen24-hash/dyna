@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const BASE = process.env.API_BASE || 'http://localhost:3000';
+const BASE = process.env.API_BASE || 'http://';
 const LOG = path.resolve('screens-e2e.log');
 const lines: string[] = [];
 const log = (s: string) => {

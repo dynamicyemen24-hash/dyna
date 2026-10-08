@@ -3,6 +3,7 @@
  * Run with: npx tsx scripts/verify-seed.ts
  */
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import fs from 'fs';
 import path from 'path';
 import pg from 'pg';
@@ -22,7 +23,7 @@ const ok = (label: string, pass: boolean, info = '') =>
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 1,
   connectionTimeoutMillis: 20000,
 });

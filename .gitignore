@@ -42,3 +42,30 @@ e2e.out
 .tmp*
 *.tmp
 scratch/
+
+# ── Agent / tool state, never source ────────────────────────────────────────
+# Orchestrator and editor-tool directories that live in the project root but
+# belong to the tool, not the product:
+#
+#   .gsee/   — per-project orchestrator state (state map, checkpoints, handover,
+#              intel). It holds decisions about THIS checkout only, so committing
+#              it would ship one machine's working memory to every clone — and
+#              its audit log is append-only noise in every diff.
+#   .kilo/   — a tool's own worktrees. The gate's data-integrity scan read a
+#              full duplicate of `server/migrations/` from
+#              `.kilo/worktrees/<name>/` and flagged ITS destructive SQL as if
+#              this repository shipped it — a foreign copy reporting on us.
+#   .manus/  — MCP result cache.
+#   .work/   — tool scratch, 91 MB at the time of writing, including a bundled
+#              `tools/node.exe`. A runtime binary in a source tree is exactly
+#              what `dist/` and `node_modules/` rules already exist to exclude.
+#   outputs/ — generated reports.
+#
+# The pattern is ignored rather than deleted for the last three because those
+# directories are owned by running tools: deleting them out from under the tool
+# loses its state, ignoring them keeps the tree honest.
+.gsee/
+.kilo/
+.manus/
+.work/
+outputs/

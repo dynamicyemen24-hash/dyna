@@ -15,7 +15,16 @@ import {
 interface PurchasesViewProps {
   suppliers: Supplier[];
   purchaseOrders: PurchaseOrder[];
-  onAddPurchaseOrder: (po: PurchaseOrder) => void;
+  /**
+   * Creates the order on the server and resolves with the row it recorded.
+   *
+   * The payload carries no `id`, `poNumber` or `supplierName`: `poNumber` is
+   * allocated server-side (`PO-2026-000001`) and the supplier name is resolved
+   * from `supplierId` there, so the list cannot drift from the supplier table.
+   */
+  onAddPurchaseOrder: (
+    po: Omit<PurchaseOrder, 'id' | 'poNumber' | 'supplierName'>,
+  ) => Promise<PurchaseOrder>;
 }
 
 export const PurchasesView: React.FC<PurchasesViewProps> = ({ suppliers, purchaseOrders, onAddPurchaseOrder }) => {
@@ -24,29 +33,37 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ suppliers, purchas
   const [itemName, setItemName] = useState('عطر جسم 88 مل');
   const [quantity, setQuantity] = useState('50');
   const [unitCost, setUnitCost] = useState('6.6');
+  // A refused order keeps the modal open with the server's Arabic reason;
+  // closing it would tell the operator the order was saved when it was not.
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const sup = suppliers.find((s) => s.id === selectedSupplierId);
     if (!sup) return;
 
     const qtyNum = Number(quantity) || 1;
     const costNum = Number(unitCost) || 0;
-    const total = qtyNum * costNum;
 
-    const newPo: PurchaseOrder = {
-      id: `po-${Date.now()}`,
-      poNumber: `PO-2026-${Math.floor(100 + Math.random() * 900)}`,
-      supplierId: sup.id,
-      supplierName: sup.name,
-      items: [{ productName: itemName, quantity: qtyNum, unitCost: costNum }],
-      totalAmount: total,
-      status: 'approved',
-      orderDate: new Date().toISOString().split('T')[0],
-    };
-
-    onAddPurchaseOrder(newPo);
-    setIsModalOpen(false);
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      // No `id`, no `poNumber`, no `supplierName`: the server allocates and
+      // resolves all three and returns the recorded order.
+      await onAddPurchaseOrder({
+        supplierId: sup.id,
+        items: [{ productName: itemName, quantity: qtyNum, unitCost: costNum }],
+        totalAmount: qtyNum * costNum,
+        status: 'approved',
+        orderDate: new Date().toISOString().split('T')[0],
+      });
+      setIsModalOpen(false);
+    } catch (err: any) {
+      setSubmitError(err?.message || 'تعذّر حفظ أمر الشراء على الخادم — تحقق من الاتصال وحاول مرة أخرى');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -56,7 +73,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ suppliers, purchas
         title="إدارة المشتريات وسلسلة الإمداد"
         subtitle="أوامر الشراء للموردين، استقبال البضائع، ومتابعة الأرصدة الدائنة"
         actions={
-          <PrimaryButton onClick={() => setIsModalOpen(true)}>
+          <PrimaryButton onClick={() => { setSubmitError(''); setIsModalOpen(true); }}>
             <Plus className="w-4 h-4" />
             إنشاء أمر شراء جديد (PO)
           </PrimaryButton>
@@ -179,8 +196,16 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ suppliers, purchas
             <GhostButton type="button" onClick={() => setIsModalOpen(false)}>
               إلغاء
             </GhostButton>
-            <PrimaryButton type="submit">
-              حفظ واعتماد أمر الشراء
+            {submitError && (
+              <p
+                role="alert"
+                className="flex-1 text-right text-[11px] leading-relaxed font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"
+              >
+                {submitError}
+              </p>
+            )}
+            <PrimaryButton type="submit" disabled={submitting}>
+              {submitting ? 'جارٍ الحفظ…' : 'حفظ واعتماد أمر الشراء'}
             </PrimaryButton>
           </div>
         </form>

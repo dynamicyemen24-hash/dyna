@@ -37,7 +37,15 @@ export const UpdateNotice: React.FC = () => {
       }).catch(() => { /* ignore */ });
     };
     window.addEventListener('dypos:update-ready', onReady);
-    return () => window.removeEventListener('dypos:update-ready', onReady);
+    // Escape dismisses the offer without applying — the till is never forced.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDismissed(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('dypos:update-ready', onReady);
+      window.removeEventListener('keydown', onKey);
+    };
   }, [dismissed]);
 
   const applyUpdate = () => {
@@ -80,7 +88,7 @@ export const UpdateNotice: React.FC = () => {
           type="button"
           onClick={applyUpdate}
           disabled={applying}
-          className="rounded-xl bg-[var(--t-brand)] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+          className="rounded-xl bg-[var(--t-brand)] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-brand)]"
         >
           {applying ? 'جارٍ التحديث…' : 'تطبيق الآن'}
         </button>
@@ -89,7 +97,7 @@ export const UpdateNotice: React.FC = () => {
           type="button"
           onClick={() => setDismissed(true)}
           aria-label="لاحقاً"
-          className="rounded-lg p-1 text-[var(--t-muted)] hover:text-[var(--t-ink)]"
+          className="rounded-lg p-1 text-[var(--t-muted)] hover:text-[var(--t-ink)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-brand)]"
         >
           <X size={16} />
         </button>

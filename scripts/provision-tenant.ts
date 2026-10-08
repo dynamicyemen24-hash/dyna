@@ -20,11 +20,23 @@
 import dotenv from 'dotenv';
 import pg from 'pg';
 
+import { provisionTenantData, PG_SSL } from '../server/neonDb.ts';
+
 dotenv.config();
 
+/*
+ * The SAME SSL posture as the application's own pool, imported rather than
+ * restated.
+ *
+ * This script used to hard-code `ssl: { rejectUnauthorized: false }`, which is
+ * how a provisioning script — the one place a new customer's first rows are
+ * written — ended up moving credentials over a weaker connection than the
+ * server that will later read them. `PG_SSL` is exported from `server/neonDb.ts`
+ * so there is one policy in the codebase, not one per caller.
+ */
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 2,
 });
 
@@ -150,6 +162,31 @@ async function main() {
     );
 
     await client.query('COMMIT');
+
+    /*
+     * Tenant-owned configuration is created HERE, inside a real tenant context,
+     * and not by `initDatabaseSchema()`.
+     *
+     * Restaurant areas used to be seeded by the system bootstrap, against a
+     * hard-coded branch belonging to one merchant. That both failed the schema's
+     * NOT NULL on `tenant_id` and, had it not, would have handed the same floor
+     * plan to every tenant on the deployment.
+     *
+     * Committed separately from the tenant itself, so a failure here leaves a
+     * working tenant with no restaurant areas — an operator can re-run this —
+     * rather than rolling back a tenant they may already have configured.
+     */
+    try {
+      const data = await provisionTenantData(client, id);
+      console.log(`  areas     ${data.areas}`);
+      console.log(`  tables    ${data.tables}`);
+    } catch (dataErr: any) {
+      console.warn(
+        `  WARNING — tenant data not provisioned: ${(dataErr as Error).message}\n`
+        + '  The tenant itself is provisioned and usable. Re-run this script, or call\n'
+        + '  provisionTenantData(client, id) once the cause is fixed.',
+      );
+    }
 
     const grantedIds = granted.rows.map((r: { capability_id: string }) => r.capability_id);
     console.log(`\n  tenant    ${id}`);

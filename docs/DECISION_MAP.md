@@ -196,9 +196,38 @@ and is itself covered by the CI gate.
 |---|---|---|
 | 1 | `mock*` arrays in six screens | Largely resolved; each screen needed its own table + CRUD + permission, not a patch. |
 | 2 | No component-level test runner | The suites here drive real PostgreSQL and real routes, so coverage of *wiring* is real — but there is still no jsdom/DOM runner, so `LoginView` and `POSView` are verified by source contract, not by rendering. |
-| 3 | SSO has no server endpoint | States plainly that it is unprovisioned rather than faking a login. Real wiring needs a provider + server-side code exchange. |
-| 4 | MFA delivery is log-only | `MfaDeliverer` defaults to `logDeliverer` — a real random code, but delivered to the server log. Production must register an SMS/e-mail deliverer. |
-| 5 | Settlement accounts are not editable in the UI | `POST`/`PUT /api/db/settlement/accounts` exist and are permission-checked, but no screen exposes them yet, so a merchant still cannot configure one from the app. |
+| 3 | SSO has no server endpoint | `server/ssoEngine.ts` exists with passkey tables and registration routes, but no provider code exchange is wired; the sign-in screen states plainly that SSO is unprovisioned rather than faking a login. Real wiring needs a provider + server-side code exchange. |
+| 4 | MFA delivery is log-only | `MfaDeliverer` defaults to `logDeliverer` — a real random code, but delivered to the server log, and the edge copy (`worker/index.ts`) writes the same code to the Worker log. Production must register an SMS/e-mail deliverer. **Both runtimes now enforce the factor** (`test:mfa-parity`, 14 assertions, challenge verified in both directions). |
+| 5 | Settlement accounts are not editable in the UI | **CLOSED** — `POST`/`PUT /api/db/settlement/accounts` are permission-checked and the settings screen writes to them (`test:no-fake-data` §6 asserts create/read/mount). |
+
+## Unknown username returned 500, not 401 — and the 500 was an oracle (P7b)
+
+`server/enrollmentEngine.ts` resolves an unknown username during sign-in with
+
+```sql
+SELECT id, tenant_id, username, email, phone, is_active, locked_until FROM dypos.users ...
+```
+
+Neither `email` nor `phone` existed on `dypos.users` — no pack in v131..v148 added them. Every query raised `42703 column "email" does not exist` and the route answered **500**. Three consequences: the unknown-user branch of sign-in was broken on the Express/on-prem path (the edge never calls the engine, so the public site looked healthy); the 500 distinguished a non-existent user from a wrong password, which is exactly the enumeration `GENERIC_AUTH_ERROR` exists to prevent; and no suite covered that branch — a rate-limit test found it, not the auth suite.
+
+Fixed additively by **`v149_user_contact_columns.sql`** (`ADD COLUMN IF NOT EXISTS email/phone` + an index) and the bootstrap `CREATE TABLE` in `neonDb.ts` now declares both. Nullable by contract — `CanonicalUserRef` marks them optional and a NULL never blocks sign-in.
+
+## Rate limiting on the pre-auth surface (P8)
+
+Two budgets, per IP, per route, on both front doors:
+
+- **Failure budget** — only 401/403 responses consume it. Spraying one password across hundreds of usernames is bounded regardless of how many accounts rotate.
+- **Request budget** — every request counts. `/api/auth/login` runs PBKDF2-100k *before* it can refuse, so an unbounded flood is a CPU attack that succeeds whether or not any guess does.
+
+The per-account lockout in `passwords.ts` bounds guessing against ONE user; this bounds the surface. Express copy: `server/rateLimit.ts`. Edge copy: `rateLimitVerdict` in `worker/index.ts` — isolate-local by design, documented as such rather than pretending to be a global store.
+
+Proof: `npm run test:rate-limit` (27 assertions: the refusal, `retry-after`, per-IP and per-route independence, the window reopening, the `off` escape hatch, and a source scan asserting every guessing route carries the middleware — so a NEW auth route cannot be added unlimited without this test failing).
+
+## MFA parity: the edge now holds the same two-phase sign-in (P9)
+
+`worker/index.ts` issued a session token on the password alone. An enrolled user signing in from the public site therefore skipped the factor the local server demanded — the control protected the dev server only.
+
+The edge now issues its own challenge (`issueChallengeEdge`) and mints a token only from `/auth/mfa/verify` after `verifyChallengeEdge` confirms the code, mirroring `server/mfa.ts` over Web Crypto with the identical on-disk format (SHA-256 hex in `dypos.mfa_challenges`). Proof: `npm run test:mfa-parity` (14 assertions) verifies a challenge issued on EXPRESS on the EDGE and one issued on the EDGE on EXPRESS, plus the mirrored constants — the same drift class that once made 210,000 iterations permanently unverifiable.
 
 ## P7 — The scale invented its own readings, and a settlement was computed from them (FIXED)
 

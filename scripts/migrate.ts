@@ -9,6 +9,7 @@
  *   npx tsx scripts/migrate.ts --status   # list what is applied
  */
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import fs from 'fs';
 import path from 'path';
 import pg from 'pg';
@@ -17,7 +18,7 @@ dotenv.config();
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 1,
 });
 

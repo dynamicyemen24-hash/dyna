@@ -1,5 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { apiGet } from '../services/dyposApi';
+import {
+  readReferenceSnapshot,
+  readSignedIdentity,
+  writeReferenceSnapshot,
+} from '../services/referenceSnapshot';
 
 /**
  * Client-side RBAC mirror of the server's authority model.
@@ -17,12 +22,15 @@ export interface RoleSummary {
 }
 
 export interface Principal {
+  userId: string;
+  tenantId: string;
   username: string;
   name: string;
   roles: RoleSummary[];
   permissions: string[];
   isSuperuser: boolean;
   branchIds: string[];
+  verified: boolean;
 }
 
 interface AuthzContextType {
@@ -43,6 +51,7 @@ export const AuthzProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [nonce, setNonce] = useState(0);
+  const token = sessionStorage.getItem('dypos_token');
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
 
@@ -54,7 +63,6 @@ export const AuthzProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // only ever answer 401, which showed up as a console error on the sign-in
   // screen and set a misleading "could not load permissions" state.
   useEffect(() => {
-    const token = sessionStorage.getItem('dypos_token');
     if (!token) {
       setPrincipal(null);
       setError('');
@@ -66,23 +74,39 @@ export const AuthzProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     (async () => {
       try {
         setLoading(true);
-        const me = await apiGet<Principal>('/api/erp/me');
-        if (alive) { setPrincipal(me); setError(''); }
+        const me = await apiGet<Omit<Principal, 'verified'>>('/api/erp/me');
+        const verifiedPrincipal: Principal = { ...me, verified: true };
+        const identity = readSignedIdentity();
+        if (identity && identity.tenantId === me.tenantId && identity.userId === me.userId) {
+          await writeReferenceSnapshot(identity, verifiedPrincipal, 'principal').catch(() => {});
+        }
+        if (alive) { setPrincipal(verifiedPrincipal); setError(''); }
       } catch (e: any) {
-        if (alive) { setPrincipal(null); setError(e.message || 'تعذّر تحميل الصلاحيات'); }
+        const identity = readSignedIdentity();
+        const cached = identity
+          ? await readReferenceSnapshot<Principal>(identity, 'principal').catch(() => null)
+          : null;
+        if (alive) {
+          setPrincipal(cached ? { ...cached.data, verified: false } : null);
+          setError(cached
+            ? 'بيانات الهوية محفوظة محلياً؛ صلاحيات الكتابة تتطلب اتصالاً بالخادم.'
+            : e.message || 'تعذّر تحميل الصلاحيات');
+        }
       } finally {
         if (alive) setLoading(false);
       }
     })();
     return () => { alive = false; };
-  }, [nonce]);
+  }, [nonce, token]);
 
   const can = useCallback(
     (...permissions: string[]) => {
       if (!principal) return false;
+      if (!principal.verified) return false;
       if (principal.isSuperuser) return true;
       // Any-of semantics: a comma-separated list acts as an OR group.
-      return permissions.some((p) => principal.permissions.includes(p));
+      const perms = principal && Array.isArray(principal.permissions) ? principal.permissions : [];
+      return permissions.some((p) => perms.includes(p));
     },
     [principal],
   );

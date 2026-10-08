@@ -28,6 +28,7 @@
  * have bought nothing at all.
  */
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import pg from 'pg';
 import express from 'express';
 import { registerAuthRoutes } from '../server/authRoutes.ts';
@@ -51,7 +52,7 @@ function check(name: string, ok: boolean, detail = ''): void {
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 4,
   idleTimeoutMillis: 10_000,
 });

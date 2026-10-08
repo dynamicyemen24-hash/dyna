@@ -19,10 +19,13 @@
  */
 
 import React, {
-  createContext, useContext, useEffect, useMemo, useRef, useState,
+  createContext, lazy, Suspense, useContext, useEffect, useMemo, useRef, useState,
 } from 'react';
-import { DiagnosticsTool } from '../components/tools/DiagnosticsTool';
-import { ThemeLabTool } from '../components/tools/ThemeLabTool';
+
+const DiagnosticsTool = lazy(() => import('../components/tools/DiagnosticsTool')
+  .then((module) => ({ default: module.DiagnosticsTool })));
+const ThemeLabTool = lazy(() => import('../components/tools/ThemeLabTool')
+  .then((module) => ({ default: module.ThemeLabTool })));
 
 /** The two independent tools, addressed by id so a deep link is possible. */
 export type ToolId = 'devices' | 'theme';
@@ -229,8 +232,14 @@ export const ToolsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <ToolsContext.Provider value={api}>
       {children}
-      {current === 'devices' && <DiagnosticsTool />}
-      {current === 'theme' && <ThemeLabTool />}
+      <Suspense fallback={(
+        <div role="status" className="fixed inset-0 z-[100] grid place-items-center bg-black/40 text-white">
+          جارٍ تحميل الأداة…
+        </div>
+      )}>
+        {current === 'devices' && <DiagnosticsTool />}
+        {current === 'theme' && <ThemeLabTool />}
+      </Suspense>
     </ToolsContext.Provider>
   );
 };

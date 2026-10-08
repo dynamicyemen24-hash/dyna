@@ -33,6 +33,30 @@ export const Pill: React.FC<{ children: React.ReactNode; tone?: string }> = ({
 );
 
 /* ------------------------------ Async states ---------------------------- */
+export const StandardProgress: React.FC<{
+  label?: string;
+  detail?: string;
+  value?: number;
+  tone?: 'brand' | 'amber' | 'rose';
+}> = ({ label = 'جارٍ تجهيز بيئة العمل…', detail = 'يتم تحميل البيانات دون تعطيل الشاشة', value, tone = 'brand' }) => {
+  const bar = tone === 'rose' ? 'bg-rose-500' : tone === 'amber' ? 'bg-amber-500' : 'bg-brand-600';
+  return (
+    <div className="w-full max-w-md rounded-2xl border border-hairline bg-surface p-4 shadow-sm" role="status" aria-live="polite">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-ink truncate">{label}</p>
+          <p className="mt-1 text-[11px] text-muted truncate">{detail}</p>
+        </div>
+        <Loader2 className="shrink-0 animate-spin text-brand-600" size={18} aria-hidden="true" />
+      </div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-subtle" aria-hidden="true">
+        <div className={`h-full rounded-full transition-all duration-500 ${bar} ${value === undefined ? 'w-2/5 animate-pulse' : ''}`} style={value === undefined ? undefined : { width: `${Math.max(0, Math.min(100, value))}%` }} />
+      </div>
+      {value !== undefined && <p className="mt-1 text-end text-[10px] text-faint text-numeric">{Math.round(value)}%</p>}
+    </div>
+  );
+};
+
 export const Loading: React.FC<{ label?: string }> = ({
   label = 'جارٍ التحميل…',
 }) => (

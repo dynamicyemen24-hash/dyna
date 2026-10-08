@@ -3,6 +3,7 @@
  * them are still empty. Run with: npx tsx scripts/audit-data.ts
  */
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import fs from 'fs';
 import path from 'path';
 import pg from 'pg';
@@ -18,7 +19,7 @@ const out = (s: string) => {
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 1,
   connectionTimeoutMillis: 20000,
 });

@@ -26,7 +26,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const BASE = process.env.API_BASE || 'http://localhost:3000';
+const BASE = process.env.API_BASE || 'http://';
 const TENANT = 'royal-global-hq';
 
 let pass = 0;

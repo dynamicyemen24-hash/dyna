@@ -9,6 +9,11 @@ import {
   resolveScreenEntitlement, type ScreenDenial,
 } from '../config/industryProfiles';
 import { resolveIdentity, type ResolvedIdentity } from '../services/tenantIdentity';
+import {
+  readReferenceSnapshot,
+  readSignedIdentity,
+  writeReferenceSnapshot,
+} from '../services/referenceSnapshot';
 
 /**
  * What the signed-in user, in this organisation, on this branch, is allowed to
@@ -52,10 +57,20 @@ export interface EntitlementBranch {
   allowed: boolean;
 }
 
+interface EntitlementSnapshot {
+  tenant: NonNullable<EntitlementContextType['tenant']> & { plan?: string | null };
+  sector: { id: string; nameAr: string; nameEn: string; isProvisioned: boolean };
+  capabilities: string[];
+  grantsFromDatabase: boolean;
+  branches: EntitlementBranch[];
+}
+
 interface EntitlementContextType {
   status: 'idle' | 'loading' | 'ready' | 'error';
   authority: EntitlementAuthority;
   error: string;
+  /** Source and snapshot time are surfaced so offline data is never presented as live. */
+  snapshotFetchedAt: string | null;
   /** True when the subscription could not be verified this session. */
   verificationFailed: boolean;
 
@@ -90,6 +105,7 @@ interface EntitlementContextType {
 
   switchingSector: boolean;
   setSector: (profileId: string) => Promise<void>;
+  setBranchId: (id: string | null) => void;
   refresh: () => void;
 }
 
@@ -136,6 +152,7 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [status, setStatus] = useState<EntitlementContextType['status']>('idle');
   const [authority, setAuthority] = useState<EntitlementAuthority>('local');
   const [error, setError] = useState('');
+    const [snapshotFetchedAt, setSnapshotFetchedAt] = useState<string | null>(null);
   const [verificationFailed, setVerificationFailed] = useState(false);
 
   const [sector, setSectorState] = useState<string>(() => localSector());
@@ -177,13 +194,44 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
    * the server or they are unresolved. An unknown stored id resolves to no
    * branch rather than to a named one.
    */
-  const [branchId] = useState<string | null>(() => {
+  const [branchId, setBranchIdState] = useState<string | null>(() => {
     try {
-      return localStorage.getItem('dypos_branch') ?? null;
+      return sessionStorage.getItem('dypos_branch') ?? null;
     } catch {
       return null;
     }
   });
+
+  // Listen for branch changes from other tabs (storage event) or same-tab
+  // dispatchers (custom event). The DataContext writes to sessionStorage and
+  // dispatches a 'dypos:branch-changed' event so all contexts stay in sync.
+  useEffect(() => {
+    const STORAGE_KEY = 'dypos_branch';
+
+    const syncFromStorage = () => {
+      try {
+        const next = sessionStorage.getItem(STORAGE_KEY);
+        setBranchIdState((current) => (current !== next ? next : current));
+      } catch { /* storage optional */ }
+    };
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY || e.key === null) syncFromStorage();
+    };
+    const onBranchChanged = () => {
+      syncFromStorage();
+      // Branch creation changes the server entitlement snapshot, not just the
+      // selected id. Re-read it so the new real branch enters the workspace.
+      setNonce((current) => current + 1);
+    };
+
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('dypos:branch-changed', onBranchChanged);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('dypos:branch-changed', onBranchChanged);
+    };
+  }, []);
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
 
@@ -193,7 +241,7 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     let alive = true;
     const profileId = localSector();
-    const permissions = authz.principal ? [...authz.principal.permissions] : null;
+    const permissions = authz.principal && Array.isArray(authz.principal.permissions) ? [...authz.principal.permissions] : [];
     const isSuperuser = Boolean(authz.principal?.isSuperuser);
 
     const apply = (
@@ -229,17 +277,22 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     (async () => {
       setStatus('loading');
+      const identity = readSignedIdentity();
 
       // 1 — the server's answer.
       try {
         const res = await apiGet<any>('/api/erp/entitlements');
         if (!alive) return;
+        if (!identity || res.tenant?.id !== identity.tenantId) {
+          throw new Error('تعذر التحقق من تطابق المؤسسة مع الجلسة الحالية');
+        }
         const nextSector = res.sector?.id || profileId;
         const nextCaps: string[] = Array.isArray(res.capabilities) ? res.capabilities : [];
         setAuthority('server');
         setPlan(res.tenant?.plan ?? null);
         setTenant(res.tenant ?? null);
         setBranches(res.branches ?? []);
+          setSnapshotFetchedAt(null);
         setVerificationFailed(false);
         apply(
           resolveScreenEntitlement({
@@ -254,6 +307,14 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
           nextCaps,
           res.grantsFromDatabase !== false,
         );
+        const snapshot: EntitlementSnapshot = {
+          tenant: res.tenant,
+          sector: res.sector,
+          capabilities: nextCaps,
+          grantsFromDatabase: res.grantsFromDatabase !== false,
+          branches: res.branches ?? [],
+        };
+        await writeReferenceSnapshot(identity, snapshot, 'entitlements').catch(() => {});
         setStatus('ready');
         return;
       } catch (e: any) {
@@ -261,32 +322,36 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
         setError(e?.message || 'تعذّر التحقق من اشتراك المؤسسة');
       }
 
-      // 2 — the endpoint is unavailable (an edge build without the route, or a
-      //     session that cannot reach it). The licence is then read from data
-      //     the client is allowed to read and resolved locally.
-      try {
-        const p = await apiGet<any>('/api/db/tenant/profile?tenantId=royal-global-hq');
-        if (!alive) return;
-        const nextSector = p.profileId || profileId;
-        const nextCaps = Array.isArray(p.enabledCapabilities) && p.enabledCapabilities.length
-          ? p.enabledCapabilities
+      const cached = identity
+        ? await readReferenceSnapshot<EntitlementSnapshot>(identity, 'entitlements').catch(() => null)
+        : null;
+      if (!alive) return;
+      if (cached) {
+        const snapshot = cached.data;
+        const nextSector = snapshot.sector?.id || profileId;
+        const nextCaps = Array.isArray(snapshot.capabilities)
+          ? snapshot.capabilities
           : capabilitiesForProfile(nextSector);
-        const fromDatabase = p.grantsFromDatabase !== false && nextCaps.length > 0;
         setAuthority('client');
-        setPlan(p.plan ?? null);
-        setBranches([]);
+        setPlan(snapshot.tenant?.plan ?? null);
+        setTenant(snapshot.tenant ?? null);
+        setBranches(snapshot.branches ?? []);
+        setSnapshotFetchedAt(cached.fetchedAt);
         setVerificationFailed(true);
-        localResolve(nextSector, nextCaps, fromDatabase);
+        localResolve(nextSector, nextCaps, snapshot.grantsFromDatabase);
         setStatus('ready');
-      } catch (e: any) {
-        if (!alive) return;
-        // 3 — nothing could be read. Sector defaults only, never an empty nav.
-        setAuthority('local');
-        setVerificationFailed(true);
-        localResolve(profileId, capabilitiesForProfile(profileId), false);
-        setError(e?.message || error);
-        setStatus('error');
+        setError(`نسخة محلية محفوظة — آخر تحديث ${new Date(cached.fetchedAt).toLocaleString('ar-SA')}`);
+        return;
       }
+
+      // No signed-identity cache: do not guess the tenant, branches, or grants.
+      setAuthority('local');
+      setVerificationFailed(true);
+      setBranches([]);
+      setSnapshotFetchedAt(null);
+      localResolve(profileId, capabilitiesForProfile(profileId), false);
+      setError('لا تتوفر نسخة محلية موثقة لبيانات هذه المؤسسة. اتصل بالشبكة لإكمال التحقق.');
+      setStatus('error');
     })();
 
     return () => { alive = false; };
@@ -294,6 +359,22 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
     // on every message it sets, which is a fetch loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nonce, authz.principal]);
+
+  // Cloud remains authoritative. Revalidate its snapshot on reconnect, focus,
+  // and periodically while the workspace is open; never merge client edits.
+  useEffect(() => {
+    const refreshFromCloud = () => {
+      if (navigator.onLine) setNonce((current) => current + 1);
+    };
+    const timer = window.setInterval(refreshFromCloud, 15 * 60 * 1000);
+    window.addEventListener('online', refreshFromCloud);
+    window.addEventListener('focus', refreshFromCloud);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('online', refreshFromCloud);
+      window.removeEventListener('focus', refreshFromCloud);
+    };
+  }, []);
 
 
   /**
@@ -305,6 +386,9 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const setSector = useCallback(async (profileId: string) => {
     setSwitchingSector(true);
     try {
+      if (authority !== 'server' || !authz.principal?.verified) {
+        throw new Error('تغيير قطاع المؤسسة يتطلب اتصالاً موثقاً بالخادم');
+      }
       await apiPost<{ profileId: string }>('/api/db/tenant/profile', { profileId });
       setProfile(profileId);
       setSectorState(profileId);
@@ -312,7 +396,23 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
     } finally {
       setSwitchingSector(false);
     }
-  }, [setProfile]);
+  }, [authority, authz.principal?.verified, setProfile]);
+
+  /**
+   * Updates the active branch, persisting to sessionStorage and notifying
+   * other contexts via a custom event so the whole app switches together.
+   */
+  const setBranchId = useCallback((id: string | null) => {
+    try {
+      if (id === null) {
+        sessionStorage.removeItem('dypos_branch');
+      } else {
+        sessionStorage.setItem('dypos_branch', id);
+      }
+    } catch { /* storage optional */ }
+    setBranchIdState(id);
+    window.dispatchEvent(new CustomEvent('dypos:branch-changed'));
+  }, []);
 
   const screenSet = useMemo(() => new Set(screens), [screens]);
 
@@ -349,7 +449,8 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (!authz.principal) return false;
     if (authz.principal.isSuperuser) return true;
     if (permissions.length === 0) return true;
-    return authz.principal.permissions.some((p) => permissions.includes(p));
+    const perms = authz.principal && Array.isArray(authz.principal.permissions) ? authz.principal.permissions : [];
+    return perms.some((p) => permissions.includes(p));
   }, [authz.principal]);
 
   const value = useMemo<EntitlementContextType>(() => ({
@@ -357,6 +458,7 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
     authority,
     error,
     verificationFailed,
+    snapshotFetchedAt,
     sector,
     sectorName: getProfileById(sector).name_ar,
     plan,
@@ -372,11 +474,12 @@ export const EntitlementProvider: React.FC<{ children: React.ReactNode }> = ({ c
     can,
     switchingSector,
     setSector,
+    setBranchId,
     refresh,
   }), [
-    status, authority, error, verificationFailed, sector, plan, tenant,
+    status, authority, error, verificationFailed, snapshotFetchedAt, sector, plan, tenant,
     capabilities, grantsFromDatabase, screens, licensedScreens, blocked,
-    branches, identity, allowsScreen, can, switchingSector, setSector, refresh,
+    branches, identity, allowsScreen, can, switchingSector, setSector, setBranchId, refresh,
   ]);
 
   return <EntitlementContext.Provider value={value}>{children}</EntitlementContext.Provider>;

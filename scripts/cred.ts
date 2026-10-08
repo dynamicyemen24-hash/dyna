@@ -1,6 +1,7 @@
-﻿import dotenv from "dotenv"; import pg from "pg";
+import { PG_SSL } from '../server/neonDb.ts';
+import dotenv from "dotenv"; import pg from "pg";
 dotenv.config();
-const p = new pg.Pool({connectionString: process.env.DATABASE_URL, ssl:{rejectUnauthorized:false}, max:1});
+const p = new pg.Pool({connectionString: process.env.DATABASE_URL, ssl: PG_SSL, max:1});
 const u = await p.query(`SELECT username, name, role, is_active, left(password_hash,20) hash_prefix, length(password_hash) len FROM dypos.users WHERE tenant_id='royal-global-hq' ORDER BY username`);
 u.rows.forEach(r=>console.log(`${r.username} | ${r.name} | ${r.role} | active=${r.is_active} | hash="${r.hash_prefix}..." (${r.len})`));
 const cols = await p.query(`SELECT column_name FROM information_schema.columns WHERE table_name='users' AND table_schema='dypos' ORDER BY ordinal_position`);

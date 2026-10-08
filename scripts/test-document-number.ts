@@ -9,6 +9,7 @@
  * broken implementation. The test therefore allocates in parallel.
  */
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import pg from 'pg';
 import { allocateDocumentNumber } from '../server/documentNumber.ts';
 
@@ -16,7 +17,7 @@ dotenv.config();
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   /*
    * Wide enough for the concurrency section to actually be concurrent.
    *

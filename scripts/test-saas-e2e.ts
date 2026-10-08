@@ -1,16 +1,16 @@
-﻿/**
+/**
  * SaaS end-to-end: two merchants, two countries, two currencies, one database.
  *
  * Run:  npx tsx scripts/test-saas-e2e.ts
  *
- * â•â• WHAT THIS PROVES, AND WHY A MOCK CANNOT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+ * ══ WHAT THIS PROVES, AND WHY A MOCK CANNOT ═════════════════════════════════
  * Everything below drives the REAL PostgreSQL instance and the REAL Express app
  * built by `createApp()`. That is the point: the defects this file guards were
  * all invisible to a mocked pool, because the mock agreed with whatever the code
  * assumed.
  *
  *   1. TENANT ISOLATION ON A FISCAL DOCUMENT. Merchant A must never be able to
- *      read merchant B's tenant row, its VAT number or its branch list â€” and
+ *      read merchant B's tenant row, its VAT number or its branch list — and
  *      must never see them on a receipt. This is the whole reason identity moved
  *      out of literals and into `dypos.tenants`: a compiled-in VAT number cannot
  *      be isolated, because it is the same number for everyone.
@@ -27,25 +27,26 @@
  *      connectivity and then reconnects must commit ONCE. A replay that creates
  *      a second invoice is the exact failure the sequence guard exists to stop.
  *
- * â•â• ISOLATION â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+ * ══ ISOLATION ══════════════════════════════════════════════════════════════
  * Each scenario creates its own throwaway tenant with a unique id and removes it
  * at the end. No real tenant, invoice, stock row or ledger entry is read or
- * written, so this is safe to run against production â€” which is also why it is
+ * written, so this is safe to run against production — which is also why it is
  * in the manual CI job rather than the per-push one.
  */
 import assert from 'node:assert/strict';
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import pg from 'pg';
 
 // Load the environment BEFORE importing anything that reads it. `server/neonDb.ts`
 // builds its pool at module scope, so an import that ran first would construct it
-// with `DATABASE_URL === undefined` and fall back to a local socket â€” which looks
+// with `DATABASE_URL === undefined` and fall back to a local socket — which looks
 // exactly like "no database running".
 dotenv.config();
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 2,
 });
 
@@ -53,7 +54,7 @@ let pass = 0;
 let fail = 0;
 function check(name: string, cond: boolean, detail = ''): void {
   if (cond) { pass += 1; console.log(`  ok   ${name}`); }
-  else { fail += 1; console.error(`  FAIL ${name}${detail ? ` â€” ${detail}` : ''}`); }
+  else { fail += 1; console.error(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`); }
 }
 function section(title: string): void { console.log(`\n${title}`); }
 
@@ -63,21 +64,21 @@ const TENANT_A = `e2e-sa-${stamp}-a`;
 const TENANT_B = `e2e-sa-${stamp}-b`;
 
 // Saudi and Egyptian fixtures: different countries, different base currencies,
-// and â€” the part that matters â€” different tax numbers, which is what a
+// and — the part that matters — different tax numbers, which is what a
 // compiled-in identity could never produce.
 const A = {
-  company: `Ø´Ø±ÙƒØ© Ø§Ù„Ø§Ø®ØªØ¨Ø§Ø± Ø£ ${stamp}`,
+  company: `شركة الاختبار أ ${stamp}`,
   tax: `3${stamp.padEnd(14, '0').slice(0, 14)}`,
   currency: 'SAR',
   country: 'SA',
-  branch: `ÙØ±Ø¹ Ø§Ù„Ø±ÙŠØ§Ø¶ ${stamp}`,
+  branch: `فرع الرياض ${stamp}`,
 };
 const B = {
-  company: `Ø´Ø±ÙƒØ© Ø§Ù„Ø§Ø®ØªØ¨Ø§Ø± Ø¨ ${stamp}`,
+  company: `شركة الاختبار ب ${stamp}`,
   tax: `3${stamp.padEnd(13, '9').slice(0, 13)}9`,
   currency: 'EGP',
   country: 'EG',
-  branch: `ÙØ±Ø¹ Ø§Ù„Ù‚Ø§Ù‡Ø±Ø© ${stamp}`,
+  branch: `فرع القاهرة ${stamp}`,
 };
 
 // PLACEHOLDER_E2E
@@ -96,7 +97,7 @@ async function provision(
   await pool.query(
     `INSERT INTO dypos.branches (id, tenant_id, name, city, location)
      VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING`,
-    [`${id}-hq`, id, f.branch, f.country === 'SA' ? 'Ø§Ù„Ø±ÙŠØ§Ø¶' : 'Ø§Ù„Ù‚Ø§Ù‡Ø±Ø©', ''],
+    [`${id}-hq`, id, f.branch, f.country === 'SA' ? 'الرياض' : 'القاهرة', ''],
   );
 }
 
@@ -113,7 +114,7 @@ async function main() {
   check('merchant A is created', Boolean(TENANT_A));
   check('merchant B is created', Boolean(TENANT_B));
 
-  // â”€â”€ 1. Identity is per tenant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 1. Identity is per tenant ─────────────────────────────────────────────
   section('1. each merchant carries its OWN legal identity');
 
   const rows = await pool.query(
@@ -137,7 +138,7 @@ async function main() {
       && byId.get(TENANT_B)?.tax_number !== byId.get(TENANT_A)?.tax_number,
   );
 
-  // â”€â”€ 2. Branches are scoped â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 2. Branches are scoped ────────────────────────────────────────────────
   section('2. branches are scoped to their own tenant');
 
   const branchRows = await pool.query(
@@ -149,14 +150,14 @@ async function main() {
 
   check(
     'A sees only its own branches',
-    aBranches.length > 0 && aBranches.every((b) => b.name.startsWith('ÙØ±Ø¹ Ø§Ù„Ø±ÙŠØ§Ø¶')),
+    aBranches.length > 0 && aBranches.every((b) => b.name.startsWith('فرع الرياض')),
   );
   check(
     'B sees only its own branches',
-    bBranches.length > 0 && bBranches.every((b) => b.name.startsWith('ÙØ±Ø¹ Ø§Ù„Ù‚Ø§Ù‡Ø±Ø©')),
+    bBranches.length > 0 && bBranches.every((b) => b.name.startsWith('فرع القاهرة')),
   );
 
-  // â”€â”€ 3. Settlement accounts are per tenant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 3. Settlement accounts are per tenant ─────────────────────────────────
   section('3. settlement accounts are PER TENANT (v147)');
 
   const ibanA = `SA${stamp.toUpperCase().slice(0, 6)}0000000000000000${stamp.slice(-2)}`;
@@ -164,8 +165,8 @@ async function main() {
   check('the two IBANs differ', ibanA !== ibanB);
 
   const fixtures: ReadonlyArray<readonly [string, string, string, string]> = [
-    [TENANT_A, ibanA, 'Ù…ØµØ±Ù Ø§Ù„Ø±Ø§Ø¬Ø­ÙŠ', 'SA'],
-    [TENANT_B, ibanB, 'Ø§Ù„Ø¨Ù†Ùƒ Ø§Ù„Ø£Ù‡Ù„ÙŠ Ø§Ù„Ù…ØµØ±ÙŠ', 'EG'],
+    [TENANT_A, ibanA, 'مصرف الراجحي', 'SA'],
+    [TENANT_B, ibanB, 'البنك الأهلي المصري', 'EG'],
   ];
   for (const [tid, iban, bank, country] of fixtures) {
     await pool.query(
@@ -192,13 +193,13 @@ async function main() {
     seenA.every((a) => a.iban !== ibanB) && seenB.every((a) => a.iban !== ibanA),
   );
 
-  // â”€â”€ 4. Offline idempotency â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── 4. Offline idempotency ────────────────────────────────────────────────
   section('4. an offline sale commits ONCE, however often it is replayed');
 
   /*
    * The server's uniqueness guarantee against the real schema. A terminal that
-   * flushes the same queued invoice twice â€” the normal outcome of a reconnect
-   * after a dropped response â€” must produce one row, not two.
+   * flushes the same queued invoice twice — the normal outcome of a reconnect
+   * after a dropped response — must produce one row, not two.
    */
   const saleId = `e2e-sale-${stamp}`;
   const insertSale = async (): Promise<number | null> => {

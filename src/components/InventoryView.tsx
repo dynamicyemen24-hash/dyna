@@ -16,10 +16,26 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+/**
+ * What the form submits to `POST /api/db/products`.
+ *
+ * Everything here is either typed by the operator or carried over from the
+ * product being edited. `id` is absent because the server creates the row;
+ * `barcode` is optional because the server allocates the EAN-13 when the field
+ * is left empty; `branchId` is optional because on create the server scopes the
+ * product to the session's branch, and on edit the existing product carries
+ * its own.
+ */
+export type ProductDraft = Omit<Product, 'id' | 'barcode' | 'branchId'> & {
+  barcode?: string;
+  branchId?: string;
+};
+
 interface InventoryViewProps {
   products: Product[];
   categories: Category[];
-  onAddProduct: (product: Product) => void;
+  /** Resolves with the product the SERVER recorded (its real barcode). */
+  onAddProduct: (product: ProductDraft) => Promise<Product>;
   onUpdateProduct: (product: Product) => void;
   onDeleteProduct: (productId: string) => void;
 }
@@ -37,6 +53,10 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [restockSuccessMessage, setRestockSuccessMessage] = useState<string | null>(null);
+  // A refused save keeps the modal open with the server's Arabic reason;
+  // closing it would tell the operator the product was recorded when it was not.
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -73,8 +93,9 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
 
   const handleOpenAdd = () => {
     setEditingProduct(null);
-    setFormName('');
-    setFormBarcode(`628${Math.floor(100000000 + Math.random() * 900000000)}`);
+    // Deliberately empty: the barcode is ALLOCATED BY THE SERVER (a 13-digit
+    // EAN-13) when the operator leaves the field blank and saves.
+    setFormBarcode('');
     setFormCategory(categories[1]?.name || 'عطور وبخاخات');
     setFormPrice('');
     setFormCost('');
@@ -82,6 +103,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     setFormMinStock('3');
     setFormUnit('حبة');
     setFormImage('');
+    setSubmitError('');
     setIsAddModalOpen(true);
   };
 
@@ -96,33 +118,53 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     setFormMinStock(p.minStock.toString());
     setFormUnit(p.unit);
     setFormImage(p.image || '');
+    setSubmitError('');
     setIsAddModalOpen(true);
   };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName || !formPrice) return;
 
-    const productData: Product = {
-      id: editingProduct ? editingProduct.id : `p-${Date.now()}`,
-      name: formName,
-      barcode: formBarcode || `628${Math.floor(100000000 + Math.random() * 900000000)}`,
-      category: formCategory,
-      price: Number(formPrice),
-      cost: Number(formCost) || 0,
-      stock: Number(formStock) || 0,
-      minStock: Number(formMinStock) || 5,
-      unit: formUnit,
-      branchId: 'b1',
-      image: formImage || 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?auto=format&fit=crop&w=600&q=80',
-    };
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      // Only what the operator typed. No invented `id`, no fabricated barcode
+      // digits: the server creates the row and allocates the EAN-13.
+      const draft: ProductDraft = {
+        name: formName,
+        // On edit the field is read-only and holds the existing value; on add
+        // an empty field means "allocate it for me".
+        barcode: editingProduct ? formBarcode : (formBarcode || undefined),
+        category: formCategory,
+        price: Number(formPrice),
+        cost: Number(formCost) || 0,
+        stock: Number(formStock) || 0,
+        minStock: Number(formMinStock) || 5,
+        unit: formUnit,
+        image: formImage || undefined,
+        // `branchId` omitted on purpose: on edit the spread below keeps the
+        // product's real branch, and on create the server scopes it to the
+        // session's branch instead of a made-up id.
+      };
 
-    if (editingProduct) {
-      onUpdateProduct(productData);
-    } else {
-      onAddProduct(productData);
+      if (editingProduct) {
+        // Editing stays a local update: the contract this screen writes
+        // through defines POST (create) only, and re-POSTing would duplicate
+        // the row the server already allocated a barcode for.
+        onUpdateProduct({ ...editingProduct, ...draft, barcode: formBarcode });
+      } else {
+        // The row that comes back carries the barcode the SERVER allocated;
+        // it replaces the draft before the modal closes.
+        const saved = await onAddProduct(draft);
+        setFormBarcode(saved.barcode);
+      }
+      setIsAddModalOpen(false);
+    } catch (err: any) {
+      setSubmitError(err?.message || 'تعذّر حفظ المنتج على الخادم — تحقق من الاتصال وحاول مرة أخرى');
+    } finally {
+      setSubmitting(false);
     }
-    setIsAddModalOpen(false);
   };
 
   // Quick Restock Action
@@ -491,9 +533,21 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                   <input
                     type="text"
                     value={formBarcode}
+                    readOnly={!!editingProduct}
                     onChange={(e) => setFormBarcode(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
+                    placeholder={editingProduct ? undefined : 'يُخصّص تلقائياً من الخادم عند الحفظ (EAN-13)'}
+                    title={editingProduct ? 'الباركود ثابت بعد إنشاء المنتج ولا يمكن تعديله' : undefined}
+                    className={`w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs font-mono focus:outline-none focus:border-brand-500 ${
+                      editingProduct
+                        ? 'text-slate-400 cursor-not-allowed'
+                        : 'text-white placeholder-slate-500'
+                    }`}
                   />
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    {editingProduct
+                      ? 'الباركود ثابت بعد إنشاء المنتج ولا يمكن تعديله'
+                      : 'يُخصّص تلقائياً من الخادم عند الحفظ (EAN-13)'}
+                  </p>
                 </div>
 
                 <div>
@@ -584,11 +638,20 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
                 >
                   إلغاء
                 </button>
+                {submitError && (
+                  <p
+                    role="alert"
+                    className="flex-1 text-right text-[11px] leading-relaxed font-semibold text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2"
+                  >
+                    {submitError}
+                  </p>
+                )}
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-500 text-white shadow-lg shadow-brand-600/30 transition-all"
+                  disabled={submitting}
+                  className="px-6 py-2.5 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-500 text-white shadow-lg shadow-brand-600/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {editingProduct ? 'حفظ التعديلات' : 'إضافة للمخزون'}
+                  {submitting ? 'جارٍ الحفظ…' : editingProduct ? 'حفظ التعديلات' : 'إضافة للمخزون'}
                 </button>
               </div>
             </form>

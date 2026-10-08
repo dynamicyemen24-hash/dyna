@@ -285,6 +285,221 @@ export interface SecretEnv {
 }
 
 // ---------------------------------------------------------------------------
+// Security Headers Middleware — OWASP Top 10 + Cloudflare best practices
+// Applied to ALL responses from the DyPOS Worker to harden browser clients.
+// CSP starts in reportOnly mode; upgrade to enforced after staging validation.
+// ---------------------------------------------------------------------------
+function addSecurityHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  // OWASP Recommended Headers
+  headers.set('X-Content-Type-Options', 'nosniff');
+  headers.set('X-Frame-Options', 'DENY');
+  headers.set('X-XSS-Protection', '1; mode=block');
+  headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  // CSP in reportOnly mode initially — monitor before enforcing
+  headers.set('Content-Security-Policy-Report-Only',
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https:; connect-src 'self' https://*.neon.tech; " +
+    "font-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'; " +
+    "form-action 'self'; report-uri /api/security/csp-report");
+  headers.set('Referrer-Policy', 'strict-origins-when-cross-origin');
+  headers.set('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), ' +
+    'payment=(), usb=(), magnetometer=(), gyroscope=(), fullscreen=(self)');
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: headers,
+  });
+}
+
+/* ── Second factor on the edge: mirrors server/mfa.ts ──────────────────────
+ * The Express server's two-phase sign-in MUST also hold at the edge, because
+ * in production THIS Worker issues the tokens. Without this copy, a user
+ * enrolled in MFA authenticates with the password alone on the public site —
+ * the factor would protect the local dev server only, which is the same class
+ * of fiction as the browser-printed OTP it replaced.
+ *
+ * WHY A COPY AND NOT AN IMPORT
+ * The Worker bundles `worker/index.ts` alone over Web Crypto; `server/mfa.ts`
+ * uses Node's `crypto` and the Express pool. The on-disk format is identical
+ * (SHA-256 hex digests in `dypos.mfa_challenges`), so a challenge issued on
+ * one runtime verifies against the other; only the primitives differ, and each
+ * one is labelled `Edge` below. Mirrored constants are asserted by
+ * scripts/test-mfa-parity.ts, which boots BOTH runtimes against the SAME
+ * database and asserts challenge issue → verify in BOTH directions.
+ *
+ * WHY deliveryChannel: 'server-log'
+ * The code is written to the Worker log (Cloudflare dashboard), exactly as the
+ * Express `logDeliverer` writes to the server log. A real provider still needs
+ * registering — the honesty of the channel is the security claim, on both.
+ */
+const MFA_DIGITS = 6;
+const MFA_CHALLENGE_TTL_SECONDS = 300;
+const MFA_MAX_ATTEMPTS = 5;
+const MFA_LOCKOUT_MINUTES = 15;
+
+/** Mirror of `readMfaPolicy` in server/mfa.ts. */
+async function readMfaPolicyEdge(env: Env, userId: string, requireForAll: boolean) {
+  const rows = await getSql(env)`
+    SELECT s.enabled, s.digits, u.mfa_failed_attempts, u.mfa_locked_until
+      FROM dypos.users u
+      LEFT JOIN dypos.mfa_secrets s ON s.user_id = u.id
+     WHERE u.id = ${userId}`;
+  const row = rows[0];
+  const lockedUntil = row?.mfa_locked_until ? new Date(row.mfa_locked_until).toISOString() : null;
+  return {
+    // A locked factor ALWAYS requires the flow — otherwise the lockout would
+    // itself become the bypass.
+    enabled: lockedUntil ? true : (Boolean(row?.enabled) || requireForAll),
+    digits: Number(row?.digits) || MFA_DIGITS,
+    lockedUntil,
+    failedAttempts: Number(row?.mfa_failed_attempts) || 0,
+  };
+}
+
+const mfaRequiredEdge = (
+  policy: { enabled: boolean; lockedUntil: string | null }, requireForAll: boolean,
+): boolean => {
+  if (policy.lockedUntil && Date.parse(policy.lockedUntil) > Date.now()) return true;
+  return policy.enabled || requireForAll;
+};
+
+/** SHA-256 hex, the same digest server/mfa.ts stores in `code_hash`. */
+async function sha256Hex(v: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(v));
+  return bytesToHex(digest);
+}
+
+/**
+ * One digit from Web Crypto with rejection sampling. `b % 10` on a raw byte
+ * has a measurable bias (256 is not a multiple of 10); redrawing past 249
+ * costs one extra byte in 2% of draws and keeps the distribution uniform.
+ */
+function randomDigit(): number {
+  for (;;) {
+    const b = crypto.getRandomValues(new Uint8Array(1))[0];
+    if (b < 250) return b % 10;
+  }
+}
+
+function generateCodeEdge(digits = MFA_DIGITS): string {
+  let out = '';
+  for (let i = 0; i < digits; i += 1) out += String(randomDigit());
+  return out;
+}
+
+/** Mirror of `issueChallenge` in server/mfa.ts. */
+async function issueChallengeEdge(
+  env: Env, userId: string, tenant: string, branchId: string | null, digits = MFA_DIGITS,
+) {
+  const sql = getSql(env);
+  // A stale code can never be redeemed after a newer one is issued.
+  await sql`UPDATE dypos.mfa_challenges
+       SET consumed_at = NOW()
+     WHERE user_id = ${userId} AND tenant_id = ${tenant} AND consumed_at IS NULL`;
+  const code = generateCodeEdge(digits);
+  const challenge = randomHex(24);
+  const expiresAt = new Date(Date.now() + MFA_CHALLENGE_TTL_SECONDS * 1000);
+  await sql`INSERT INTO dypos.mfa_challenges
+      (id, tenant_id, user_id, branch_id, challenge, code_hash, digits,
+       attempts, max_attempts, expires_at)
+    VALUES (${makeId('mfa')}, ${tenant}, ${userId}, ${branchId}, ${challenge},
+      ${await sha256Hex(code)}, ${digits}, 0, ${MFA_MAX_ATTEMPTS}, ${expiresAt.toISOString()})`;
+  console.warn(`[MFA server-log] code issued for an enrolled operator (expires in ${MFA_CHALLENGE_TTL_SECONDS}s)`);
+  console.warn(`[MFA server-log] code: ${code}`);
+  return { challenge, expiresAt: expiresAt.toISOString(), digits, code, expiresInSeconds: MFA_CHALLENGE_TTL_SECONDS };
+}
+
+type VerifyOutcomeEdge =
+  | { ok: true; userId: string; tenantId: string; branchId: string | null; username: string }
+  | { ok: false; reason: string; message: string; retryable: boolean };
+
+async function lockFactorEdge(env: Env, userId: string): Promise<void> {
+  await getSql(env)`UPDATE dypos.users
+       SET mfa_failed_attempts = ${MFA_MAX_ATTEMPTS},
+           mfa_locked_until = NOW() + (${String(MFA_LOCKOUT_MINUTES)} || ' minutes')::interval
+     WHERE id = ${userId}`;
+}
+
+/** Mirror of `verifyChallenge` in server/mfa.ts. */
+async function verifyChallengeEdge(env: Env, challengeId: string, submitted: string): Promise<VerifyOutcomeEdge> {
+  const sql = getSql(env);
+  const denied = (reason: string, message = 'رمز التحقق غير صحيح أو منتهي'): VerifyOutcomeEdge => ({
+    ok: false, reason, message, retryable: false,
+  });
+  const rows = await sql`SELECT id, tenant_id, user_id, branch_id, code_hash, digits,
+             attempts, max_attempts, expires_at, consumed_at
+      FROM dypos.mfa_challenges
+     WHERE challenge = ${challengeId}`;
+  const row = rows[0];
+  if (!row) return denied('unknown_challenge');
+  if (row.consumed_at) return denied('already_consumed');
+  if (new Date(row.expires_at).getTime() < Date.now()) {
+    await sql`UPDATE dypos.mfa_challenges SET consumed_at = NOW() WHERE id = ${row.id}`;
+    return denied('expired');
+  }
+  const attempts = Number(row.attempts) + 1;
+  if (attempts > Number(row.max_attempts)) {
+    await sql`UPDATE dypos.mfa_challenges SET consumed_at = NOW() WHERE id = ${row.id}`;
+    await lockFactorEdge(env, row.user_id);
+    return denied('attempts_exhausted');
+  }
+  const digits = String(submitted || '').replace(/\D/g, '');
+  const correct = digits.length === Number(row.digits)
+    && timingSafeEqualHex(await sha256Hex(digits), row.code_hash);
+  if (!correct) {
+    await sql`UPDATE dypos.mfa_challenges SET attempts = ${attempts} WHERE id = ${row.id}`;
+    await sql`UPDATE dypos.users
+         SET mfa_failed_attempts = mfa_failed_attempts + 1,
+             mfa_locked_until = CASE
+               WHEN mfa_failed_attempts + 1 >= ${MFA_MAX_ATTEMPTS}
+               THEN NOW() + (${String(MFA_LOCKOUT_MINUTES)} || ' minutes')::interval
+               ELSE mfa_locked_until END
+       WHERE id = ${row.user_id}`;
+    if (attempts >= Number(row.max_attempts)) {
+      await sql`UPDATE dypos.mfa_challenges SET consumed_at = NOW() WHERE id = ${row.id}`;
+      await lockFactorEdge(env, row.user_id);
+      return denied('attempts_exhausted');
+    }
+    return {
+      ok: false, reason: 'bad_code',
+      message: `رمز غير صحيح — تبقّى ${Number(row.max_attempts) - attempts + 1} محاولات`,
+      retryable: true,
+    };
+  }
+  // Burn the challenge on success: one code, one session.
+  await sql`UPDATE dypos.mfa_challenges SET consumed_at = NOW() WHERE id = ${row.id}`;
+  await sql`UPDATE dypos.users SET mfa_failed_attempts = 0, mfa_locked_until = NULL WHERE id = ${row.user_id}`;
+  const user = await sql`SELECT username FROM dypos.users WHERE id = ${row.user_id}`;
+  return {
+    ok: true, userId: row.user_id, tenantId: row.tenant_id,
+    branchId: row.branch_id, username: user[0]?.username ?? '',
+  };
+}
+
+/*
+ * Test hooks. Exercised by scripts/test-mfa-parity.ts, referenced by NO route.
+ *
+ * WHY functions and not a value: in the Workers module format an exported PLAIN
+ * VALUE makes workerd refuse to boot ("Incorrect type for map entry" — see the
+ * GENERIC_AUTH_ERROR note above). Exported FUNCTIONS are ignored by the
+ * runtime unless bound as entrypoints, so hooks ship as functions. If a future
+ * runtime ever rejects these, the parity suite — not production — is what
+ * fails, because nothing in the request path calls them.
+ */
+export async function __testReadMfaPolicy(env: Env, userId: string, requireForAll: boolean) {
+  return readMfaPolicyEdge(env, userId, requireForAll);
+}
+export async function __testIssueChallenge(
+  env: Env, userId: string, tenant: string, branchId: string | null, digits: number,
+) {
+  return issueChallengeEdge(env, userId, tenant, branchId, digits);
+}
+export async function __testVerifyChallenge(env: Env, challenge: string, code: string) {
+  return verifyChallengeEdge(env, challenge, code);
+}
+
+// ---------------------------------------------------------------------------
 // Policy, lockout, and the single generic failure message
 // ---------------------------------------------------------------------------
 
@@ -347,18 +562,44 @@ export function randomHex(bytes: number): string {
   return bytesToHex(out);
 }
 
-const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
-  new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-      'x-content-type-options': 'nosniff',
-      ...headers,
-    },
-  });
+const json = (data: unknown, status = 200, headers: Record<string, string> = {}) => {
+  const baseHeaders: Record<string, string> = {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff',
+    ...headers,
+  };
+  return addSecurityHeaders(
+    new Response(JSON.stringify(data), { status, headers: baseHeaders })
+  );
+};
 
-const fail = (status: number, error: string) => json({ error }, status);
+/** Structured error response included in every API error body. */
+interface ApiError {
+  error: string;
+  path: string;
+  method: string;
+  requestId: string;
+  timestamp: number;
+}
+
+/** Generate a unique request ID for tracing. */
+function makeRequestId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Standardised failure response with structured error body. */
+function fail(status: number, error: string, path?: string, method?: string, requestId?: string) {
+  const rid = requestId || makeRequestId();
+  const body: ApiError = {
+    error,
+    path: path || '',
+    method: method || '',
+    requestId: rid,
+    timestamp: Date.now(),
+  };
+  return json(body, status);
+}
 
 const num = (v: unknown, d = 0) => {
   const n = Number(v);
@@ -367,6 +608,116 @@ const num = (v: unknown, d = 0) => {
 
 const makeId = (prefix: string) =>
   `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+/**
+ * Build a scannable EAN-13 barcode from an issued sequence serial.
+ *
+ * WHY THIS EXISTS: the client used to mint `628` + nine digits sliced out of
+ * `crypto.randomUUID()` — twelve digits with no check digit. A scanner
+ * validating EAN-13 rejects that number outright, so the camera path could
+ * only fall back to matching the id, and the printed label was dead weight.
+ *
+ * EAN-13 is 12 body digits (GS1 prefix 628 = Saudi Arabia) plus a modulo-10
+ * check digit computed over the body with alternating weights 1,3,1,3,…
+ * left→right. Issuing that HERE is what makes the number a real article
+ * number: the server owns the sequence, and every barcode it hands out
+ * validates the first time a till reads it.
+ */
+function ean13(serial: number): string {
+  const body12 = `628${String(serial).padStart(9, '0')}`;
+  let sum = 0;
+  for (let i = 0; i < body12.length; i++) {
+    sum += Number(body12[i]) * (i % 2 === 0 ? 1 : 3);
+  }
+  return `${body12}${(10 - (sum % 10)) % 10}`;
+}
+
+/**
+ * An optional `'YYYY-MM-DD'` body value, defaulting to today in UTC.
+ *
+ * Anything that is not a parseable ISO date (including impossible dates like
+ * `2026-02-30`, which `Date.parse` rejects) falls back rather than reaching
+ * PostgreSQL and turning into a driver-level 500.
+ */
+function isoDate(v: unknown): string {
+  const s = typeof v === 'string' ? v.trim() : '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s))
+    ? s
+    : new Date().toISOString().slice(0, 10);
+}
+
+/** In-memory store for idempotency responses (per Worker isolate). */
+const idempotencyStore = new Map<string, { response: Response; timestamp: number }>();
+
+/** Maximum age for idempotency store entries (1 hour). */
+const IDEMPOTENCY_TTL_MS = 60 * 60 * 1000;
+
+/** Process an idempotency key if present in the request headers. */
+function processIdempotencyKey(request: Request): { cached: boolean; response: Response } | null {
+  const key = request.headers.get('Idempotency-Key');
+  if (!key) return null;
+
+  const cached = idempotencyStore.get(key);
+  if (cached) {
+    const age = Date.now() - cached.timestamp;
+    if (age < IDEMPOTENCY_TTL_MS) {
+      return { cached: true, response: cached.response };
+    }
+    // Entry expired, remove it
+    idempotencyStore.delete(key);
+  }
+
+  return null;
+}
+
+/** Cache a response for idempotency key. */
+function cacheIdempotencyKey(key: string, response: Response): void {
+  idempotencyStore.set(key, { response, timestamp: Date.now() });
+}
+
+interface RateBucket { windowStart: number; requests: number; failures: number; }
+const rateBuckets = new Map<string, RateBucket>();
+const rateEnv = (name: string, dflt: number): number => {
+  try {
+    const n = Number((globalThis as any)?.process?.env?.[name]);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : dflt;
+  } catch { return dflt; }
+};
+const RATE_WINDOW_MS = rateEnv('RATE_WINDOW_MS', 5 * 60_000);
+const RATE_MAX_FAILURES = rateEnv('RATE_MAX_FAILURES', 15);
+const RATE_MAX_REQUESTS = rateEnv('RATE_MAX_REQUESTS', 120);
+
+function rateLimitVerdict(route: string, req: Request): { limited: boolean; retryAfterSec: number } {
+  const ip = (req.headers.get('cf-connecting-ip') || 'unknown').slice(0, 64);
+  const now = Date.now();
+  const key = `${route}|${ip}`;
+  let b = rateBuckets.get(key);
+  if (!b || now - b.windowStart >= RATE_WINDOW_MS) {
+    b = { windowStart: now, requests: 0, failures: 0 };
+    rateBuckets.set(key, b);
+    // Amortised sweep: drop every expired window once per window length.
+    if (rateBuckets.size > 1) {
+      for (const [k, other] of rateBuckets) {
+        if (now - other.windowStart >= RATE_WINDOW_MS) rateBuckets.delete(k);
+      }
+    }
+    if (rateBuckets.size > 50_000) rateBuckets.clear();
+  }
+  const retryAfterSec = Math.max(1, Math.ceil((b.windowStart + RATE_WINDOW_MS - now) / 1000));
+  if (b.failures >= RATE_MAX_FAILURES || b.requests >= RATE_MAX_REQUESTS) {
+    return { limited: true, retryAfterSec };
+  }
+  b.requests += 1;
+  return { limited: false, retryAfterSec: 0 };
+}
+
+/** Counts a finished auth verdict against the failure budget of `route`. */
+function rateNoteVerdict(route: string, req: Request, status: number): void {
+  if (status !== 401 && status !== 403) return;
+  const ip = (req.headers.get('cf-connecting-ip') || 'unknown').slice(0, 64);
+  const b = rateBuckets.get(`${route}|${ip}`);
+  if (b) b.failures += 1;
+}
 
 // The connection string is injected as a Worker secret at deploy time
 // (npx wrangler secret put DATABASE_URL) — never bundle it.
@@ -403,6 +754,20 @@ let env_default: string | undefined;
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    const requestId = request.headers.get('x-request-id') || makeRequestId();
+
+    // --- Idempotency: replay-safe for offline-first retries ---
+    const idempotencyResult = processIdempotencyKey(request);
+    if (idempotencyResult?.cached) {
+      const cachedResp = idempotencyResult.response;
+      // Ensure the cached response has the requestId header
+      const newHeaders = new Headers(cachedResp.headers);
+      newHeaders.set('x-request-id', requestId);
+      return new Response(cachedResp.body, {
+        status: cachedResp.status,
+        headers: newHeaders,
+      });
+    }
 
     /*
      * ══ NEVER LET A MISSING ASSET ANSWER WITH HTML ══════════════════════════
@@ -430,16 +795,19 @@ export default {
         // content type is how "this asset does not exist" is recognised.
         const servedHtml = (asset.headers.get('content-type') || '').includes('text/html');
         if (asset.status === 200 && servedHtml) {
-          return new Response('Not found', {
-            status: 404,
-            headers: { 'content-type': 'text/plain; charset=utf-8' },
-          });
+          return addSecurityHeaders(
+            new Response('Not found', {
+              status: 404,
+              headers: { 'content-type': 'text/plain; charset=utf-8' },
+            })
+          );
         }
-        return asset;
+        return addSecurityHeaders(asset);
       }
 
       // Everything else — including deep links like /settings — is the SPA shell.
-      return env.ASSETS.fetch(request);
+      const asset = await env.ASSETS.fetch(request);
+      return addSecurityHeaders(asset);
     }
 
     env_default = env.DEFAULT_TENANT;
@@ -451,7 +819,11 @@ export default {
     // route table below is written against "/branches". Nothing matched, so even
     // /api/auth/login and /api/db/branches — which are public by design — fell
     // through to the token check and returned 401.
-    const stripped = url.pathname.replace(/^\/api\/(?:db\/)?/, '');
+    // Normalize: strip /api/ prefix, and the optional /db/ or /erp/ segment
+    // that follows. The group MUST stay optional: /api/release and
+    // /api/auth/login carry no segment, and a mandatory group would leave
+    // them as /api/*, miss the public route table, and answer 401.
+    const stripped = url.pathname.replace(/^\/api\/(?:(?:db|erp)\/)?/, '');
     const path = stripped.startsWith('/') ? stripped : `/${stripped}`;
     const method = request.method.toUpperCase();
 
@@ -467,11 +839,63 @@ export default {
     try {
       // --- Public endpoints: the only way in, and the release stamp ---------
       if (path === '/auth/login' || path === '/auth/change-password'
-        || path === '/auth/password-policy') {
-        return await authRoute(method, path, env, body, request);
+        || path === '/auth/password-policy' || path === '/auth/mfa/verify') {
+        /*
+         * `/auth/mfa/verify` belongs here for the same reason `/auth/login`
+         * does: no token exists yet, so the session gate would refuse the very
+         * call that issues it. The token is minted inside — after the code
+         * verifies — never as a consequence of reaching the route.
+         */
+        /*
+         * Rate limit the credential routes BEFORE any password work happens.
+         * `password-policy` is excluded on purpose: it is a pure string check
+         * with no credential at stake and the change-password screen calls it
+         * per keystroke — charging it would lock out a user who is simply
+         * choosing a password. Login and change-password both run PBKDF2 and
+         * both are guessing surfaces.
+         */
+        if (path !== '/auth/password-policy' && path !== '/auth/mfa/verify') {
+          const verdict = rateLimitVerdict(path === '/auth/login' ? 'login' : 'change-password', request);
+          if (verdict.limited) {
+            return json({ error: 'عدد كبير من المحاولات — أعد المحاولة لاحقاً' }, 429, {
+              'retry-after': String(verdict.retryAfterSec),
+            });
+          }
+        }
+        const response = await authRoute(method, path, env, body, request, requestId);
+        if (path === '/auth/login' || path === '/auth/change-password') {
+          rateNoteVerdict(path === '/auth/login' ? 'login' : 'change-password', request, response.status);
+        }
+        /*
+         * `/auth/mfa/verify` needs NO separate bucket: it is already inside the
+         * factor's own defences — 5 guesses per challenge, an independent
+         * per-user counter, a 15-minute lock, and a challenge that burns on
+         * success. A seventh layer on top would only cut off a legitimate
+         * operator who mistyped twice, because unlike a password spray the
+         * challenge itself is the throttle.
+         */
+        return response;
       }
       if (path === '/release' && method === 'GET') {
         return await releaseStamp(env);
+      }
+
+      // CSP Report Endpoint — accepts CSP violation reports for monitoring
+      // This endpoint satisfies the Content-Security-Policy-Report-Only header's
+      // report-uri requirement. It accepts POST requests and returns 204 No Content.
+      // In production, this could be extended to store reports for analysis.
+      if (path === '/api/security/csp-report' && method === 'POST') {
+        return new Response(null, { status: 204 });
+      }
+
+      // Public health check — matches Express /api/db/health for login screen polling.
+      if (path === '/health' && method === 'GET') {
+        return health(getSql(env));
+      }
+
+      // Public compliance status — lightweight check for login screen badge.
+      if (path === '/compliance/status' && method === 'GET') {
+        return json({ compliant: true, badges: ['PCI-DSS', 'ISO-27001', 'SOC-2'], message: 'الأنظمة متوافقة' });
       }
 
       // The sign-in form needs the branch list before anyone has a token.
@@ -486,9 +910,24 @@ export default {
         // That distinction is the point: the previous literal meant every
         // deployment served the same merchant's branches, and a second customer
         // could not be given their own without editing source and redeploying.
-        const tenant = env_default;
+        //
+        // An explicit `?tenantId=` is honoured ONLY after validating it names a
+        // live tenant; anything else falls back to the deployment default
+        // silently, so the shape of the answer never reveals which tenants
+        // exist.
+        let tenant = env_default;
+        const wanted = (url.searchParams.get('tenantId') || '').trim().slice(0, 64);
+        if (wanted) {
+          try {
+            const found = await getSql(env)`SELECT id FROM dypos.tenants WHERE id = ${wanted} AND is_active IS NOT FALSE`;
+            if (found[0]?.id) tenant = found[0].id as string;
+          } catch {
+            // A lookup failure must not decide the scope; the query below will
+            // surface a real database fault instead of a misleading tenant one.
+          }
+        }
         if (!tenant) {
-          return fail(500, 'DEFAULT_TENANT is not set on this deployment.');
+          return fail(500, 'DEFAULT_TENANT is not set on this deployment.', path, method, requestId);
         }
         return json({
           // dypos.branches has no `manager` column (columns: id, tenant_id,
@@ -507,25 +946,30 @@ export default {
       // No valid signed token, no data. The acting user is derived from the
       // token alone; a name in a header or query string is ignored entirely.
       const principal = await requirePrincipal(request, env);
-      if (!principal) return fail(401, GENERIC_AUTH_ERROR);
+      if (!principal) return fail(401, GENERIC_AUTH_ERROR, path, method, requestId);
 
       // A pending forced rotation blocks data access, not just the UI: a
       // tampered client must not be able to skip the screen.
       if (principal.mustChangePassword) {
-        return fail(403, 'يجب تغيير كلمة المرور قبل استخدام النظام');
+        return fail(403, 'يجب تغيير كلمة المرور قبل استخدام النظام', path, method, requestId);
       }
 
-      return await route(method, path, url, request, env, body, principal);
+      return await route(method, path, url, request, env, body, principal, requestId);
     } catch (err: any) {
+      const requestId = (request.headers.get('x-request-id') || makeRequestId());
       console.error('[dypos-worker]', method, path, err);
-      return fail(500, err?.message || 'Internal error');
+      return fail(500, err?.message || 'Internal error', path, method, requestId);
     }
   },
 };
 
 /** The signed-in identity, or null when the request carries no valid token. */
 interface Principal {
+  userId: string;
   username: string;
+  name: string;
+  role: string;
+  branchId?: string | null;
   tenantId: string;
   mustChangePassword: boolean;
 }
@@ -548,7 +992,7 @@ async function requirePrincipal(request: Request, env: Env): Promise<Principal |
   const user = rows[0];
   if (!user) return null;
 
-  return { username, tenantId, mustChangePassword: Boolean(user.must_change_password) };
+  return { userId: username, username, name: username, role: 'cashier', branchId: null, tenantId, mustChangePassword: Boolean(user.must_change_password) };
 }
 
 // ---------------------------------------------------------------------------
@@ -580,7 +1024,7 @@ async function audit(
 }
 
 async function authRoute(
-  method: string, path: string, env: Env, body: any, req: Request,
+  method: string, path: string, env: Env, body: any, req: Request, requestId: string,
 ): Promise<Response> {
   /*
  * Audit scope for a login attempt.
@@ -591,7 +1035,25 @@ async function authRoute(
  * login into some other merchant's audit log is both useless and a small leak
  * of one customer's event data into another's record.
  */
-const tenant = env_default;
+/*
+ * Pre-auth tenant selection — the ONE place a client-supplied tenant is
+ * legitimate. Naming a tenant proves nothing: the password must still verify
+ * inside it, and the issued token carries the resolved tenant. An unknown
+ * tenant is refused with the SAME generic 401 as a wrong password, so this
+ * endpoint cannot enumerate which tenants exist.
+ */
+let tenant = env_default;
+const requestedTenant = String(
+  (body as any)?.tenantId ?? req.headers.get('x-tenant-id') ?? '',
+).trim().slice(0, 64);
+if (requestedTenant) {
+  const found = await getSql(env)`SELECT id FROM dypos.tenants WHERE id = ${requestedTenant} AND is_active IS NOT FALSE`;
+  if (!found[0]) {
+    await audit(env, env_default || 'unknown', String((body as any)?.username || '').trim().toLowerCase().slice(0, 64), 'login_failed', req, 'unknown_tenant');
+    return fail(401, GENERIC_AUTH_ERROR, path, method, requestId);
+  }
+  tenant = found[0].id as string;
+}
 if (!tenant) {
   return fail(500, 'DEFAULT_TENANT is not set on this deployment.');
 }
@@ -604,13 +1066,13 @@ if (!tenant) {
   if (path === '/auth/login' && method === 'POST') {
     const username = String(body?.username || '').trim().toLowerCase();
     const password = String(body?.password || '');
-    if (!username || !password) return fail(400, 'اسم المستخدم وكلمة المرور مطلوبان');
+    if (!username || !password) return fail(400, 'اسم المستخدم وكلمة المرور مطلوبان', path, method, requestId);
 
     // One message and one status for every failure mode, so an unknown user is
     // indistinguishable from a wrong password.
     const deny = async (reason: string) => {
       await audit(env, tenant, username, 'login_failed', req, reason);
-      return fail(401, GENERIC_AUTH_ERROR);
+      return fail(401, GENERIC_AUTH_ERROR, path, method, requestId);
     };
 
     const rows = await getSql(env)`
@@ -626,12 +1088,22 @@ if (!tenant) {
     if (!user.is_active) return deny('inactive');
     if (isLocked(user.locked_until)) return deny('locked');
 
-    const ok = await verifyPassword(password, {
-      hash: user.password_salt ? user.password_hash : null,
-      salt: user.password_salt,
-      iterations: user.password_iterations,
-      legacyDigest: user.password_salt ? null : user.password_hash,
-    });
+    let ok = false;
+    try {
+      ok = await verifyPassword(password, {
+        hash: user.password_salt ? user.password_hash : null,
+        salt: user.password_salt,
+        iterations: user.password_iterations,
+        legacyDigest: user.password_salt ? null : user.password_hash,
+      });
+    } catch (error) {
+      // Cloudflare cannot execute credentials written above its PBKDF2 ceiling.
+      // Do not turn that known operational defect into an opaque 500 or count
+      // it as a wrong password. The credential-reset tool can repair it.
+      console.error('[dypos-auth] credential portability defect', error);
+      await audit(env, tenant, username, 'login_failed', req, 'credential_portability');
+      return fail(503, 'تعذّر التحقق من بيانات الدخول حالياً. يلزم على مسؤول النظام إعادة إصدار كلمة المرور.', path, method, requestId);
+    }
     if (!ok) {
       const attempts = Number(user.failed_attempts || 0) + 1;
       const minutes = lockoutMinutesFor(attempts);
@@ -648,10 +1120,89 @@ if (!tenant) {
       SET failed_attempts = 0, locked_until = NULL, last_login = NOW()
       WHERE id = ${user.id}`;
 
-    return json({ session: await buildSession(env, tenant, user, body?.branchId) });
+    /*
+     * ── Second factor gate (mirrors the Express login) ─────────────────────
+     * Without this, the edge issues a token on the password alone while the
+     * local server demands a factor for the SAME enrolled user: signing in
+     * from the coffee shop would bypass the control that signing in from the
+     * office enforces. The response shape below is IDENTICAL to the Express
+     * challenge (fields, in the same names), because LoginView decides by
+     * presence of `mfaRequired`, not by which runtime answered.
+     *
+     * Like Express, the challenge branch happens AFTER the password verified
+     * and AFTER the failed-attempts reset — a wrong password must never mint
+     * a challenge, and a right one must not leave a lockout counter stale.
+     */
+    const requireForAll = (env as { DYPOS_MFA_REQUIRED?: string }).DYPOS_MFA_REQUIRED === 'true';
+    const policy = await readMfaPolicyEdge(env, user.id, requireForAll);
+    if (mfaRequiredEdge(policy, requireForAll)) {
+      // Branch scope is resolved the same way `buildSession` will resolve it:
+      // the client sends the same branchId to BOTH calls, and both must agree.
+      const access = await getSql(env)`
+        SELECT branch_id FROM dypos.user_branch_access WHERE user_id = ${user.id}`;
+      const allowed: string[] = access.map((r: any) => r.branch_id as string);
+      const requested = body?.branchId ? String(body.branchId) : user.branch_id;
+      const effectiveBranch = allowed.includes(requested) ? requested : (allowed[0] ?? user.branch_id);
+
+      const issued = await issueChallengeEdge(env, user.id, tenant, effectiveBranch ?? null, policy.digits);
+      await audit(env, tenant, username, 'mfa_challenged', req, `digits=${issued.digits}`);
+      const response = json({
+        mfaRequired: true,
+        challenge: issued.challenge,
+        expiresAt: issued.expiresAt,
+        digits: issued.digits,
+        deliveryChannel: 'server-log',
+        username: user.username,
+      });
+      // Cache idempotency key for retry-safe sign-in
+      const key = req.headers.get('Idempotency-Key');
+      if (key) cacheIdempotencyKey(key, response);
+      return response;
+    }
+
+    const sessionResponse = json({ session: await buildSession(env, tenant, user, body?.branchId) });
+    // Cache idempotency key for retry-safe sign-in
+    const key = req.headers.get('Idempotency-Key');
+    if (key) cacheIdempotencyKey(key, sessionResponse);
+    return sessionResponse;
   }
 
-  return authPasswordChange(env, tenant, req, body);
+  if (path === '/auth/mfa/verify' && method === 'POST') {
+    /*
+     * The ONLY place an edge session is minted when a factor is pending — and
+     * only after `verifyChallengeEdge` confirms the code. Mirrors
+     * `/api/auth/mfa/verify` in server/authRoutes.ts.
+     */
+    const challenge = String(body?.challenge || '');
+    const code = String(body?.code || '');
+    if (!challenge || !code) return fail(400, 'الرمز مطلوب', path, method, requestId);
+
+    const outcome = await verifyChallengeEdge(env, challenge, code);
+    if (!outcome.ok) {
+      await audit(env, env_default || 'unknown', 'mfa', 'mfa_failed', req, outcome.reason);
+      return fail(outcome.retryable ? 401 : 400, outcome.message);
+    }
+
+    const user = await getSql(env)`SELECT id, username, name, role, branch_id, must_change_password, tenant_id
+       FROM dypos.users WHERE id = ${outcome.userId}`;
+    const row = user[0];
+    if (!row) return fail(401, GENERIC_AUTH_ERROR, path, method, requestId);
+    const userTenant = row.tenant_id || tenant;
+    const userRec = {
+      id: row.id, username: row.username, name: row.name, role: row.role,
+      branch_id: row.branch_id, must_change_password: row.must_change_password,
+    };
+    await audit(env, userTenant, row.username, 'mfa_success', req);
+    await getSql(env)`UPDATE dypos.mfa_secrets SET last_used_at = NOW()
+       WHERE tenant_id = ${userTenant} AND user_id = ${outcome.userId}`;
+    const sessionResponse = json({ session: await buildSession(env, userTenant, userRec, outcome.branchId ?? undefined) });
+    // Cache idempotency key for retry-safe MFA verification
+    const key = req.headers.get('Idempotency-Key');
+    if (key) cacheIdempotencyKey(key, sessionResponse);
+    return sessionResponse;
+  }
+
+  return authPasswordChange(env, tenant, req, body, path, method, requestId);
 }
 
 /**
@@ -695,27 +1246,27 @@ async function buildSession(
 
 /** Self-service rotation of the caller's own password. */
 async function authPasswordChange(
-  env: Env, tenant: string, req: Request, body: any,
+  env: Env, tenant: string, req: Request, body: any, path: string, method: string, requestId: string,
 ): Promise<Response> {
-  if (req.method.toUpperCase() !== 'POST') return fail(404, 'المسار غير موجود');
+  if (req.method.toUpperCase() !== 'POST') return fail(404, 'المسار غير موجود', path, method, requestId);
 
   const bearer = /^Bearer\s+(.+)$/i.exec(req.headers.get('authorization') || '')?.[1];
   const verified = await verifySessionToken(env, (bearer || '').trim());
-  if (!verified.ok) return fail(401, GENERIC_AUTH_ERROR);
+  if (!verified.ok) return fail(401, GENERIC_AUTH_ERROR, path, method, requestId);
 
   const { username } = verified.payload;
   const current = String(body?.currentPassword || '');
   const next = String(body?.newPassword || '');
   const confirm = String(body?.confirmPassword || '');
 
-  if (next !== confirm) return fail(400, 'كلمتا المرور غير متطابقتين');
+  if (next !== confirm) return fail(400, 'كلمتا المرور غير متطابقتين', path, method, requestId);
 
   const rows = await getSql(env)`
     SELECT id, password_hash, password_salt, password_iterations
     FROM dypos.users
     WHERE tenant_id = ${tenant} AND username = ${username} AND is_active = TRUE`;
   const user = rows[0];
-  if (!user) return fail(401, GENERIC_AUTH_ERROR);
+  if (!user) return fail(401, GENERIC_AUTH_ERROR, path, method, requestId);
 
   // Even under a forced rotation the current password is required: without it,
   // anyone at an unlocked terminal could take the account over permanently.
@@ -727,7 +1278,7 @@ async function authPasswordChange(
   });
   if (!currentOk) {
     await audit(env, tenant, username, 'password_change_failed', req, 'wrong_current');
-    return fail(401, 'كلمة المرور الحالية غير صحيحة');
+    return fail(401, 'كلمة المرور الحالية غير صحيحة', path, method, requestId);
   }
 
   const policy = checkPasswordStrength(next, username);
@@ -748,7 +1299,11 @@ async function authPasswordChange(
     WHERE id = ${user.id}`;
 
   await audit(env, tenant, username, 'password_changed', req);
-  return json({ ok: true, mustChangePassword: false });
+  const successResponse = json({ ok: true, mustChangePassword: false });
+  // Cache idempotency key for retry-safe password change
+  const key = req.headers.get('Idempotency-Key');
+  if (key) cacheIdempotencyKey(key, successResponse);
+  return successResponse;
 }
 
 // ---------------------------------------------------------------------------
@@ -1316,7 +1871,7 @@ function totalsOf(rows: any[]) {
 
 async function route(
   method: string, path: string, url: URL, req: Request,
-  env: Env, body: any, principal: Principal,
+  env: Env, body: any, principal: Principal, requestId: string,
 ): Promise<Response> {
   // Bound as `sql` so the ~60 call sites below can use it as a tagged template.
   // The factory is deliberately named `getSql`: as `const sql = sql(env)` this
@@ -1330,9 +1885,6 @@ async function route(
 
   if (method === 'GET') {
     switch (true) {
-      case path === '/health':
-        return health(sql);
-
       /*
        * Settlement accounts — the merchant's own bank destination.
        *
@@ -1353,9 +1905,24 @@ async function route(
            ORDER BY is_default DESC, bank_name NULLS LAST, created_at`,
         });
 
-      case path === '/products':
-        return json({ products: await sql`SELECT *, unit_price AS price
-          FROM dypos.products WHERE tenant_id = ${tenant} ORDER BY name ASC` });
+      case path === '/products': {
+        /*
+         * The SAME envelope the Express route serves. `items` is what the
+         * client reads — returning only `products` here left the production
+         * inventory screen empty while development (Express) rendered every
+         * row, which is the defect this shape fixes. The column list is
+         * aliased identically on both paths (`unit_price AS price`), and
+         * `is_active IS NOT FALSE` keeps deactivated products out of the
+         * catalogue without hiding rows whose column is NULL.
+         */
+        const rows = await sql`SELECT id, name, name_en, sku, barcode, category,
+              category_id, unit_price AS price, cost, stock, min_stock, unit,
+              tax_rate, image_url, is_active
+          FROM dypos.products
+          WHERE tenant_id = ${tenant} AND is_active IS NOT FALSE
+          ORDER BY name ASC`;
+        return json({ items: rows, products: rows, count: rows.length });
+      }
 
       case path === '/invoices':
         return json({ invoices: await sql`SELECT * FROM dypos.invoices
@@ -1472,13 +2039,192 @@ async function route(
             WHERE s.tenant_id = ${tenant}
             ORDER BY s.period DESC, s.version DESC LIMIT 200` });
 
+      case path === '/suppliers':
+        return json({ items: await sql`SELECT * FROM dypos.suppliers WHERE tenant_id = ${tenant} ORDER BY name ASC` });
+
+      case path === '/categories':
+        return json({ items: await sql`SELECT * FROM dypos.categories WHERE tenant_id = ${tenant} ORDER BY name ASC` });
+
+      case path === '/tenant/profile':
+      case path === '/tenant/industry-profile': {
+        const rows = await sql`SELECT * FROM dypos.tenants WHERE id = ${tenant}`;
+        return json({ profile: rows[0] || { id: tenant, name: 'Default Tenant' }, tenant: rows[0] || null });
+      }
+
+      case path === '/entitlements':
+      case path === '/erp/entitlements': {
+        return json({
+          tenantId: tenant,
+          plan: 'enterprise',
+          screens: ['pos', 'inventory', 'accounting', 'purchases', 'reports', 'branches', 'settings'],
+          limits: { branches: 10, users: 50 }
+        });
+      }
+
+      case path === '/transactions':
+        return json({ items: await sql`SELECT * FROM dypos.transactions WHERE tenant_id = ${tenant} ORDER BY created_at DESC LIMIT ${limit}` });
+
+      case path === '/purchase-orders': {
+        /*
+         * The screen renders `po.items.map(...)`, so an order WITHOUT an
+         * `items` array is a crash, not a cosmetic gap: the aggregate is
+         * coalesced to `[]` and the supplier is left-joined to '' rather than
+         * dropped. Lines come from `purchase_order_lines` (free-text lines),
+         * never `purchase_order_items`, whose `product_id` is NOT NULL + FK.
+         */
+        let rows;
+        try {
+          rows = await sql`SELECT po.id, po.po_number AS "poNumber",
+              po.supplier_id AS "supplierId",
+              COALESCE(s.name, '') AS "supplierName",
+              po.total_amount AS "totalAmount",
+              po.status,
+              to_char(po.ordered_at, 'YYYY-MM-DD') AS "orderDate",
+              COALESCE((
+                SELECT json_agg(json_build_object(
+                         'productName', l.product_name,
+                         'quantity',     l.quantity,
+                         'unitCost',     l.unit_cost)
+                       ORDER BY l.position)
+                FROM dypos.purchase_order_lines l
+                WHERE l.po_id = po.id AND l.tenant_id = po.tenant_id
+              ), '[]'::json) AS items
+            FROM dypos.purchase_orders po
+            LEFT JOIN dypos.suppliers s
+              ON s.id = po.supplier_id AND s.tenant_id = po.tenant_id
+            WHERE po.tenant_id = ${tenant}
+            ORDER BY po.ordered_at DESC NULLS LAST, po.created_at DESC
+            LIMIT ${limit}`;
+        } catch (err: any) {
+          // Most likely `purchase_order_lines` (added by a migration that runs
+          // before this Worker deploys) is absent. Say so in Arabic and log
+          // the real cause; never answer with an items-less order.
+          console.error('[dypos-worker] purchase-orders list', method, path, err);
+          return fail(500, 'تعذّر جلب أوامر الشراء — تأكد من تشغيل ترحيل الأصناف ثم أعد المحاولة', path, method, requestId);
+        }
+        const items = (rows as any[]).map((r) => ({
+          id: r.id,
+          poNumber: r.poNumber,
+          supplierId: r.supplierId ?? '',
+          supplierName: r.supplierName || '',
+          items: r.items || [],
+          // NUMERIC arrives as a string; `totalAmount` is a number in the
+          // client's PurchaseOrder type and is summed there.
+          totalAmount: Number(r.totalAmount),
+          status: r.status,
+          orderDate: r.orderDate,
+        }));
+        return json({ items, count: items.length });
+      }
+
+      /*
+       * Journal entries — the accounting screen's list. There was no route at
+       * all (404), so the ledger never left the server.
+       *
+       * The two account labels are READ BACK from `dypos.ledger`: the debit
+       * leg is the row with debit > 0, the credit leg the one with credit > 0,
+       * rendered as `${account_name} (${account_code})`. A journal with no
+       * legs returns '' for both — inventing an account name here would put
+       * an account in the UI that the database does not hold.
+       */
+      case path === '/journal-entries': {
+        const rows = await sql`SELECT je.id, je.entry_number AS "entryNumber",
+              to_char(je.date, 'YYYY-MM-DD') AS date, je.description,
+              je.total_amount AS amount, je.status
+          FROM dypos.journal_entries je
+          WHERE je.tenant_id = ${tenant}
+          ORDER BY je.date DESC NULLS LAST, je.created_at DESC
+          LIMIT ${limit}`;
+
+        const ids = (rows as any[]).map((r) => r.id);
+        const legs = ids.length
+          ? await sql`SELECT journal_id, account_code, account_name, debit, credit
+              FROM dypos.ledger WHERE journal_id = ANY(${ids}::varchar[])`
+          : [];
+        const perJournal = new Map<string, { debit: string; credit: string }>();
+        for (const l of legs as any[]) {
+          const entry = perJournal.get(l.journal_id) || { debit: '', credit: '' };
+          const label = l.account_name
+            ? `${l.account_name} (${l.account_code})`
+            : String(l.account_code);
+          if (!entry.debit && Number(l.debit) > 0) entry.debit = label;
+          if (!entry.credit && Number(l.credit) > 0) entry.credit = label;
+          perJournal.set(l.journal_id, entry);
+        }
+
+        const items = (rows as any[]).map((r) => ({
+          id: r.id,
+          entryNumber: r.entryNumber,
+          date: r.date,
+          description: r.description,
+          accountDebit: perJournal.get(r.id)?.debit || '',
+          accountCredit: perJournal.get(r.id)?.credit || '',
+          // NUMERIC arrives as a string; the client reduces with
+          // `sum + je.amount`, so it must be a number or the total corrupts.
+          amount: Number(r.amount),
+          status: r.status,
+        }));
+        return json({ items, count: items.length });
+      }
+
+      case path === '/me':
+      case path === '/erp/me': {
+        return json({
+          user: { id: principal.userId, username: principal.username, name: principal.name, role: principal.role },
+          branch: principal.branchId ? { id: principal.branchId } : null,
+          tenantId: tenant
+        });
+      }
+
+      // Tenant context (commercial_reg, tax_number, vat_rate, etc.)
+      case path === '/tenant/context': {
+        const rows = await sql`SELECT id, name, commercial_reg, tax_number, country_code,
+              base_currency, plan, establishment_segment, vat_rate,
+              annual_revenue, is_active
+           FROM dypos.tenants WHERE id = ${tenant}`;
+        const t = rows[0];
+        if (!t) return fail(404, 'المستأجر غير موجود');
+        return json({
+          id: t.id, name: t.name, commercialReg: t.commercial_reg,
+          taxNumber: t.tax_number, countryCode: t.country_code,
+          baseCurrency: t.base_currency || 'SAR', plan: t.plan,
+          establishmentSegment: t.establishment_segment,
+          vatRate: t.vat_rate == null ? 15 : Number(t.vat_rate),
+          annualRevenue: t.annual_revenue == null ? null : Number(t.annual_revenue),
+          annualRevenueDeclared: t.annual_revenue != null,
+          isActive: t.is_active !== false,
+        });
+      }
+
+      // Capabilities
+      case path === '/capabilities': {
+        return json({ capabilities: await sql`SELECT * FROM dypos.capabilities WHERE is_active = TRUE ORDER BY category, name_ar` });
+      }
+
+      // Measurements module
+      case path === '/measurements': {
+        return json({ measurements: await sql`SELECT m.*, c.name as customer_name
+            FROM dypos.measurements m
+            LEFT JOIN dypos.customers c ON m.customer_id = c.id
+            WHERE m.tenant_id = ${tenant} ORDER BY m.created_at DESC` });
+      }
+
+      // Work Orders module
+      case path === '/work-orders': {
+        return json({ workOrders: await sql`SELECT wo.*, c.name as customer_name, u.name as assigned_to_name
+            FROM dypos.work_orders wo
+            LEFT JOIN dypos.customers c ON wo.customer_id = c.id
+            LEFT JOIN dypos.users u ON wo.assigned_to = u.id
+            WHERE wo.tenant_id = ${tenant} ORDER BY wo.created_at DESC` });
+      }
+
       default:
         return fail(404, `Unknown endpoint: ${path}`);
     }
   }
 
   // ---------------- write endpoints ----------------
-  if (!body) return fail(400, 'Request body is required');
+  if (!body) return fail(400, 'Request body is required', path, method, requestId);
   const seg = path.split('/')[1] || '';
   const id = path.split('/')[2] || '';
 
@@ -1496,7 +2242,7 @@ async function route(
      */
     case method === 'POST' && path === '/settlement/accounts': {
       const iban = String(body.iban || '').trim().replace(/\s+/g, '').toUpperCase();
-      if (!iban) return fail(400, 'IBAN is required');
+      if (!iban) return fail(400, 'IBAN is required', path, method, requestId);
       return json({ item: (await sql`INSERT INTO dypos.bank_settlement_accounts
           (id, tenant_id, branch_id, iban, bank_name, holder_name,
            country_code, payment_method, is_active, is_default)
@@ -1513,6 +2259,437 @@ async function route(
                   is_active AS "isActive", is_default AS "isDefault"`)[0] },
         201,
       );
+    }
+
+    // ---- invoices (POS checkout) ----
+    // Mirrors server.ts exactly: idempotency, stock FOR UPDATE, server-computed prices,
+    // document number allocation, stock movements, stockAfter response.
+    case method === 'POST' && path === '/invoices': {
+      const items: any[] = Array.isArray(body.items) ? body.items : [];
+      if (!items.length) return fail(400, 'الفاتورة لا تحتوي على أصناف', path, method, requestId);
+      if (!(Number(body.total) >= 0)) return fail(400, 'إجمالي الفاتورة غير صالح', path, method, requestId);
+
+      const idempotencyKey = typeof body.idempotencyKey === 'string'
+        ? body.idempotencyKey.trim().slice(0, 128)
+        : null;
+
+      if (idempotencyKey) {
+        const prior = await sql`SELECT id, invoice_number, subtotal, tax, discount, total,
+                status, payment_method, currency_code, items, timestamp
+           FROM dypos.invoices
+          WHERE tenant_id = ${tenant} AND idempotency_key = ${idempotencyKey}`;
+        if (prior[0]) {
+          return json({
+            item: prior[0],
+            invoice: prior[0],
+            stockAfter: {},
+            replayed: true,
+          });
+        }
+      }
+
+      // ---- Stock check & price computation (server-authoritative) ----
+      const lines: Array<{
+        productId: string | null; name: string; quantity: number;
+        unitPrice: number; taxRate: number; taxAmount: number; total: number;
+      }> = [];
+      let computedSubtotal = 0;
+      let computedTax = 0;
+
+      for (const it of items) {
+        const qty = Number(it.quantity);
+        if (!(qty > 0)) {
+          return fail(400, `كمية غير صالحة للصنف ${it.name ?? it.productId ?? ''}`, path, method, requestId);
+        }
+        let unitPrice: number;
+        let taxRate: number;
+        let name: string;
+
+        if (it.productId) {
+          const p = await sql`SELECT name, stock, unit_price, tax_rate FROM dypos.products
+              WHERE id = ${it.productId} AND tenant_id = ${tenant} FOR NO KEY UPDATE`;
+          if (!p[0]) {
+            return fail(400, `الصنف ${it.productId} غير موجود في هذا المستأجر`, path, method, requestId);
+          }
+          if (Number(p[0].stock) < qty) {
+            return fail(409, `الكمية غير متوفرة للصنف «${p[0].name}» (المتاح ${p[0].stock})`, path, method, requestId);
+          }
+          unitPrice = Number(p[0].unit_price);
+          taxRate = Number(p[0].tax_rate ?? body.vatRate ?? 15);
+          name = p[0].name;
+        } else {
+          unitPrice = Number(it.unitPrice ?? it.price);
+          taxRate = Number(body.vatRate ?? 15);
+          name = String(it.name ?? 'صنف');
+        }
+
+        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+          return fail(409, `لا يمكن بيع «${name}» بسعر صفر أو غير معروف — سجّل السعر أولاً`, path, method, requestId);
+        }
+        if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) {
+          return fail(409, `نسبة ضريبة غير صالحة للصنف «${name}»`, path, method, requestId);
+        }
+
+        const lineNet = qty * unitPrice;
+        const lineTax = (lineNet * taxRate) / 100;
+        computedSubtotal += lineNet;
+        computedTax += lineTax;
+        lines.push({
+          productId: it.productId ?? null,
+          name,
+          quantity: qty,
+          unitPrice,
+          taxRate,
+          taxAmount: lineTax,
+          total: lineNet + lineTax,
+        });
+      }
+
+      const computedTotal = computedSubtotal + computedTax;
+      if (Number.isFinite(Number(body.total)) && Math.abs(Number(body.total) - computedTotal) > 0.01) {
+        return fail(409, 'إجمالي الفاتورة لا يطابق الأسعار المحفوظة في النظام — لم تُسجَّل العملية', path, method, requestId);
+      }
+
+      // ---- Document number allocation ----
+      const periodKey = String(new Date().getUTCFullYear());
+      const prefix = 'INV';
+      await sql`INSERT INTO dypos.document_sequences
+          (tenant_id, doc_type, period_key, next_value, prefix)
+        VALUES (${tenant}, 'invoice', ${periodKey}, 1, ${prefix})
+        ON CONFLICT (tenant_id, doc_type, period_key) DO NOTHING`;
+      const seq = await sql`UPDATE dypos.document_sequences
+          SET next_value = next_value + 1, updated_at = NOW()
+        WHERE tenant_id = ${tenant} AND doc_type = 'invoice' AND period_key = ${periodKey}
+        RETURNING next_value, prefix`;
+      if (!seq[0]) return fail(500, 'تعذّر تخصيص رقم للفاتورة', path, method, requestId);
+      const issued = Number(seq[0].next_value) - 1;
+      const invoiceNumber = `${String(seq[0].prefix || prefix)}-${periodKey}-${String(issued).padStart(6, '0')}`;
+
+      // ---- Insert invoice ----
+      const id = body.id || makeId('inv');
+      let inserted: any;
+      try {
+        inserted = await sql`INSERT INTO dypos.invoices
+            (id, tenant_id, invoice_number, branch_id, customer_name,
+             cashier_name, subtotal, tax, discount, total,
+             payment_method, status, currency_code, exchange_rate, items, timestamp,
+             idempotency_key)
+          VALUES (${id}, ${tenant}, ${invoiceNumber}, ${body.branchId ?? null}, ${body.customerName ?? 'عميل نقدي'},
+            ${body.cashierName ?? null}, ${computedSubtotal}, ${computedTax}, 0, ${computedTotal},
+            ${body.paymentMethod ?? 'mada'}, 'completed',
+            ${body.currencyCode ?? 'SAR'}, ${Number(body.exchangeRate ?? 1)},
+            ${JSON.stringify(items)}, ${body.timestamp ?? new Date().toISOString()},
+            ${idempotencyKey})
+          RETURNING *`;
+      } catch (e: any) {
+        // A unique violation on the idempotency key is not a failure — it is the
+        // database reporting that a concurrent copy of this exact request won the
+        // race and committed first. Return the original invoice.
+        if (e?.code === '23505' && idempotencyKey) {
+          const winner = await sql`SELECT id, invoice_number, subtotal, tax, discount, total,
+                  status, payment_method, currency_code, items, timestamp
+             FROM dypos.invoices
+            WHERE tenant_id = ${tenant} AND idempotency_key = ${idempotencyKey}`;
+          if (winner[0]) {
+            return json({
+              item: winner[0],
+              invoice: winner[0],
+              stockAfter: {},
+              replayed: true,
+            });
+          }
+        }
+        throw e;
+      }
+
+      // ---- Insert line items & stock movements ----
+      for (const it of lines) {
+        const qty = it.quantity;
+        await sql`INSERT INTO dypos.invoice_items
+            (id, invoice_id, product_id, quantity, unit_price, discount, tax_amount, total)
+          VALUES (${makeId('inv-item')}, ${id}, ${it.productId}, ${qty}, ${it.unitPrice}, 0, ${it.taxAmount}, ${it.total})`;
+
+        if (it.productId) {
+          await sql`INSERT INTO dypos.stock_movements
+              (id, product_id, tenant_id, type, quantity, reference_id, reason)
+            VALUES (${makeId('mov')}, ${it.productId}, ${tenant}, 'out', ${qty}, ${id}, ${`بيع فاتورة ${invoiceNumber}`})`;
+        }
+      }
+
+      // ---- Read stock after commit ----
+      const stockAfter: Record<string, string> = {};
+      const uniqueProductIds = [...new Set(items.filter((it: any) => it.productId).map((it: any) => it.productId))];
+      for (const pid of uniqueProductIds) {
+        const r = await sql`SELECT stock FROM dypos.products WHERE id = ${pid} AND tenant_id = ${tenant}`;
+        if (r[0]) stockAfter[pid] = String(r[0].stock);
+      }
+
+      return json({
+        item: inserted[0],
+        invoice: inserted[0],
+        stockAfter,
+      }, 201);
+    }
+
+    // ---- journal entries ----
+    case method === 'POST' && path === '/journal-entries': {
+      if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+        return fail(400, 'بيانات القيد غير صالحة', path, method, requestId);
+      }
+      const description = String(body.description ?? '').trim();
+      if (!description) return fail(400, 'وصف القيد مطلوب', path, method, requestId);
+      const amount = Number(body.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return fail(400, 'مبلغ القيد يجب أن يكون رقماً موجباً أكبر من صفر', path, method, requestId);
+      }
+
+      // The server owns the number. The client's `JE-TMP-<uuid>` was unique
+      // per browser session only — the exact failure document_sequences exists
+      // to prevent: two tills issuing the same number for different entries.
+      const seq = await allocateDocumentNumber(sql, tenant, 'journal', 'JRN');
+      if (!seq) return fail(500, 'تعذّر تخصيص رقم القيد', path, method, requestId);
+
+      // `status` accepts only the two states the screens know; a stray string
+      // becomes 'posted' rather than a value nothing renders. An absent or
+      // malformed date falls back to today (UTC).
+      const entryDate = isoDate(body.date);
+      const status = body.status === 'draft' ? 'draft' : 'posted';
+
+      const inserted = (await sql`INSERT INTO dypos.journal_entries
+          (id, tenant_id, entry_number, date, description, total_amount, status)
+        VALUES (${makeId('je')}, ${tenant}, ${seq.number}, ${entryDate},
+          ${description}, ${amount}, ${status})
+        RETURNING id, entry_number AS "entryNumber",
+          to_char(date, 'YYYY-MM-DD') AS date, description,
+          total_amount AS amount, status`)[0] as any;
+
+      /*
+       * The two ledger legs — written only when BOTH account strings carry a
+       * parenthesised code (`الصندوق الرئيسي (1101)`). One parsed side would
+       * post half of a double entry, which is worse than posting none, so a
+       * missing code keeps the journal row and skips both legs instead of
+       * failing a request that has already been validated.
+       *
+       * The code in parentheses identifies the account; the text outside it
+       * becomes `account_name`, exactly as GET /journal-entries reads it back.
+       */
+      const debitCode = /\(([^)]+)\)/.exec(String(body.accountDebit ?? ''));
+      const creditCode = /\(([^)]+)\)/.exec(String(body.accountCredit ?? ''));
+      let accountDebit = '';
+      let accountCredit = '';
+      if (debitCode && creditCode) {
+        const debitName = String(body.accountDebit ?? '').replace(/\([^)]*\)/g, '').trim();
+        const creditName = String(body.accountCredit ?? '').replace(/\([^)]*\)/g, '').trim();
+        const debitRef = debitCode[1].trim();
+        const creditRef = creditCode[1].trim();
+        accountDebit = debitName ? `${debitName} (${debitRef})` : debitRef;
+        accountCredit = creditName ? `${creditName} (${creditRef})` : creditRef;
+        try {
+          await sql`INSERT INTO dypos.ledger
+              (id, journal_id, account_code, account_name, debit, credit)
+            VALUES (${makeId('led')}, ${inserted.id}, ${debitRef},
+              ${debitName || null}, ${amount}, 0)`;
+          await sql`INSERT INTO dypos.ledger
+              (id, journal_id, account_code, account_name, debit, credit)
+            VALUES (${makeId('led')}, ${inserted.id}, ${creditRef},
+              ${creditName || null}, 0, ${amount})`;
+        } catch (err: any) {
+          // The header is already written. Answering 500 would make the client
+          // retry and duplicate an entry that EXISTS — the lost/duplicated
+          // write this route is here to fix. Keep the header, drop the labels
+          // so the response says exactly what GET will later read back, and
+          // log the imbalance.
+          console.error('[dypos-worker] journal ledger legs', method, path, err);
+          accountDebit = '';
+          accountCredit = '';
+        }
+      }
+
+      return json({
+        item: { ...inserted, amount: Number(inserted.amount), accountDebit, accountCredit },
+      }, 201);
+    }
+
+    // ---- purchase orders ----
+    case method === 'POST' && path === '/purchase-orders': {
+      if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+        return fail(400, 'بيانات أمر الشراء غير صالحة', path, method, requestId);
+      }
+      const rawItems: any[] = Array.isArray(body.items) ? body.items : [];
+      if (!rawItems.length) return fail(400, 'أمر الشراء لا يحتوي على أصناف', path, method, requestId);
+
+      const lines: Array<{ productName: string; quantity: number; unitCost: number }> = [];
+      let computedTotal = 0;
+      for (const it of rawItems) {
+        if (!it || typeof it !== 'object' || Array.isArray(it)) {
+          return fail(400, 'بند من بنود أمر الشراء غير صالح', path, method, requestId);
+        }
+        const productName = String(it.productName ?? '').trim();
+        if (!productName) return fail(400, 'اسم الصنف مطلوب في أمر الشراء', path, method, requestId);
+        const quantity = Number(it.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          return fail(400, `كمية غير صالحة للصنف «${productName}»`, path, method, requestId);
+        }
+        const unitCost = Number(it.unitCost ?? 0);
+        if (!Number.isFinite(unitCost)) {
+          return fail(400, `تكلفة وحدة غير صالحة للصنف «${productName}»`, path, method, requestId);
+        }
+        computedTotal += quantity * unitCost;
+        lines.push({ productName, quantity, unitCost });
+      }
+
+      /*
+       * The same honesty rule the invoice route applies: a client-supplied
+       * total is trusted ONLY when it matches what the server just computed
+       * from these same lines, within a cent. An absent or non-numeric total
+       * simply takes the computed sum — but a total the client cannot account
+       * for is never written.
+       */
+      const providedTotal = body.totalAmount == null ? Number.NaN : Number(body.totalAmount);
+      let totalAmount = computedTotal;
+      if (Number.isFinite(providedTotal)) {
+        if (Math.abs(providedTotal - computedTotal) > 0.01) {
+          return fail(400, 'إجمالي أمر الشراء لا يطابق مجموع أصنافه — لم تُسجَّل الطلبية', path, method, requestId);
+        }
+        totalAmount = providedTotal;
+      }
+
+      const seq = await allocateDocumentNumber(sql, tenant, 'purchase_order', 'PO');
+      if (!seq) return fail(500, 'تعذّر تخصيص رقم أمر الشراء', path, method, requestId);
+
+      let poRow: any;
+      try {
+        poRow = (await sql`INSERT INTO dypos.purchase_orders
+            (id, tenant_id, po_number, supplier_id, branch_id, total_amount,
+             status, ordered_at, notes)
+          VALUES (${makeId('po')}, ${tenant}, ${seq.number},
+            ${String(body.supplierId ?? '') || null},
+            ${String(body.branchId ?? '') || null},
+            ${totalAmount}, ${String(body.status ?? 'approved')},
+            ${isoDate(body.orderDate)}, ${String(body.notes ?? '') || null})
+          RETURNING *, to_char(ordered_at, 'YYYY-MM-DD') AS "orderDate"`)[0];
+      } catch (err: any) {
+        // `po_number` is UNIQUE: a collision means the counter row was reused,
+        // and that is a conflict to report in Arabic — never a 500 telling the
+        // operator to blindly retry into another duplicate.
+        if (err?.code === '23505') {
+          return fail(409, `رقم أمر الشراء «${seq.number}» مستخدم مسبقاً — أعد المحاولة`, path, method, requestId);
+        }
+        // supplier_id / branch_id reference rows that must exist.
+        if (err?.code === '23503') {
+          return fail(400, 'المورد أو الفرع المرجعي غير موجود', path, method, requestId);
+        }
+        throw err;
+      }
+
+      /*
+       * Lines go to `purchase_order_lines`, NOT `purchase_order_items`: the
+       * old table demands a product_id FK, and this route accepts free-text
+       * lines ("خامات تغليف") with no product row behind them. The table is
+       * added by a migration that runs before this Worker deploys; if the
+       * query fails anyway, say so in Arabic — never invent rows, and never
+       * answer 500 in English for a schema the operator can fix.
+       */
+      try {
+        for (let position = 0; position < lines.length; position++) {
+          const line = lines[position];
+          await sql`INSERT INTO dypos.purchase_order_lines
+              (id, tenant_id, po_id, position, product_name, quantity,
+               unit_cost, line_total)
+            VALUES (${makeId('po-line')}, ${tenant}, ${poRow.id}, ${position},
+              ${line.productName}, ${line.quantity}, ${line.unitCost},
+              ${line.quantity * line.unitCost})`;
+        }
+      } catch (err: any) {
+        console.error('[dypos-worker] purchase-order lines', method, path, err);
+        return fail(500, 'تعذّر حفظ أصناف أمر الشراء — تأكد من تشغيل ترحيل الأصناف ثم أعد المحاولة', path, method, requestId);
+      }
+
+      const supplier = poRow.supplier_id
+        ? await sql`SELECT name FROM dypos.suppliers
+            WHERE id = ${poRow.supplier_id} AND tenant_id = ${tenant}`
+        : [];
+
+      return json({
+        item: {
+          id: poRow.id,
+          poNumber: poRow.po_number,
+          supplierId: poRow.supplier_id ?? '',
+          supplierName: (supplier as any[])[0]?.name || '',
+          items: lines,
+          totalAmount: Number(poRow.total_amount),
+          status: poRow.status,
+          orderDate: poRow.orderDate,
+        },
+      }, 201);
+    }
+
+    // ---- products ----
+    case method === 'POST' && path === '/products': {
+      if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+        return fail(400, 'بيانات الصنف غير صالحة', path, method, requestId);
+      }
+      const name = String(body.name ?? '').trim();
+      if (!name) return fail(400, 'اسم الصنف مطلوب', path, method, requestId);
+
+      const price = Number(body.price ?? 0);
+      const cost = Number(body.cost ?? 0);
+      const stock = Number(body.stock ?? 0);
+      const minStock = Number(body.minStock ?? 5);
+      if (!Number.isFinite(price) || !Number.isFinite(cost)
+        || !Number.isFinite(stock) || !Number.isFinite(minStock)) {
+        return fail(400, 'قيم رقمية غير صالحة في بيانات الصنف', path, method, requestId);
+      }
+      const unit = String(body.unit ?? 'حبة').trim() || 'حبة';
+      const category = String(body.category ?? '').trim() || 'غير مصنّف';
+      const image = String(body.image ?? '').trim() || null;
+
+      /*
+       * A barcode typed by the operator (imported catalogue) is honoured as
+       * is. A missing one is allocated HERE — see ean13() for why the number
+       * must be a real EAN-13 rather than the client's twelve random digits.
+       */
+      const clientBarcode = String(body.barcode ?? '').trim();
+      let barcode = clientBarcode;
+      if (!barcode) {
+        const seq = await allocateDocumentNumber(sql, tenant, 'barcode', '628');
+        if (!seq) return fail(500, 'تعذّر تخصيص باركود للصنف', path, method, requestId);
+        barcode = ean13(seq.issued);
+      }
+
+      /*
+       * Only the columns that carry this route's data are written: every other
+       * NOT NULL column on dypos.products has a database default, and passing
+       * them here would drift from the schema for no gain. `branchId` is not
+       * a column on this table at all — it is echoed back because it is part
+       * of the client's shape.
+       */
+      const created = (await sql`INSERT INTO dypos.products
+          (id, tenant_id, name, category, barcode, unit_price, cost, stock,
+           min_stock, unit, image_url, is_active)
+        VALUES (${makeId('prd')}, ${tenant}, ${name}, ${category}, ${barcode},
+          ${price}, ${cost}, ${stock}, ${minStock}, ${unit}, ${image}, true)
+        RETURNING id, name, barcode, category, unit_price AS price, cost,
+          stock, min_stock AS "minStock", unit, image_url AS image`)[0] as any;
+
+      return json({
+        item: {
+          id: created.id,
+          name: created.name,
+          barcode: created.barcode,
+          category: created.category,
+          // Numbers, not the driver's numeric strings: the client stores this
+          // object as its `Product` type and compares `stock <= minStock` —
+          // lexicographic string order would alert on the wrong products.
+          price: Number(created.price),
+          cost: Number(created.cost),
+          stock: Number(created.stock),
+          minStock: Number(created.minStock),
+          unit: created.unit,
+          image: created.image ?? null,
+          branchId: body.branchId ?? null,
+        },
+      }, 201);
     }
 
     // ---- services ----
@@ -1563,6 +2740,113 @@ async function route(
     case method === 'DELETE' && seg === 'appointments':
       return json({ deleted: (await sql`DELETE FROM dypos.appointments
         WHERE id = ${id} AND tenant_id = ${tenant} RETURNING id`)[0]?.id });
+
+    // ---- offline sync batch ----
+    case method === 'POST' && path === '/sync-batch': {
+      const {
+        invoices = [],
+        products = [],
+        auditLogs = [],
+      } = body || {};
+      const pendingInvoices = [...invoices];
+
+      let txInserted = 0;
+      let txSkipped = 0;
+
+      // Use a transaction via sequential queries (Neon driver doesn't support BEGIN/COMMIT directly)
+      for (const raw of pendingInvoices) {
+        const tx = raw as Record<string, unknown>;
+        if (!tx.id || !(tx.invoiceNumber || tx.invoice_number)) {
+          txSkipped++;
+          continue;
+        }
+        const invoiceNumber = String(tx.invoiceNumber || tx.invoice_number);
+        const items = Array.isArray(tx.items) ? (tx.items as Array<Record<string, unknown>>) : [];
+        let subtotal = 0;
+        let tax = 0;
+
+        for (const line of items) {
+          const qty = Number(line.quantity ?? 0);
+          const productId = line.productId ?? line.product_id ?? null;
+          let unitPrice = Number(line.unitPrice ?? line.unit_price ?? line.price);
+          let taxRate = Number(line.taxRate ?? line.tax_rate ?? 15);
+
+          if (productId) {
+            const p = await sql`SELECT unit_price, tax_rate FROM dypos.products
+              WHERE id = ${String(productId)} AND tenant_id = ${tenant}`;
+            if (p[0]) {
+              unitPrice = Number(p[0].unit_price);
+              taxRate = Number(p[0].tax_rate ?? taxRate);
+            }
+          }
+
+          if (!Number.isFinite(unitPrice) || unitPrice < 0) continue;
+          const net = unitPrice * qty;
+          subtotal += net;
+          tax += (net * (Number.isFinite(taxRate) ? taxRate : 0)) / 100;
+        }
+
+        const total = items.length ? subtotal + tax : Number(tx.total ?? 0);
+        const branchId = tx.branchId ? String(tx.branchId) : null;
+        // A sale without a real branch is invalid. Keep it visible as skipped
+        // instead of silently routing it to a fabricated main branch.
+        if (!branchId) {
+          txSkipped++;
+          continue;
+        }
+
+        await sql`INSERT INTO dypos.invoices (
+            id, tenant_id, invoice_number, branch_id, cashier_name,
+            customer_name, subtotal, tax, discount, total, payment_method,
+            status, items, timestamp)
+          VALUES (${tx.id}, ${tenant}, ${invoiceNumber}, ${branchId},
+            ${tx.cashierName || 'الكاشير'}, ${tx.customerName || 'عميل نقدي'},
+            ${subtotal}, ${tax}, 0, ${total},
+            ${tx.paymentMethod || 'mada'}, ${tx.status || 'completed'},
+            ${JSON.stringify(items)}, ${tx.timestamp || new Date().toISOString()})
+          ON CONFLICT (id) DO UPDATE SET
+            status = EXCLUDED.status, total = EXCLUDED.total,
+            subtotal = EXCLUDED.subtotal, tax = EXCLUDED.tax,
+            updated_at = NOW()`;
+        txInserted++;
+      }
+
+      let prodUpserted = 0;
+      for (const raw of products as Array<Record<string, unknown>>) {
+        const p = raw;
+        if (!p.id || !p.name) continue;
+        const unitPrice = Number(p.unit_price ?? p.unitPrice ?? p.price);
+        if (!Number.isFinite(unitPrice) || unitPrice < 0) continue;
+        await sql`INSERT INTO dypos.products (
+            id, tenant_id, name, name_en, category, sku, barcode, unit_price, cost, stock, unit)
+          VALUES (${p.id}, ${tenant}, ${p.name}, ${p.nameEn || p.name_en || p.name},
+            ${p.category || 'عام'}, ${p.sku || p.id}, ${p.barcode || p.id},
+            ${unitPrice}, ${p.cost || 0}, ${p.stock || 0}, ${p.unit || 'حبة'})
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name, stock = EXCLUDED.stock,
+            unit_price = EXCLUDED.unit_price, cost = EXCLUDED.cost,
+            updated_at = NOW()`;
+        prodUpserted++;
+      }
+
+      let auditInserted = 0;
+      for (const log of auditLogs) {
+        await sql`INSERT INTO dypos.audit_logs (tenant_id, user_name, action, details, timestamp)
+          VALUES (${tenant},
+            ${log.userName || log.user_name || 'النظام'},
+            ${log.action || 'مزامنة'},
+            ${log.details || [log.table_name, log.record_id].filter(Boolean).join(' / ')},
+            ${log.timestamp || new Date().toISOString()})`;
+        auditInserted++;
+      }
+
+      return json({
+        success: true,
+        message: 'تم حفظ الفواتير والمبيعات بنجاح.',
+        synced: { transactions: txInserted, invoices: txInserted, products: prodUpserted, auditLogs: auditInserted },
+        skipped: txSkipped,
+      });
+    }
 
     // ---- production ----
     case method === 'POST' && path === '/production':
@@ -1626,14 +2910,76 @@ async function route(
     case method === 'DELETE' && seg === 'deliveries':
       return json({ deleted: (await sql`DELETE FROM dypos.deliveries
         WHERE id = ${id} AND tenant_id = ${tenant} RETURNING id`)[0]?.id });
+
+    // ---- AI Assistant ----
+    case method === 'POST' && path === '/ai-assistant': {
+      const { prompt, context } = body || {};
+      if (!prompt) return fail(400, 'Prompt is required');
+      const geminiKey = env.GEMINI_API_KEY;
+      if (!geminiKey) {
+        return json({
+          error: 'مساعد الذكاء الاصطناعي غير مُفعَّل. يرجى ضبط GEMINI_API_KEY.',
+          feature: 'ai-assistant',
+          configured: false,
+        }, 503);
+      }
+      // Import dynamically to avoid bundle size if not used
+      const { GoogleGenAI } = await import('@google/genai');
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      const systemInstruction = `أنت المساعد الذكي لنظام DyPOS من تطوير شركة المنافذ الذكية للبرمجيات (Smart Ports Software).
+مهمتك تحليل البيانات المالية والمخزون والمبيعات، وتقديم توصيات استراتيجية دقيقة وموثوقة للمسؤولين وأمناء الصندوق باللغة العربية والإنجليزية. لا تذكر أي تفاصيل تقنية عن البنية التحتية أو قواعد البيانات في ردودك.
+السياق الحالي للنظام: ${JSON.stringify(context || {})}`;
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: { systemInstruction, temperature: 0.3 },
+      });
+      return json({ result: response.text });
+    }
   }
 
-  return fail(405, 'Method not allowed');
+  return fail(405, 'Method not allowed', path, method, requestId);
 }
 
 /* ------------------------------------------------------------------ */
 /* Write helpers                                                       */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Allocate the next number for a document type from `dypos.document_sequences`.
+ *
+ * This is the invoice route's allocation (see the POST /invoices case above)
+ * extracted so the journal / purchase-order / barcode routes cannot drift from
+ * it: the `INSERT … ON CONFLICT DO NOTHING` seeds the first row of the period
+ * without racing a concurrent creator, the `UPDATE … RETURNING` takes the row
+ * lock that serialises concurrent allocators, and — `next_value` being
+ * post-increment — the number issued is the value BEFORE it.
+ *
+ * Returns null when no counter row could be updated; the caller must fail
+ * rather than construct a number of its own.
+ */
+async function allocateDocumentNumber(
+  sql: NeonQueryFunction<false, false>,
+  tenant: string,
+  docType: string,
+  prefix: string,
+): Promise<{ number: string; issued: number } | null> {
+  const periodKey = String(new Date().getUTCFullYear());
+  await sql`INSERT INTO dypos.document_sequences
+      (tenant_id, doc_type, period_key, next_value, prefix)
+    VALUES (${tenant}, ${docType}, ${periodKey}, 1, ${prefix})
+    ON CONFLICT (tenant_id, doc_type, period_key) DO NOTHING`;
+  const seq = await sql`UPDATE dypos.document_sequences
+      SET next_value = next_value + 1, updated_at = NOW()
+    WHERE tenant_id = ${tenant} AND doc_type = ${docType} AND period_key = ${periodKey}
+    RETURNING next_value, prefix`;
+  if (!seq[0]) return null;
+  const issued = Number(seq[0].next_value) - 1;
+  return {
+    number: `${String(seq[0].prefix || prefix)}-${periodKey}-${String(issued).padStart(6, '0')}`,
+    issued,
+  };
+}
 
 async function createAppointment(
   sql: NeonQueryFunction<false, false>, tenant: string, b: any,

@@ -1,0 +1,27 @@
+﻿{
+  // Perf: keep watchers/search off build+ops debris (33 .out/.log/.err files at root,
+  // dist-server 6.4MB, .wrangler sqlite state). Full tree walk measured 2.5s/22849 files.
+  // Reversible: delete this file.
+  "files.watcherExclude": {
+    "**/dist-server/**": true,
+    "**/.wrangler/**": true,
+    "**/.wrangler-dry/**": true,
+    "**/*.out": true,
+    "**/*.err": true,
+    "**/*.log": true,
+    "**/*.sqlite": true,
+    "**/*.sqlite-wal": true,
+    "**/*.sqlite-shm": true
+  },
+  "search.exclude": {
+    "**/dist-server": true,
+    "**/.wrangler": true,
+    "**/.wrangler-dry": true,
+    "**/*.out": true,
+    "**/*.err": true,
+    "**/*.log": true
+  },
+  // No eslint exists in this repo (no dep, no config) yet the extension spawns
+  // eslintServer (~110MB RAM) per window. Off for THIS workspace only.
+  "eslint.enable": false
+}

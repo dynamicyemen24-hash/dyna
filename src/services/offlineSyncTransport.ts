@@ -76,6 +76,16 @@ function verdictFor(status: number, body: unknown): SyncResult {
  * is therefore one session on the till, not two.
  */
 function sessionToken(): string | null {
+  // Canonical first: the live login (`LoginView` via `dyposApi`) persists the
+  // signed token under sessionStorage `dypos_token`. The legacy
+  // `localStorage dypos_session_v1` record (dead `AuthContext`) is kept ONLY
+  // as a fallback so an older tab's queue can still flush after an upgrade.
+  try {
+    const live = sessionStorage.getItem('dypos_token');
+    if (typeof live === 'string' && live.trim()) return live.trim();
+  } catch {
+    // Storage unavailable — fall through to the legacy record.
+  }
   try {
     const raw = localStorage.getItem('dypos_session_v1');
     if (!raw) return null;
@@ -121,6 +131,12 @@ async function pushItem(items: OfflineQueueItem[]): Promise<SyncResult> {
   }
 
   const payload = (item.data ?? {}) as Record<string, unknown>;
+  // The queue id is the idempotent primary key. This provisional number is
+  // only for the human-facing document until the server allocates authority.
+  const invoiceNumber = String(
+    payload.invoiceNumber
+      ?? `OFF-${item.clientId ?? 'device'}-${item.clientSeq ?? item.id}`,
+  );
 
   const response = await fetch('/api/db/sync-batch', {
     method: 'POST',
@@ -133,7 +149,14 @@ async function pushItem(items: OfflineQueueItem[]): Promise<SyncResult> {
        * treats it as the same sale rather than a second one. Without it, a
        * flaky link would duplicate a paid invoice on every attempt.
        */
-      invoices: [{ ...payload, id: item.id, clientId: item.clientId }],
+      invoices: [{
+        ...payload,
+        id: item.id,
+        clientId: item.clientId,
+        invoiceNumber,
+        timestamp: payload.timestamp ?? new Date().toISOString(),
+        status: 'completed',
+      }],
       clientId: item.clientId,
       sequenceNo: item.clientSeq,
     }),

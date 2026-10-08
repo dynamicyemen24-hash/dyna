@@ -47,7 +47,7 @@ export interface Transaction {
   cashierName: string;
   timestamp: string;
   branchId: string;
-  status: 'completed' | 'refunded' | 'held';
+  status: 'completed' | 'refunded' | 'held' | 'pending_sync';
 }
 
 export interface Customer {

@@ -1,3 +1,5 @@
+import { TOKEN_KEY, SESSION_KEY } from './dyposApi';
+
 export interface OfflineQueueItem {
   id: string;
   type: 'transaction' | 'stock_update' | 'backup' | 'general';
@@ -130,12 +132,40 @@ export interface OfflineSyncState {
  */
 function activeTenant(): string | null {
   try {
-    const raw = localStorage.getItem('dypos_session_v1');
-    if (!raw) return null;
-    const { token } = JSON.parse(raw) as { token?: string };
-    if (typeof token !== 'string') return null;
+    // 1. Read the current token from sessionStorage (TOKEN_KEY).
+    let token = sessionStorage.getItem(TOKEN_KEY);
 
-    // `payload.signature` — decode the first segment only.
+    // 2. Fall back to SESSION_KEY if TOKEN_KEY is empty.
+    if (!token) {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { token?: string };
+        if (typeof parsed.token === 'string') {
+          token = parsed.token;
+        }
+      }
+    }
+
+    // 3. Legacy upgrade fallback: queues written by the retired
+    // `localStorage dypos_session_v1` record flush once under their real
+    // tenant instead of stranding in `__unclaimed__`.
+    if (!token) {
+      try {
+        const legacy = localStorage.getItem('dypos_session_v1');
+        if (legacy) {
+          const parsed = JSON.parse(legacy) as { token?: string };
+          if (typeof parsed.token === 'string' && parsed.token.trim()) {
+            token = parsed.token;
+          }
+        }
+      } catch {
+        // Legacy record unreadable — the queue stays unclaimed, never misfiled.
+      }
+    }
+
+    if (!token) return null;
+
+    // 3. Decode the JWT payload to get tenantId.
     const body = token.slice(0, token.indexOf('.'));
     if (!body) return null;
     const json = atob(body.replace(/-/g, '+').replace(/_/g, '/'));
@@ -199,6 +229,9 @@ class OfflineSyncManager {
   private deviceId(): string {
     const KEY = 'dypos_offline_device_id';
     try {
+      // The device namespace must survive a browser restart. A new id after
+      // reload would make the same terminal look like a new writer to the
+      // server and weakens replay detection for restored outbox items.
       const existing = localStorage.getItem(KEY);
       if (existing) return existing;
       const minted = `d${Math.random().toString(36).slice(2, 10)}`;
@@ -586,6 +619,15 @@ class OfflineSyncManager {
       item.retries += 1;
       return true;
     });
+
+    const settledIds = [...results.entries()]
+      .filter(([, verdict]) => verdict.outcome === 'accepted' || verdict.duplicate)
+      .map(([id]) => id);
+    if (settledIds.length && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('dypos:offline-sync-settled', {
+        detail: { ids: settledIds },
+      }));
+    }
 
     const conflicted = [...results.values()].filter((r) => r.outcome === 'conflict');
     const rejected = [...results.values()].filter((r) => r.outcome === 'rejected');

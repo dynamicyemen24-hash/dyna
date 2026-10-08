@@ -33,6 +33,7 @@
  * Accounts already at a portable cost are left completely untouched.
  */
 import dotenv from 'dotenv';
+import { PG_SSL } from '../server/neonDb.ts';
 import pg from 'pg';
 import crypto from 'crypto';
 import { hashPassword, ALGO, EDGE_MAX_ITERATIONS } from '../server/passwords.ts';
@@ -41,7 +42,7 @@ dotenv.config();
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: PG_SSL,
   max: 1,
   connectionTimeoutMillis: 20_000,
 });

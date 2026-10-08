@@ -97,6 +97,9 @@ export const RetailPOS: React.FC = () => {
    */
   const [tenantVatRate, setTenantVatRate] = useState<number>(15);
 
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null);
+  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
+
   React.useEffect(() => {
     let cancelled = false;
 

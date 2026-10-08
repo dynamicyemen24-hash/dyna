@@ -46,6 +46,12 @@ const PUBLIC_API_ROUTES = new Set<string>([
   '/api/auth/reset-password',
   '/api/auth/password-policy',
   '/api/auth/unlock',
+  // /api/release is deliberately public: it returns only the current build
+  // version and deployment metadata — no user data, no secrets, no authentication
+  // required. Adding it to the allowlist is consistent with the philosophy that
+  // the safe state is default-DENY; this route is open by explicit choice, not
+  // by omission.
+  '/api/release',
 ]);
 
 /**

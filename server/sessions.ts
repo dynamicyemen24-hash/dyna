@@ -39,6 +39,8 @@ export interface SessionPayload {
   iat: number;
   /** Expiry, seconds since epoch. */
   exp: number;
+  /** True if the user must change their password before accessing business data. */
+  mustChangePassword: boolean;
 }
 
 /** Token lifetime. Short enough that a stolen token has a small window. */
@@ -46,10 +48,12 @@ const TTL_SECONDS = Number(process.env.DYPOS_SESSION_TTL_SECONDS) || 8 * 60 * 60
 
 export function issueSessionToken(
   userId: string, username: string, tenantId: string,
+  mustChangePassword: boolean = false,
 ): string {
   const now = Math.floor(Date.now() / 1000);
   const payload: SessionPayload = {
     sub: userId, username, tenantId, iat: now, exp: now + TTL_SECONDS,
+    mustChangePassword,
   };
   const body = b64(JSON.stringify(payload));
   return `${body}.${sign(body)}`;

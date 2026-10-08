@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const BASE = process.env.API_BASE || 'http://localhost:3000';
+const BASE = process.env.API_BASE || 'http://';
 const TENANT = 'royal-global-hq';
 const LOG = path.resolve('apitest.log');
 const lines: string[] = [];

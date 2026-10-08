@@ -161,14 +161,17 @@ export function useWorkCenter(): WorkCenter {
   useEffect(() => offlineSyncService.subscribe(setSync), []);
 
   const cancelled = useRef(false);
+  const refreshInFlight = useRef(false);
   useEffect(() => {
     cancelled.current = false;
     return () => { cancelled.current = true; };
   }, []);
 
-
   const refresh = useCallback(async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
     setBusy(true);
+    setLoading(true);
     const problems: DegradedSource[] = [];
     const safe = async <T>(source: string, run: () => Promise<T>): Promise<T | null> => {
       try {
@@ -227,6 +230,7 @@ export function useWorkCenter(): WorkCenter {
         setBusy(false);
         setLoading(false);
       }
+      refreshInFlight.current = false;
     }
     // `sector` and `branchId` are the only inputs that change what is fetched;
     // everything else is read at use time.
@@ -235,6 +239,16 @@ export function useWorkCenter(): WorkCenter {
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        void refresh();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [refresh]);
 
   const scored = useMemo(() => buildWorkQueue(queue), [queue]);

@@ -24,11 +24,17 @@ interface BottomStatusBarProps {
   syncStatus: SyncStatus;
   lastBackupTime: string | null;
   onOpenAppInstaller: () => void;
-  /** Operations waiting in the local queue. 0 means everything is durable. */
+  /**
+   * Operations waiting in the local queue. `undefined` means the queue has
+   * not been read — rendered as `—`, never as a `0` that claims a measurement.
+   */
   pendingCount?: number;
-  /** The branch this terminal works in. */
+  /** The branch this terminal works in. Unread renders as `—`, never `بلا فرع`. */
   branchLabel?: string;
-  /** The organisation's reporting base currency (`dypos.tenants.base_currency`). */
+  /**
+   * The organisation's reporting base currency (`dypos.tenants.base_currency`).
+   * Unread renders as `—`, never an assumed `SAR`.
+   */
   baseCurrency?: string;
 }
 
@@ -37,9 +43,9 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
   syncStatus,
   lastBackupTime,
   onOpenAppInstaller,
-  pendingCount = 0,
+  pendingCount,
   branchLabel,
-  baseCurrency = 'SAR',
+  baseCurrency,
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -69,15 +75,15 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
 
         <span className="h-3 w-px bg-hairline hidden sm:block" />
 
-        <span className="hidden sm:flex items-center gap-1.5 truncate" title={branchLabel}>
+        <span className="hidden sm:flex items-center gap-1.5 truncate" title={branchLabel ?? 'لم يُقرأ الفرع بعد'}>
           <GitBranch size={12} className="text-faint shrink-0" />
-          {branchLabel || 'بلا فرع'}
+          {branchLabel || '—'}
         </span>
 
         <span className="h-3 w-px bg-hairline hidden sm:block" />
 
         <span
-          className={`flex items-center gap-1.5 ${shift.isOpen ? 'text-brand-600' : 'text-amber-600'}`}
+          className={`flex items-center gap-1.5 ${shift.isOpen ? 'text-brand-600 dark:text-brand-300' : 'text-amber-600 dark:text-amber-400'}`}
           title={shift.isOpen
             ? `وردية مفتوحة — نقدي افتتاحي ${shift.openingCash}`
             : 'لا توجد وردية مفتوحة على هذا الجهاز'}
@@ -90,7 +96,7 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
 
         <span className="hidden lg:flex items-center gap-1.5" title="العملة الأساسية للتوحيد">
           <Globe2 size={12} className="text-faint" />
-          <span>التوحيد: <strong className="text-ink">{baseCurrency}</strong></span>
+          <span>التوحيد: <strong className="text-ink">{baseCurrency || '—'}</strong></span>
         </span>
       </div>
 
@@ -105,21 +111,23 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
 
         <div className="flex items-center gap-1.5 font-mono">
           {syncStatus === 'synced' && (
-            <span className="text-brand-600 flex items-center gap-1 font-semibold">
+            <span className="text-brand-600 dark:text-brand-300 flex items-center gap-1 font-semibold">
               <CloudCheck size={13} />
               متزامن{lastBackupTime ? ` · ${lastBackupTime}` : ''}
             </span>
           )}
           {syncStatus === 'syncing' && (
-            <span className="text-amber-600 flex items-center gap-1 font-semibold">
+            <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-semibold">
               <RefreshCw size={13} className="animate-spin" />
               جارٍ التزامن
             </span>
           )}
           {syncStatus === 'offline' && (
-            <span className="text-amber-700 flex items-center gap-1 font-semibold" title="العمليات محفوظة محلياً حتى عودة الشبكة">
+            <span className="text-amber-700 dark:text-amber-300 flex items-center gap-1 font-semibold" title="العمليات محفوظة محلياً حتى عودة الشبكة">
               <HardDriveUpload size={13} />
-              {pendingCount > 0 ? `${pendingCount} بانتظار المزامنة` : 'محلي آمن'}
+              {pendingCount === undefined
+                ? '—'
+                : pendingCount > 0 ? `${pendingCount as number} بانتظار المزامنة` : 'محلي آمن'}
             </span>
           )}
         </div>
@@ -131,8 +139,8 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
           </span>
         )}
 
-        {pendingCount > 0 && syncStatus === 'offline' && (
-          <span className="hidden xl:flex items-center gap-1 text-2xs text-amber-700">
+        {(pendingCount !== undefined && pendingCount > 0) && syncStatus === 'offline' && (
+          <span className="hidden xl:flex items-center gap-1 text-2xs text-amber-700 dark:text-amber-300">
             <AlertTriangle size={12} />
             راجع قائمة الانتظار قبل إغلاق الوردية
           </span>

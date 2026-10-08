@@ -65,6 +65,28 @@ POST /api/auth/break-glass         { code }     → accepted
 The reason is mandatory and audited on issue, redemption and denial. A grant
 authorises escalation; it does not open a session — credentials are still required.
 
+## Rate limiting (pre-auth surface)
+
+Two budgets per IP per route, on BOTH front doors — `server/rateLimit.ts` for
+Express, `rateLimitVerdict` inside `worker/index.ts` for the public edge:
+
+| Budget | Counts | Bounds |
+|---|---|---|
+| failures | only 401/403 responses | credential spraying across usernames |
+| requests | every request | the PBKDF2-100k CPU cost of being flooded |
+
+| Variable | Default | Effect |
+|---|---|---|
+| `DYPOS_AUTH_RATE_WINDOW_MS` | `300000` | window length (Express only) |
+| `DYPOS_AUTH_RATE_MAX_FAILURES` | `15` | failed auths per window per IP per route |
+| `DYPOS_AUTH_RATE_MAX_REQUESTS` | `120` | total requests per window per IP per route |
+| `DYPOS_AUTH_RATE_LIMIT=off` | — | disable (load tests measuring the app, not the limiter) |
+
+A 429 carries `Retry-After` and changes nothing about an authenticated session.
+The edge copy is isolate-local — deliberately, rather than a KV write on every
+sign-in attempt; it stops single-source grinding, which is the attack it exists
+for. Verify with `npm run test:rate-limit`.
+
 ## Payment gateway
 
 `paymentGatewayService` **fails closed**. With no provider configured, card
@@ -151,6 +173,27 @@ single character.
 
 Asserted by `npm run test:credentials` (13 assertions, both directions, plus a
 rotation performed on the edge). It is in `npm run ci`; do not remove it.
+
+### Bootstrap credentials
+
+After running `npm run migrate`, run:
+
+```
+npm run release:credentials
+```
+
+This script:
+1. Generates temporary 20-character passwords for `DYPOS_BOOTSTRAP_YACOUB` and
+   `DYPOS_BOOTSTRAP_ABDULRAHMAN` if the environment variables are not already set.
+2. Applies the v135 schema migration (`server/migrations/v135_release_auth.sql`).
+3. Sets the operator credentials with forced rotation enabled.
+4. Prints a credential sheet with the temporary passwords (capture them — they
+   are not stored anywhere else).
+5. Stamps the release version in `dypos.app_releases`.
+
+The temporary passwords must be delivered to operators via a secure channel. After
+each operator's first sign-in, the system forces a password change before any
+business screen is accessible.
 
 ### Re-issuing a credential the edge cannot run
 

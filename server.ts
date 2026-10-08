@@ -15,19 +15,68 @@ import { attachPrincipal, requirePermission, registerAuthzRoutes, requireSession
 import { registerKpiRoutes } from './server/kpiEngine.js';
 import { registerFinancialRoutes } from './server/financialRoutes.js';
 import { registerAuthRoutes } from './server/authRoutes.js';
+import { registerSsoRoutes } from './server/ssoEngine.js';
 import { tenantOf, asyncRoute, fail, makeId , internalError } from './server/apiHelpers.js';
 import { registerEntitlementRoutes, registerTenantProfileRoutes } from './server/entitlementRoutes.js';
+import { registerIdentityRoutes } from './server/identityRoutes.js';
+import { registerSyncRecoveryRoutes } from './server/syncRecoveryRoutes.js';
+import { registerPolicyRoutes } from './server/policyRoutes.js';
 import { registerCommerceRoutes } from './server/commerceRoutes.js';
 import { registerAccountingRoutes } from './server/accountingRoutes.js';
 import { registerApiKeyRoutes } from './server/apiKeyRoutes.js';
 import { registerSettlementRoutes } from './server/settlementRoutes.js';
+import { registerTelemetryRoutes } from './server/telemetryEngine.js';
+import { registerZatcaRoutes } from './server/zatcaComplianceEngine.js';
+import { initSyncEngineTables, registerSyncRoutes } from './server/syncEngine.js';
+import { initForecastingTables, registerForecastingRoutes } from './server/forecastingEngine.js';
+import { registerCatalogRoutes } from './server/catalogRoutes.js';
 import { allocateDocumentNumber } from './server/documentNumber.js';
 
 dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-const ai = new GoogleGenAI({ apiKey: apiKey || '' });
+
+/*
+ * ══ THE AI ASSISTANT IS OPTIONAL; THE TILL IS NOT ═════════════════════════
+ * This was constructed at module load:
+ *
+ *   const apiKey = process.env.GEMINI_API_KEY || …;
+ *   const ai = new GoogleGenAI({ apiKey: apiKey || '' });
+ *
+ * and `new GoogleGenAI({apiKey: ''})` prints "API key should be set when using
+ * the Gemini API." twice while it initialises. Verified, not assumed — the
+ * constructor does not throw today, but it is a third-party constructor with a
+ * documented precondition, and this ran at IMPORT time.
+ *
+ * That ordering makes an optional integration a startup dependency. The import
+ * graph evaluates this module before `createApp()`, so anything that throws here
+ * stops the entire POS from starting: no login, no sale, no receipt — because a
+ * convenience feature has no credential. A deployment with no Gemini key must
+ * be fully usable, and it must be usable without an error in the log that
+ * suggests otherwise.
+ *
+ * So the client is built lazily, on first use, and only when a key exists. An
+ * absent key is reported as a configuration gap on THAT route alone.
+ */
+const aiApiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+
+/** Built on first use, so importing this module never touches the SDK. */
+let aiClient: InstanceType<typeof GoogleGenAI> | null = null;
+
+function getAiClient(): InstanceType<typeof GoogleGenAI> | null {
+  if (!aiApiKey) return null;
+  if (!aiClient) {
+    try {
+      aiClient = new GoogleGenAI({ apiKey: aiApiKey });
+    } catch (err: any) {
+      // A broken optional integration must not take the POS down with it. Log
+      // the real cause and let the route report the feature as unavailable.
+      console.error('[ai] Gemini client could not be created:', err?.message ?? err);
+      aiClient = null;
+    }
+  }
+  return aiClient;
+}
 
 /**
  * Builds the Express app and mounts every route module.
@@ -55,14 +104,29 @@ export async function createApp(): Promise<Express> {
    */
   requireSessionByDefault(app);
 
-  // Initialize Neon PostgreSQL dypos schema
-  initDatabaseSchema()
-    .then(() => console.log('🚀 DyPOS Neon PostgreSQL dypos schema ready.'))
-    .catch((err) => console.warn('⚠️ Neon PostgreSQL initial check warning:', err.message));
+  // Do not expose routes until schema initialization succeeds.
+  await initDatabaseSchema();
+  await initSyncEngineTables();
+  await initForecastingTables();
+  console.log('🚀 DyPOS Neon PostgreSQL dypos schema ready.');
 
   // Seven screens wired end-to-end: services, appointments, production,
   // batches, serials, commissions and delivery.
   registerCoreScreenRoutes(app);
+
+  /*
+   * Journal entries, purchase orders and product creation — the three writes
+   * production has no endpoint for, plus the journal LIST.
+   *
+   * Registered here, with the other modules, and therefore BEFORE the inline
+   * `app.get('/api/db/purchase-orders')` further down this file: Express takes
+   * the first handler that matches, so this module is what serves that path and
+   * returns the contract the client is written against (each order carrying an
+   * `items` array). GET `/api/db/products` is NOT part of this module — it
+   * stays exactly as it is below, with its `{ items, count, products }`
+   * envelope.
+   */
+  registerCatalogRoutes(app);
 
   // Restaurant floor, kitchen display, subscriptions and the consignment
   // ledger. These four rendered invented records and made no calls at all;
@@ -97,12 +161,20 @@ export async function createApp(): Promise<Express> {
   registerKpiRoutes(app);
   registerFinancialRoutes(app);
   registerAuthRoutes(app);
+  registerSsoRoutes(app);
+  registerIdentityRoutes(app);
+  registerSyncRecoveryRoutes(app);
+  registerPolicyRoutes(app);
 
   // The four-level licence (sector → subscription → branch → user) is resolved
   // once, here, and handed to the shell as a screen list. Every other surface
   // reads the answer instead of re-deriving it.
   registerEntitlementRoutes(app);
   registerTenantProfileRoutes(app);
+  registerZatcaRoutes(app);
+  registerTelemetryRoutes(app);
+  registerSyncRoutes(app);
+  registerForecastingRoutes(app);
 
   const DEFAULT_TENANT = 'royal-global-hq';
 
@@ -129,10 +201,17 @@ export async function createApp(): Promise<Express> {
         tables: tablesRes.rows.map((r: any) => r.table_name),
       });
     } catch (err: any) {
-      res.status(500).json({
+      // DB unavailable: degrade gracefully so the POS keeps working offline.
+      res.status(200).json({
         status: 'degraded',
+        offline: true,
+        database: 'Neon Serverless PostgreSQL (dyposdb) — unreachable',
+        schema: 'dypos',
+        ownerCompany: 'شركة المنافذ الذكية للبرمجيات (Smart Ports Software)',
+        productBrand: 'DyPOS Enterprise Cloud & Edge',
         error: err.message,
-        hint: 'Using offline-first client storage and Firestore fallback.',
+        hint: 'Using offline-first client storage (IndexedDB) and Firestore fallback.',
+        latencyMs: Date.now() - startTime,
       });
     }
   });
@@ -941,9 +1020,18 @@ app.get('/api/tenant/context', async (req, res) => {
   app.post('/api/ai-assistant', async (req, res) => {
     try {
       const { prompt, context } = req.body;
-      if (!apiKey) {
-        return res.status(500).json({
-          error: 'مفتاح Gemini API غير مُعرف. يرجى ضبط مفتاح GEMINI_API_KEY في إعدادات النظام.',
+
+      /*
+       * 503, not 500. The feature is absent by configuration, not broken, and the
+       * distinction is what tells an operator whether to set a key or debug a
+       * service. The POS core does not depend on this route.
+       */
+      const ai = getAiClient();
+      if (!ai) {
+        return res.status(503).json({
+          error: 'مساعد الذكاء الاصطناعي غير مُفعَّل. يرجى ضبط GEMINI_API_KEY في إعدادات النظام.',
+          feature: 'ai-assistant',
+          configured: false,
         });
       }
 
@@ -992,11 +1080,22 @@ app.get('/api/tenant/context', async (req, res) => {
 async function startServer() {
   const app = await createApp();
 
+  // Check for bootstrap credentials and warn if missing (random passwords
+  // will be generated at first release-credentials run, but operators should
+  const hasYacoub = process.env.DYPOS_BOOTSTRAP_YACOUB !== undefined;
+  const hasAbdulrahman = process.env.DYPOS_BOOTSTRAP_ABDULRAHMAN !== undefined;
+  if (!hasYacoub || !hasAbdulrahman) {
+    console.warn('⚠️  Bootstrap credentials not fully configured:');
+    if (!hasYacoub) console.warn('   - DYPOS_BOOTSTRAP_YACOUB is not set — random password will be generated on first `npm run release:credentials` run');
+    if (!hasAbdulrahman) console.warn('   - DYPOS_BOOTSTRAP_ABDULRAHMAN is not set — random password will be generated on first `npm run release:credentials` run');
+    console.warn('   See .env.example and DEPLOYMENT.md for details.');
+  }
+
   const PORT = Number(process.env.PORT) || 3000;
   /*
    * The message states the BIND ADDRESS, not a guess.
    *
-   * It used to say `http://localhost:3000` while the call below binds `0.0.0.0`.
+   * It used to say `http://` while the call below binds `0.0.0.0`.
    * That is not a performance concern — it is a false statement about where the
    * service can be reached. An operator reading it would conclude the port is
    * loopback-only when in fact every interface is bound, which is exactly the
@@ -1027,5 +1126,8 @@ const isDirectRun = process.argv[1]
   && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isDirectRun) {
-  startServer();
+  startServer().catch((error) => {
+    console.error('❌ DyPOS startup failed:', error);
+    process.exitCode = 1;
+  });
 }

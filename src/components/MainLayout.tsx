@@ -4,6 +4,8 @@ import { useEntitlement } from '../contexts/EntitlementContext';
 import { useAuthz } from '../contexts/AuthzContext';
 import { useData } from '../contexts/DataContext';
 import { CommandBar } from './CommandBar';
+import { BottomStatusBar } from './BottomStatusBar';
+import { offlineSyncService, type OfflineSyncState } from '../services/offlineSyncService';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { ToolLauncher } from '../contexts/ToolsContext';
 import {
@@ -65,7 +67,12 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     screens, blocked, authority, verificationFailed, plan, tenant, status,
   } = useEntitlement();
   const { principal, loading: authzLoading } = useAuthz();
-  const { operator, selectedBranch } = useData();
+  const { operator, selectedBranch, shift } = useData();
+
+  // The shell's own sync subscription — the status bar below reads the queue
+  // directly instead of receiving defaulted props.
+  const [sync, setSync] = React.useState<OfflineSyncState>(() => offlineSyncService.getState());
+  React.useEffect(() => offlineSyncService.subscribe(setSync), []);
 
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(
     () => localStorage.getItem(SIDEBAR_KEY) !== 'closed',
@@ -73,6 +80,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const [query, setQuery] = React.useState('');
   const [pinned, setPinned] = React.useState<string[]>(() => readList(PINNED_KEY));
   const [recent, setRecent] = React.useState<string[]>(() => readList(RECENT_KEY));
+  const searchRef = React.useRef<HTMLInputElement | null>(null);
 
   /*
    * NOTE — declaration order below is load-bearing.
@@ -105,12 +113,27 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 
   // Ctrl/Cmd+K focuses the screen search — the shortcut every enterprise shell
   // converges on, and the only practical way to reach one screen among 27.
+  // When the rail is collapsed the input is unmounted, so focusing it directly
+  // fails silently: open the rail first, then focus once it has rendered.
+  const setSidebar = React.useCallback((open: boolean) => {
+    setIsSidebarOpen(open);
+    localStorage.setItem(SIDEBAR_KEY, open ? 'open' : 'closed');
+  }, []);
+
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
+        if (!isSidebarOpen) {
+          setSidebar(true);
+          window.setTimeout(() => {
+            searchRef.current?.focus();
+            searchRef.current?.select();
+          }, 60);
+        } else {
+          searchRef.current?.focus();
+          searchRef.current?.select();
+        }
       }
       if (e.key === 'Escape' && document.activeElement === searchRef.current) {
         setQuery('');
@@ -119,7 +142,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [isSidebarOpen, setSidebar]);
 
   // Identity, sector and scope come from the session — never from a constant.
   const identity = operator.name || operator.username;
@@ -128,18 +151,31 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     ? `${selectedBranch.name}${selectedBranch.city ? ` · ${selectedBranch.city}` : ''}`
     : 'بلا فرع محدد';
   const verificationChip = verificationFailed
-    ? { text: 'الاشتراك لم يُتحقق', tone: 'text-amber-700 bg-amber-50 border-amber-200' }
+    ? { text: 'الاشتراك لم يُتحقق', tone: 'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-200 dark:bg-amber-950 dark:border-amber-800' }
     : authority === 'server'
-      ? { text: `اشتراك ${plan || 'معتمد'}`, tone: 'text-brand-700 bg-brand-50 border-brand-200' }
-      : { text: 'فحص محلي', tone: 'text-slate-600 bg-slate-50 border-slate-200' };
+      ? { text: `اشتراك ${plan || 'معتمد'}`, tone: 'text-brand-700 bg-brand-50 border-brand-200 dark:text-brand-200 dark:bg-brand-950 dark:border-brand-800' }
+      : { text: 'فحص محلي', tone: 'text-muted bg-subtle border-hairline' };
 
   const [showExplanation, setShowExplanation] = React.useState(false);
-  const searchRef = React.useRef<HTMLInputElement | null>(null);
+  const whyTriggerRef = React.useRef<HTMLButtonElement | null>(null);
 
-  const setSidebar = React.useCallback((open: boolean) => {
-    setIsSidebarOpen(open);
-    localStorage.setItem(SIDEBAR_KEY, open ? 'open' : 'closed');
+  // Escape closes the "why" popover and returns focus to its trigger.
+  const closeExplanation = React.useCallback(() => {
+    setShowExplanation(false);
+    whyTriggerRef.current?.focus();
   }, []);
+
+  React.useEffect(() => {
+    if (!showExplanation) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        closeExplanation();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showExplanation, closeExplanation]);
 
   /**
    * A screen is rendered only when the four-level licence allows it. While the
@@ -207,6 +243,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     }
   }, [activeTab, permitted, status, setActiveTab]);
 
+  // Same mapping the root shell uses: only an actually-flushed queue reads as
+  // synced. Anything unread stays `undefined` and the bar prints `—`.
+  const shellSyncStatus: 'synced' | 'syncing' | 'offline' =
+    sync.syncStatus === 'syncing'
+      ? 'syncing'
+      : (!sync.isOnline || sync.pendingCount > 0) ? 'offline' : 'synced';
+
   return (
     <div className="flex h-screen bg-canvas text-ink overflow-hidden" dir="rtl">
       {/* Keyboard users land here first: one keypress to reach the workspace. */}
@@ -226,7 +269,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         <div className="h-14 px-4 flex items-center justify-between border-b border-hairline">
           {isSidebarOpen && (
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 bg-slate-900 rounded-md grid place-items-center text-white text-[13px] font-bold">
+              <div className="w-7 h-7 bg-ink text-canvas rounded-md grid place-items-center text-[13px] font-bold">
                 D
               </div>
               <div className="leading-tight min-w-0">
@@ -256,7 +299,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             </div>
 
             {verificationFailed && (
-              <p className="text-2xs text-amber-700 leading-relaxed flex items-start gap-1">
+              <p className="text-2xs text-amber-700 dark:text-amber-200 leading-relaxed flex items-start gap-1">
                 <AlertTriangle size={11} className="mt-px shrink-0" />
                 لم يُتحقق من اشتراك المؤسسة هذه الجلسة؛ العرض مقتصر على افتراضات القطاع.
               </p>
@@ -343,9 +386,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
               <div className="flex items-center justify-between">
                 <p className="text-eyebrow">سبب إخفاء الشاشات</p>
                 <button
-                  onClick={() => setShowExplanation(false)}
+                  onClick={closeExplanation}
                   aria-label="إغلاق"
-                  className="text-faint hover:text-ink"
+                  className="text-faint hover:text-ink rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                 >
                   <X size={13} />
                 </button>
@@ -362,8 +405,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                       const n = blocked.filter((b) => b.reason === reason).length;
                       if (!n) return null;
                       const tone = reason === 'permission'
-                        ? 'bg-amber-50 text-amber-700 border-amber-200'
-                        : 'bg-slate-50 text-slate-600 border-slate-200';
+                        ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800'
+                        : 'bg-subtle text-muted border-hairline';
                       return (
                         <span key={reason} className={`px-1.5 py-0.5 rounded border text-2xs font-semibold ${tone}`}>
                           {n} — {blocked.find((b) => b.reason === reason)!.detail}
@@ -388,8 +431,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           )}
 
           <button
-            onClick={() => setShowExplanation((v) => !v)}
-            className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md bg-subtle border border-hairline text-2xs text-muted hover:text-ink transition-colors"
+            ref={whyTriggerRef}
+            onClick={() => (showExplanation ? closeExplanation() : setShowExplanation(true))}
+            aria-expanded={showExplanation}
+            className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md bg-subtle border border-hairline text-2xs text-muted hover:text-ink transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
             <span className="flex items-center gap-1.5">
               <HelpCircle size={12} />
@@ -399,7 +444,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           </button>
 
           <div className="flex items-center gap-2.5 mt-2.5">
-            <div className="w-8 h-8 shrink-0 bg-slate-900 rounded-full grid place-items-center text-white text-[11px] font-semibold">
+            <div className="w-8 h-8 shrink-0 bg-ink text-canvas rounded-full grid place-items-center text-[11px] font-semibold">
               {identity.trim()[0] || '؟'}
             </div>
             <div className="min-w-0 flex-1">
@@ -417,7 +462,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           <button
             onClick={onSignOut}
             disabled={!onSignOut}
-            className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-hairline text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors"
+            className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-hairline text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors dark:text-rose-400 dark:hover:bg-rose-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             title="إنهاء الجلسة والعودة لشاشة الدخول"
           >
             <LogOut size={13} />
@@ -479,6 +524,24 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             {children}
           </ErrorBoundary>
         </div>
+
+        {/*
+          The terminal health line, inside the shell and fed directly from the
+          session (`useData`) and the offline queue — never from defaulted
+          props. Anything the shell has not actually read (branch, base
+          currency, queue depth) renders as `—`, the same honesty rule the
+          Dashboard follows: no `بلا فرع`, no assumed `SAR`, no `0` that claims
+          a queue was measured.
+        */}
+        <BottomStatusBar
+          shift={shift}
+          syncStatus={shellSyncStatus}
+          lastBackupTime={sync.lastSyncTime}
+          pendingCount={sync.pendingCount}
+          branchLabel={selectedBranch?.name}
+          baseCurrency={tenant?.baseCurrency}
+          onOpenAppInstaller={() => setActiveTab('settings')}
+        />
       </main>
     </div>
   );
@@ -520,15 +583,15 @@ const NavRow: React.FC<NavRowProps> = ({
       onClick={() => onGo(item.id)}
       title={item.label}
       aria-current={active ? 'page' : undefined}
-      className={`group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors duration-150 ${
+      className={`group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
         active
-          ? 'bg-slate-900 text-white'
+          ? 'bg-ink text-canvas'
           : 'text-muted hover:bg-subtle hover:text-ink'
       } ${isSidebarOpen ? '' : 'justify-center'}`}
     >
       <Icon
         size={16}
-        className={`shrink-0 ${active ? 'text-brand-400' : 'text-faint group-hover:text-ink'}`}
+        className={`shrink-0 ${active ? '' : 'text-faint group-hover:text-ink'}`}
       />
       {isSidebarOpen && <span className="text-xs font-medium truncate">{item.label}</span>}
     </button>

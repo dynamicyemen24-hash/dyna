@@ -34,6 +34,80 @@ export const API_BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '')
 const DEFAULT_TENANT_ID = 'royal-global-hq';
 const TENANT_STORAGE_KEY = 'dypos_tenant';
 
+/*
+ * Canonical auth-storage keys. `App.tsx` persists its session under SESSION_KEY
+ * and the signed token under TOKEN_KEY (both in sessionStorage); every request
+ * reads the token through `getToken()` below so there is exactly one reader.
+ *
+ * DEPRECATED — DO NOT USE: `src/contexts/AuthContext.tsx` (`AuthProvider` /
+ * `signIn`) persists to `localStorage` key `dypos_session_v1`. That provider is
+ * not mounted anywhere in the app, its `signIn` posts the legacy
+ * `{ username, password, branchId, openingCash }` shape, and writing through it
+ * forks the session from the keys above. It is kept only so existing importers
+ * keep resolving — new code must use TOKEN_KEY/SESSION_KEY + `apiPost(login)`.
+ */
+export const TOKEN_KEY = 'dypos_token';
+export const SESSION_KEY = 'dypos_session';
+
+/** Single reader for the signed session token (empty string when absent). */
+export function getToken(): string {
+  try {
+    if (typeof sessionStorage === 'undefined') return '';
+    return sessionStorage.getItem(TOKEN_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** Clears the token and the session snapshot (logout / expired session). */
+export function clearAuthStorage(): void {
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Storage unavailable (private mode, SSR): nothing persisted, nothing to clear.
+  }
+}
+
+type UnauthorizedHandler = () => void;
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+/**
+ * Registers the ONE central 401 handler (the app shell uses it to sign out).
+ * Returns an unsubscribe function. A `dypos:unauthorized` window event is also
+ * dispatched so non-React listeners have a single subscription point too.
+ */
+export function onUnauthorized(cb: UnauthorizedHandler): () => void {
+  unauthorizedHandler = cb;
+  return () => {
+    if (unauthorizedHandler === cb) unauthorizedHandler = null;
+  };
+}
+
+function notifyUnauthorized(): void {
+  try {
+    unauthorizedHandler?.();
+  } catch {
+    // A throwing UI callback must never break the API layer that reported it.
+  }
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('dypos:unauthorized'));
+    }
+  } catch {
+    // No window (tests/SSR): the callback above is the only channel.
+  }
+}
+
+/*
+ * Set once the boot-default fallback below has warned. The default keeps an
+ * unauthenticated app bootable, but every call that relies on it is unscoped —
+ * real tenant isolation comes from the signed session token the server derives
+ * the tenant from, never from this header value. Warn once so a misconfigured
+ * deployment is visible without spamming the console per request.
+ */
+let warnedBootDefaultTenant = false;
+
 /** True when the build pins one tenant, which hides the field on the login screen. */
 export const TENANT_IS_PINNED = Boolean(import.meta.env.VITE_TENANT_ID);
 
@@ -46,9 +120,21 @@ export const TENANT_IS_PINNED = Boolean(import.meta.env.VITE_TENANT_ID);
  * and then reload rather than simply continuing.
  */
 export function tenantId(): string {
-  return (import.meta.env.VITE_TENANT_ID as string | undefined)
-    || localStorage.getItem(TENANT_STORAGE_KEY)
-    || DEFAULT_TENANT_ID;
+  const pinned = import.meta.env.VITE_TENANT_ID as string | undefined;
+  if (pinned) return pinned;
+  const stored = localStorage.getItem(TENANT_STORAGE_KEY);
+  if (stored) return stored;
+  // Boot default only: deliberately NOT written back via rememberTenant('') —
+  // clearing stays cleared, and the next call re-evaluates rather than reading
+  // a default that was injected into storage.
+  if (!warnedBootDefaultTenant) {
+    warnedBootDefaultTenant = true;
+    console.warn(
+      '[dypos] no tenant selected — using boot default '
+      + `'${DEFAULT_TENANT_ID}'. Real isolation comes from the server token, not this header.`,
+    );
+  }
+  return DEFAULT_TENANT_ID;
 }
 
 /**
@@ -91,14 +177,14 @@ export class ApiError extends Error {
 async function request<T>(
   path: string,
   init?: RequestInit,
-  opts?: { actor?: string },
+  opts?: { actor?: string; tenant?: boolean },
 ): Promise<T> {
   let res: Response;
 
   // Identity travels as the signed session token issued by /api/auth/login.
   // The old `x-dypos-user` header was a name the client chose, so it could be
   // edited to impersonate another operator; the server now rejects it outright.
-  const token = opts?.actor ?? sessionStorage.getItem('dypos_token') ?? '';
+  const token = opts?.actor ?? getToken();
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -112,7 +198,7 @@ async function request<T>(
      * it keeps the request honest and lets the server answer 403 instead of
      * quietly serving a different scope than the operator selected.
      */
-    'x-tenant-id': tenantId(),
+    ...(opts?.tenant === false ? {} : { 'x-tenant-id': tenantId() }),
     ...(init?.headers as Record<string, string> | undefined),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -132,6 +218,11 @@ async function request<T>(
   }
 
   if (!res.ok) {
+    // Central 401 handler: any 401 outside the login call itself means the session is dead — wipe token+snapshot once here and notify, so no screen handles expiry on its own.
+    if (res.status === 401 && !path.startsWith('/api/auth/login')) {
+      clearAuthStorage();
+      notifyUnauthorized();
+    }
     /*
      * ══ THE CLIENT ALSO REFUSES TO ECHO THE SERVER ══════════════════════
      * This threw `json.error` verbatim.
@@ -169,10 +260,13 @@ async function request<T>(
   return json as T;
 }
 
-export const apiGet = <T>(path: string, opts?: { actor?: string }) =>
+export const apiGet = <T>(path: string, opts?: { actor?: string; tenant?: boolean }) =>
   request<T>(path, undefined, opts);
-export const apiPost = <T>(path: string, body: unknown) =>
-  request<T>(path, { method: 'POST', body: JSON.stringify(body) });
+export const apiPost = <T>(
+  path: string,
+  body: unknown,
+  opts?: { actor?: string; tenant?: boolean },
+) => request<T>(path, { method: 'POST', body: JSON.stringify(body) }, opts);
 export const apiPut = <T>(path: string, body: unknown) =>
   request<T>(path, { method: 'PUT', body: JSON.stringify(body) });
 export const apiPatch = <T>(path: string, body: unknown) =>

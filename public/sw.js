@@ -1,13 +1,15 @@
 /**
  * ══ CACHE NAME IS A VERSION ════════════════════════════════════════════════
- * Bumped to v4 together with the caching strategy below.
+ * Bumped to v6 because `install` strategy changed (shell best-effort + strict
+ * manifest via `cache.addAll`): a single missing font no longer fails install,
+ * but an incomplete hashed bundle set still must not activate.
  *
  * It has to be bumped whenever the strategy changes, because `activate` deletes
  * every cache whose name is not this one. Without that, a till that has been
  * open since the previous release keeps serving the shell from the OLD
  * strategy's cache indefinitely.
  */
-const CACHE_NAME = 'dypos-offline-v4.0';
+const CACHE_NAME = 'dypos-offline-v6.0';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -54,13 +56,40 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
-        console.warn('Pre-caching non-fatal warning:', err);
-      });
-    })
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+
+    // Best-effort put: one failed origin must not fail the whole install.
+    const cacheOne = async (asset) => {
+      try {
+        await cache.add(asset);
+      } catch (err) {
+        console.warn(`[sw] precache skipped: ${asset}`, err);
+      }
+    };
+
+    // Shell first, each entry independent so a missing font/icon still installs.
+    for (const asset of ASSETS_TO_CACHE) {
+      await cacheOne(asset);
+    }
+
+    // Manifest is required: every hashed bundle must be cached before activation.
+    // The shell above is best-effort (a missing font must not block install),
+    // but the build manifest itself is strict — an incomplete bundle set that
+    // still activates is a till missing its own code, which is worse than a
+    // failed install that retries on next launch.
+    const manifestResponse = await fetch('/dypos-precache.json', { cache: 'no-store' });
+    if (!manifestResponse.ok) {
+      throw new Error(`Offline asset manifest unavailable (${manifestResponse.status})`);
+    }
+    const assets = await manifestResponse.json();
+    if (!Array.isArray(assets) || assets.some((asset) => (
+      typeof asset !== 'string' || !asset.startsWith('/assets/')
+    ))) {
+      throw new Error('Offline asset manifest is invalid');
+    }
+    await cache.addAll(assets);
+  })());
   self.skipWaiting();
 });
 

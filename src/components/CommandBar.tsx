@@ -3,10 +3,11 @@ import { useAuthz } from '../contexts/AuthzContext';
 import { useData } from '../contexts/DataContext';
 import { useEntitlement } from '../contexts/EntitlementContext';
 import { apiGet, apiPost } from '../services/dyposApi';
+import { offlineSyncService, type OfflineSyncState } from '../services/offlineSyncService';
 import { CURRENCY_SYMBOLS } from '../erp/money';
 import {
   ShieldCheck, ChevronDown, Coins, Ruler, CalendarClock, RefreshCw, Lock,
-  GitBranch, LogOut, Loader2,
+  GitBranch, LogOut, Loader2, X, AlertTriangle, Info, CheckCircle2,
 } from 'lucide-react';
 
 /**
@@ -42,7 +43,7 @@ export interface CommandBarProps {
 export const CommandBar: React.FC<CommandBarProps> = ({ onSignOut, onNavigate }) => {
   const { can } = useAuthz();
   const { reload, selectedBranch } = useData();
-  const { tenant, plan, branches } = useEntitlement();
+  const { tenant, plan, branches, verificationFailed } = useEntitlement();
 
   const [currencies, setCurrencies] = useState<any[]>([]);
   const [base, setBase] = useState('SAR');
@@ -52,6 +53,12 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onSignOut, onNavigate })
   const [roleMenu, setRoleMenu] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  // Individually-dismissed MessageStrip rows (the `notice` source above is kept;
+  // it now feeds the strip instead of rendering as a separate inline chip).
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const [syncState, setSyncState] = useState<OfflineSyncState>(() => offlineSyncService.getState());
+  const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
 
   const currentPeriod = new Date().toISOString().slice(0, 7);
 
@@ -80,6 +87,109 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onSignOut, onNavigate })
     return () => { alive = false; };
   }, [currentPeriod]);
 
+  // The strip reads the same queue the status bar and the toast read — no new
+  // fetch, just the shared subscription.
+  useEffect(() => offlineSyncService.subscribe(setSyncState), []);
+
+  // Mirrors the update the floating UpdateNotice offers, so the strip can carry
+  // it as a row with the same "apply on the operator's terms" action.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    let alive = true;
+    navigator.serviceWorker.ready.then((reg) => {
+      if (alive && reg.waiting && !updateDismissed) setWaitingWorker(reg.waiting);
+    }).catch(() => { /* no worker; nothing to update */ });
+    const onReady = () => {
+      navigator.serviceWorker.ready.then((reg) => {
+        if (reg.waiting) { setUpdateDismissed(false); setWaitingWorker(reg.waiting); }
+      }).catch(() => { /* ignore */ });
+    };
+    window.addEventListener('dypos:update-ready', onReady);
+    return () => { alive = false; window.removeEventListener('dypos:update-ready', onReady); };
+  }, [updateDismissed]);
+
+  const applyUpdate = () => {
+    if (!waitingWorker || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
+    waitingWorker.postMessage({ type: 'SKIP_WAITING' });
+  };
+
+  /** Flushes the offline queue from the strip — the service call, not a fetch. */
+  const syncNowFromStrip = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await offlineSyncService.syncNow();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const dismissRow = (id: string) =>
+    setDismissed((prev) => (prev.includes(id) ? prev : [...prev, id]));
+
+  const messages: StripMessage[] = [];
+  if (notice && !dismissed.includes('notice')) {
+    messages.push({
+      id: 'notice',
+      severity: notice.tone === 'error' ? 'critical' : 'success',
+      text: notice.text,
+      dismiss: () => dismissRow('notice'),
+    });
+  }
+  if (!syncState.isOnline && !dismissed.includes('offline')) {
+    messages.push({
+      id: 'offline',
+      severity: 'critical',
+      text: syncState.pendingCount > 0
+        ? `انقطع الاتصال — ${syncState.pendingCount} عملية محفوظة محلياً وستُزامَن عند عودة الشبكة`
+        : 'انقطع الاتصال — العمل مستمر محلياً وسيُحفظ كل شيء على الجهاز',
+      dismiss: () => dismissRow('offline'),
+    });
+  }
+  if (syncState.notification?.type === 'error') {
+    messages.push({
+      id: `sync-${syncState.notification.id}`,
+      severity: 'critical',
+      text: `${syncState.notification.title} — ${syncState.notification.message}`,
+      dismiss: () => offlineSyncService.dismissNotification(),
+    });
+  }
+  if (syncState.isOnline && syncState.pendingCount > 0 && !dismissed.includes('scheduled')) {
+    messages.push({
+      id: 'scheduled',
+      severity: 'info',
+      text: `${syncState.pendingCount} عملية بانتظار المزامنة مع السحابة`,
+      actionLabel: 'مزامنة الآن',
+      onAction: () => void syncNowFromStrip(),
+      dismiss: () => dismissRow('scheduled'),
+    });
+  }
+  if (waitingWorker && !updateDismissed) {
+    messages.push({
+      id: 'update',
+      severity: 'info',
+      text: 'يتوفّر تحديث جديد — لن يُطبَّق تلقائياً حتى تنتهي من العملية الحالية',
+      actionLabel: 'تطبيق الآن',
+      onAction: applyUpdate,
+      dismiss: () => setUpdateDismissed(true),
+    });
+  }
+  if (verificationFailed && !dismissed.includes('verification')) {
+    messages.push({
+      id: 'verification',
+      severity: 'warning',
+      text: 'لم يُتحقق من اشتراك المؤسسة هذه الجلسة؛ العرض مقتصر على افتراضات القطاع',
+      dismiss: () => dismissRow('verification'),
+    });
+  }
+
+  const periodLoading = period === null;
   const periodClosed = period?.status === 'closed';
   const rate = currencies.find((c) => c.code === currency)?.exchange_rate ?? 1;
 
@@ -121,7 +231,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onSignOut, onNavigate })
       <div className="px-6 h-14 flex items-center justify-between gap-4">
         <div className="flex items-center gap-4 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 shrink-0">
-            <span className="w-6 h-6 rounded bg-slate-900 text-white grid place-items-center text-[11px] font-bold">
+            <span className="w-6 h-6 rounded bg-ink text-canvas grid place-items-center text-[11px] font-bold">
               D
             </span>
             <div className="leading-tight min-w-0">
@@ -181,42 +291,44 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onSignOut, onNavigate })
             </span>
           </div>
 
-          {/* Posting period with its lock state */}
+          {/* Posting period with its lock state. While the status has not been
+              read yet the strip shows an explicit loading mark — never a false
+              "open". */}
           <div
+            role="status"
             className={`flex items-center gap-1.5 shrink-0 px-2 py-1 rounded-md border ${
-              periodClosed
-                ? 'border-rose-200 bg-rose-50 text-rose-700'
-                : 'border-brand-200 bg-brand-50 text-brand-700'
+              periodLoading
+                ? 'border-hairline bg-subtle text-muted'
+                : periodClosed
+                ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200'
+                : 'border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200'
             }`}
-            title={periodClosed ? 'الفترة مغلقة — لا يمكن الترحيل' : 'الفترة مفتوحة للترحيل'}
+            title={
+              periodLoading
+                ? 'جارٍ قراءة حالة الفترة'
+                : periodClosed ? 'الفترة مغلقة — لا يمكن الترحيل' : 'الفترة مفتوحة للترحيل'
+            }
           >
-            {periodClosed ? <Lock size={11} /> : <CalendarClock size={11} />}
-            <span className="text-2xs font-medium">
-              {currentPeriod} · {periodClosed ? 'مغلقة' : 'مفتوحة'}
+            {periodLoading ? (
+              <CalendarClock size={11} className="animate-pulse" aria-hidden="true" />
+            ) : periodClosed ? (
+              <Lock size={11} aria-hidden="true" />
+            ) : (
+              <CalendarClock size={11} aria-hidden="true" />
+            )}
+            <span className="text-2xs font-medium text-numeric">
+              {currentPeriod} · {periodLoading ? '…' : periodClosed ? 'مغلقة' : 'مفتوحة'}
             </span>
-            {can('period.close') && !periodClosed && (
+            {can('period.close') && !periodClosed && !periodLoading && (
               <button
                 onClick={closePeriod}
                 disabled={busy}
-                className="text-2xs underline underline-offset-2 hover:no-underline disabled:opacity-50"
+                className="text-2xs underline underline-offset-2 hover:no-underline disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand rounded"
               >
                 {busy ? '…' : 'إغلاق'}
               </button>
             )}
           </div>
-
-          {notice && (
-            <span
-              role={notice.tone === 'error' ? 'alert' : 'status'}
-              className={`shrink-0 px-2 py-1 rounded-md border text-2xs ${
-                notice.tone === 'error'
-                  ? 'border-rose-200 bg-rose-50 text-rose-700'
-                  : 'border-brand-200 bg-brand-50 text-brand-700'
-              }`}
-            >
-              {notice.text}
-            </span>
-          )}
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -240,11 +352,105 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onSignOut, onNavigate })
       </div>
 
       <Ribbon periodClosed={periodClosed} onNavigate={onNavigate} />
+
+      <MessageStrip messages={messages} />
     </div>
   );
 };
 
 const Sep = () => <span className="w-px h-5 bg-hairline mx-1.5 shrink-0" />;
+
+/**
+ * One stacked shell message.
+ *
+ * `critical` (offline, sync errors, failed actions) is announced with
+ * `role="alert"`; everything else uses `role="status"` so a screen reader is
+ * informed without being interrupted mid-task.
+ */
+interface StripMessage {
+  id: string;
+  severity: 'critical' | 'warning' | 'info' | 'success';
+  text: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  dismiss: () => void;
+}
+
+/**
+ * The unified message strip.
+ *
+ * It sits under both CommandBar rows and stacks the four shell signals that
+ * used to compete for one inline slot (or float over content): the transient
+ * action notice, the offline/queue state, the pending service-worker update,
+ * and the unverified-subscription warning. Each row carries a severity icon,
+ * the text, an optional action, and its own close button.
+ */
+const MessageStrip: React.FC<{ messages: StripMessage[] }> = ({ messages }) => {
+  if (messages.length === 0) return null;
+
+  const iconFor = (severity: StripMessage['severity']) => {
+    switch (severity) {
+      case 'critical':
+      case 'warning':
+        return AlertTriangle;
+      case 'success':
+        return CheckCircle2;
+      case 'info':
+      default:
+        return Info;
+    }
+  };
+
+  const toneFor = (severity: StripMessage['severity']) => {
+    switch (severity) {
+      case 'critical':
+        return 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200';
+      case 'warning':
+        return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200';
+      case 'success':
+        return 'border-brand-200 bg-brand-50 text-brand-800 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200';
+      case 'info':
+      default:
+        return 'border-hairline bg-surface text-ink';
+    }
+  };
+
+  return (
+    <div className="px-6 py-1.5 space-y-1.5 border-t border-hairline bg-subtle/40" aria-label="رسائل النظام">
+      {messages.map((m) => {
+        const Icon = iconFor(m.severity);
+        const critical = m.severity === 'critical';
+        return (
+          <div
+            key={m.id}
+            role={critical ? 'alert' : 'status'}
+            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-2xs ${toneFor(m.severity)}`}
+          >
+            <Icon size={13} className="shrink-0" aria-hidden="true" />
+            <p className="flex-1 min-w-0 leading-relaxed">{m.text}</p>
+            {m.actionLabel && m.onAction && (
+              <button
+                type="button"
+                onClick={m.onAction}
+                className="shrink-0 px-2 py-0.5 rounded-md font-semibold underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                {m.actionLabel}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={m.dismiss}
+              aria-label="إغلاق الرسالة"
+              className="shrink-0 p-1 rounded-md opacity-70 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            >
+              <X size={12} aria-hidden="true" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 /**
  * Action ribbon.
@@ -320,9 +526,9 @@ const RibbonAction: React.FC<{
       onClick={onClick}
       disabled={disabled}
       title={disabled ? 'غير متاح — الفترة مغلقة' : `${label} — الشاشة التي تنفّذ العملية`}
-      className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
+      className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand focus-visible:ring-2 focus-visible:ring-brand/40 ${
         primary
-          ? 'bg-slate-900 text-white hover:bg-slate-800'
+          ? 'bg-ink text-canvas hover:opacity-90'
           : 'text-ink hover:bg-subtle'
       }`}
     >
@@ -348,19 +554,42 @@ const IdentityMenu: React.FC<{
   branchCount?: number;
 }> = ({ open, setOpen, onSignOut, branchCount = 0 }) => {
   const { principal, isAdmin, loading } = useAuthz();
+  const triggerRef = React.useRef<HTMLButtonElement | null>(null);
+
+  // Escape closes the panel and hands focus back to the chip that opened it,
+  // so a keyboard operator is not dropped into the page body.
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, setOpen]);
+
   if (!principal) return null;
 
   const roleName = principal.roles.map((r) => r.name).join(' · ') || 'بلا أدوار';
 
+  const closeAndRefocus = () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
   return (
     <div className="relative shrink-0">
       <button
+        ref={triggerRef}
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-subtle transition-colors"
+        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-subtle transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       >
-        <span className="w-6 h-6 rounded-full bg-slate-900 text-white grid place-items-center text-2xs font-semibold">
+        <span className="w-6 h-6 rounded-full bg-ink text-canvas grid place-items-center text-2xs font-semibold">
           {principal.name.trim()[0]}
         </span>
         <div className="text-right leading-tight hidden sm:block">
@@ -373,8 +602,11 @@ const IdentityMenu: React.FC<{
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 w-72 surface-card elev-2 z-50 overflow-hidden">
-          <div className="px-4 py-3 border-b border-hairline">
+        <div
+          role="menu"
+          aria-label="هوية المستخدم وأدواره"
+          className="absolute left-0 top-full mt-1 w-72 surface-card elev-2 z-50 overflow-hidden"
+        >          <div className="px-4 py-3 border-b border-hairline">
             <p className="text-xs font-semibold text-ink">
               {principal.name} · {principal.username}
             </p>
@@ -394,7 +626,7 @@ const IdentityMenu: React.FC<{
               <div key={r.id} className="flex items-center justify-between gap-2">
                 <span className="text-2xs text-ink">{r.name}</span>
                 {r.sodGroup && (
-                  <span className="text-[9px] px-1.5 py-px rounded bg-amber-50 text-amber-700 border border-amber-200">
+                  <span className="text-[9px] px-1.5 py-px rounded bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800">
                     فصل مهام: {r.sodGroup}
                   </span>
                 )}
@@ -431,15 +663,15 @@ const IdentityMenu: React.FC<{
             <button
               onClick={onSignOut}
               disabled={!onSignOut}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-hairline text-2xs text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-hairline text-2xs text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors dark:text-rose-400 dark:hover:bg-rose-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               title="إنهاء الجلسة والعودة لشاشة الدخول"
             >
               <LogOut size={12} />
               تسجيل الخروج
             </button>
             <button
-              onClick={() => setOpen(false)}
-              className="px-2 py-1.5 text-2xs text-muted hover:text-ink"
+              onClick={closeAndRefocus}
+              className="px-2 py-1.5 text-2xs text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand rounded"
             >
               إغلاق
             </button>

@@ -1,6 +1,6 @@
 import type { Express } from 'express';
 import { pool } from './neonDb.js';
-import { asyncRoute, DEFAULT_TENANT, fail } from './apiHelpers.js';
+import { asyncRoute, fail } from './apiHelpers.js';
 import { attachPrincipal, requirePermission } from './authz.js';
 import {
   ALL_SCREEN_IDS, capabilitiesForProfile, resolveScreenEntitlement,
@@ -40,6 +40,7 @@ export function registerEntitlementRoutes(app: Express) {
     attachPrincipal,
     asyncRoute(async (req, res) => {
       const p = req.principal!;
+      const tenantId = p.tenantId;
 
       const [tenantRes, capsRes, catalogueRes, branchesRes] = await Promise.all([
         pool.query(
@@ -47,7 +48,7 @@ export function registerEntitlementRoutes(app: Express) {
                   industry_profile, base_currency, country_code,
                   commercial_reg, tax_number
            FROM dypos.tenants WHERE id = $1`,
-          [DEFAULT_TENANT],
+          [tenantId],
         ),
         pool.query(
           `SELECT tc.capability_id, tc.is_enabled, c.name_ar, c.name_en, c.category
@@ -55,7 +56,7 @@ export function registerEntitlementRoutes(app: Express) {
            LEFT JOIN dypos.capabilities c ON c.id = tc.capability_id
            WHERE tc.tenant_id = $1 AND tc.is_enabled = TRUE
            ORDER BY tc.capability_id`,
-          [DEFAULT_TENANT],
+          [tenantId],
         ),
         pool.query(
           `SELECT id, name_ar, name_en, category FROM dypos.capabilities
@@ -66,7 +67,7 @@ export function registerEntitlementRoutes(app: Express) {
            FROM dypos.branches
            WHERE tenant_id = $1 AND is_active = TRUE
            ORDER BY name ASC`,
-          [DEFAULT_TENANT],
+          [tenantId],
         ),
       ]);
 
@@ -163,6 +164,7 @@ export function registerTenantProfileRoutes(app: Express) {
     attachPrincipal,
     requirePermission('settings.manage'),
     asyncRoute(async (req, res) => {
+      const tenantId = req.principal!.tenantId;
       const profileId = String(req.body?.profileId || '');
       if (!industryProfiles.some((p) => p.id === profileId)) {
         return fail(res, 400, `قطاع غير معروف: ${profileId || '(فارغ)'}`);
@@ -175,7 +177,7 @@ export function registerTenantProfileRoutes(app: Express) {
         await client.query(
           `UPDATE dypos.tenants SET industry_profile = $2, updated_at = NOW()
            WHERE id = $1`,
-          [DEFAULT_TENANT, profileId],
+          [tenantId, profileId],
         );
 
         // Re-seed the grants from the sector's derived capability list. Only
@@ -189,7 +191,7 @@ export function registerTenantProfileRoutes(app: Express) {
            FROM dypos.capabilities c
            ON CONFLICT (tenant_id, capability_id)
              DO UPDATE SET is_enabled = EXCLUDED.is_enabled`,
-          [DEFAULT_TENANT, derived],
+          [tenantId, derived],
         );
 
         await client.query('COMMIT');

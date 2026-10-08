@@ -145,7 +145,10 @@ export const generateInvoicePDF = (
 /**
  * Utility to generate full Financial & Analytics PDF Summary Report
  */
-export const generateSummaryReportPDF = (transactions: Transaction[]) => {
+export const generateSummaryReportPDF = (
+  transactions: Transaction[],
+  identity?: ResolvedIdentity,
+) => {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -165,7 +168,8 @@ export const generateSummaryReportPDF = (transactions: Transaction[]) => {
   doc.text('DyPOS Financial Performance Report', 14, 20);
   doc.setFontSize(10);
   doc.setTextColor(52, 211, 153);
-  doc.text(`Smart Ports Software | Subscriber: Royal Global Enterprise | Date: ${new Date().toLocaleDateString()}`, 14, 28);
+  const subscriber = identity?.ownerCompany || UNRESOLVED_LABEL;
+  doc.text(`Subscriber: ${subscriber} | Date: ${new Date().toLocaleDateString()}`, 14, 28);
 
   // Executive Summary Metrics
   doc.setFillColor(248, 250, 252);

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, lazy, Suspense, useEffect } from 'react';
 import { IndustryProvider } from './contexts/IndustryContext';
 import { AuthzProvider } from './contexts/AuthzContext';
-import { EntitlementProvider, useEntitlement } from './contexts/EntitlementContext';
+import { EntitlementProvider, useEntitlement, type EntitlementAuthority } from './contexts/EntitlementContext';
 import { ToolsProvider } from './contexts/ToolsContext';
 import { offlineSyncService, type OfflineSyncState } from './services/offlineSyncService';
 import { attachOfflineSyncTransport } from './services/offlineSyncTransport';
@@ -12,6 +12,8 @@ import UpdateNotice from './components/UpdateNotice';
 import { MainLayout } from './components/MainLayout';
 import { Dashboard } from './components/Dashboard';
 import { ShiftOpeningDialog } from './components/ShiftOpeningDialog';
+import { readSignedIdentity } from './services/referenceSnapshot';
+import { StandardProgress } from './components/ui/Primitives';
 
 /*
  * ══ WHY THIS IS REGISTERED HERE ═══════════════════════════════════════════
@@ -86,18 +88,32 @@ import { SerialsView } from './components/SerialsView';
 import { CommissionsView } from './components/CommissionsView';
 import { DeliveryView } from './components/DeliveryView';
 import { OfflineSyncToast } from './components/OfflineSyncToast';
-import { BottomStatusBar } from './components/BottomStatusBar';
-import { apiGet, apiPost } from './services/dyposApi';
+import { apiGet, apiPost, ApiError, TOKEN_KEY, SESSION_KEY, onUnauthorized } from './services/dyposApi';
 import { DataProvider, useData } from './contexts/DataContext';
+// Type-only: the draft shape the inventory form submits. Erased at compile
+// time, so the code-split InventoryView bundle is unaffected.
+import type { ProductDraft } from './components/InventoryView';
 import type {
   Product,
   Customer,
   Transaction,
   CartItem,
   Branch,
+  JournalEntry,
+  PurchaseOrder,
 } from './types';
 
-function AppContent({ onSignOut }: { onSignOut: () => void }) {
+function AppContent({
+  onSignOut,
+  branchSource,
+  snapshotFetchedAt,
+  referenceError,
+}: {
+  onSignOut: () => void;
+  branchSource: EntitlementAuthority;
+  snapshotFetchedAt: string | null;
+  referenceError: string;
+}) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const { tenant } = useEntitlement();
 
@@ -134,6 +150,15 @@ function AppContent({ onSignOut }: { onSignOut: () => void }) {
 
   /** Surfaced when the server refuses a sale; cleared on the next attempt. */
   const [checkoutError, setCheckoutError] = useState('');
+
+  /**
+   * The Arabic reason the last catalogue/ledger create was refused.
+   *
+   * Kept here so the shell has one honest record of a failed write, alongside
+   * the audit entry below. The screen that initiated the write re-thrown the
+   * error renders the same message inline, next to its submit button.
+   */
+  const [catalogError, setCatalogError] = useState('');
 
   // ---- POS cart ----
   const handleAddToCart = useCallback((product: Product) => {
@@ -256,6 +281,51 @@ function AppContent({ onSignOut }: { onSignOut: () => void }) {
          */
         return tx;
       } catch (err: any) {
+        const transportOffline = !navigator.onLine || (err instanceof ApiError && err.status === 0);
+        if (transportOffline && selectedBranch && cart.length > 0) {
+          // A transport failure is not a business rejection: commit the sale to the
+          // tenant-scoped outbox and let the existing idempotent sync transport settle it.
+          const queuedPayload = {
+            branchId: selectedBranch.id,
+            subtotal: data.subtotal ?? 0,
+            tax: data.tax ?? 0,
+            discount: data.discount ?? 0,
+            total,
+            paymentMethod: data.paymentMethod ?? 'mada',
+            customerName: data.customerName ?? 'عميل نقدي',
+            cashierName: shift.cashierName,
+            items: lines,
+          };
+          const queueId = offlineSyncService.enqueue('transaction', `فاتورة ${selectedBranch.name}`, queuedPayload);
+          const localTx: Transaction = {
+            id: queueId,
+            invoiceNumber: `OFF-${Date.now()}`,
+            items: cart,
+            subtotal: data.subtotal ?? 0,
+            tax: data.tax ?? 0,
+            discount: data.discount ?? 0,
+            total,
+            paymentMethod: (data.paymentMethod as Transaction['paymentMethod']) ?? 'mada',
+            customerName: data.customerName ?? 'عميل نقدي',
+            cashierName: shift.cashierName,
+            timestamp: new Date().toISOString(),
+            branchId: selectedBranch.id,
+            status: 'pending_sync',
+          };
+          insertTransaction(localTx);
+          setShift((current) => ({
+            ...current,
+            totalSales: current.totalSales + total,
+            transactionsCount: current.transactionsCount + 1,
+          }));
+          applyStock(Object.fromEntries(
+            cart.map((item) => [item.product.id, Math.max(0, item.product.stock - item.quantity)]),
+          ));
+          setCart([]);
+          pushAudit('حفظ بيع محلي', `فاتورة ${localTx.invoiceNumber} محفوظة محلياً بانتظار المزامنة`);
+          setCheckoutError('تم حفظ الفاتورة محلياً بأمان؛ ستتم مزامنتها تلقائياً عند عودة الاتصال.');
+          return localTx;
+        }
         pushAudit(
           'فشل إتمام البيع',
           err?.message ?? 'تعذّر حفظ الفاتورة على الخادم — تم الإبقاء على السلة',
@@ -264,20 +334,96 @@ function AppContent({ onSignOut }: { onSignOut: () => void }) {
         throw err;
       }
     },
-    [cart, transactions.length, shift.cashierName, selectedBranch?.id, pushAudit, insertTransaction, applyStock, setShift],
+    [cart, shift.cashierName, selectedBranch, pushAudit, insertTransaction, applyStock, setShift],
   );
 
   // ---- Catalog / CRM / HR / Accounting ----
   // These delegate to the shared provider rather than keeping a private copy:
   // a second copy is how the POS and the inventory screen drifted apart on how
   // many products existed.
-  const handleAddProduct = addProduct;
+  //
+  // The three CREATE handlers are real writes. The server allocates the row —
+  // and with it the barcode, the entry number and the PO number — so the
+  // client never invents an identifier and never keeps a row the server did
+  // not record. On failure the Arabic reason is kept in `catalogError`, an
+  // audit entry names what failed, and the error is RE-THROWN so the screen
+  // can keep its modal open (it renders the same message inline).
+  const handleAddProduct = async (p: ProductDraft): Promise<Product> => {
+    setCatalogError('');
+    try {
+      const res = await apiPost<{ item: Product }>('/api/db/products', {
+        name: p.name,
+        category: p.category,
+        price: p.price,
+        cost: p.cost,
+        stock: p.stock,
+        minStock: p.minStock,
+        unit: p.unit,
+        image: p.image,
+        // A product belongs to a branch. The form does not choose one, so the
+        // session's working branch is used — never a made-up id.
+        branchId: p.branchId || selectedBranch?.id || undefined,
+        // Empty means "allocate": the server answers with a real 13-digit
+        // EAN-13, and that value is what lands in the catalogue.
+        barcode: p.barcode || undefined,
+      });
+      addProduct(res.item);
+      return res.item;
+    } catch (err: any) {
+      const message = err?.message || 'تعذّر حفظ المنتج على الخادم — تحقق من الاتصال وحاول مرة أخرى';
+      setCatalogError(message);
+      pushAudit('فشل حفظ منتج', message);
+      throw err;
+    }
+  };
   const handleUpdateProduct = updateProduct;
   const handleDeleteProduct = removeProduct;
   const handleAddCustomer = addCustomer;
   const handleAddEmployee = addEmployee;
-  const handleAddJournalEntry = addJournalEntry;
-  const handleAddPurchaseOrder = addPurchaseOrder;
+  const handleAddJournalEntry = async (
+    e: Omit<JournalEntry, 'id' | 'entryNumber'>,
+  ): Promise<JournalEntry> => {
+    setCatalogError('');
+    try {
+      const res = await apiPost<{ item: JournalEntry }>('/api/db/journal-entries', {
+        description: e.description,
+        amount: e.amount,
+        date: e.date,
+        accountDebit: e.accountDebit,
+        accountCredit: e.accountCredit,
+        status: e.status,
+      });
+      addJournalEntry(res.item);
+      return res.item;
+    } catch (err: any) {
+      const message = err?.message || 'تعذّر ترحيل قيد اليومية على الخادم — تحقق من الاتصال وحاول مرة أخرى';
+      setCatalogError(message);
+      pushAudit('فشل حفظ قيد يومية', message);
+      throw err;
+    }
+  };
+  const handleAddPurchaseOrder = async (
+    po: Omit<PurchaseOrder, 'id' | 'poNumber' | 'supplierName'>,
+  ): Promise<PurchaseOrder> => {
+    setCatalogError('');
+    try {
+      const res = await apiPost<{ item: PurchaseOrder }>('/api/db/purchase-orders', {
+        supplierId: po.supplierId,
+        // Always an array — the server totals the lines itself from this.
+        items: po.items,
+        totalAmount: po.totalAmount,
+        status: po.status,
+        orderDate: po.orderDate,
+      });
+      addPurchaseOrder(res.item);
+      return res.item;
+    } catch (err: any) {
+      const message = err?.message || 'تعذّر حفظ أمر الشراء على الخادم — تحقق من الاتصال وحاول مرة أخرى';
+      setCatalogError(message);
+      pushAudit('فشل حفظ أمر شراء', message);
+      throw err;
+    }
+  };
 
   /**
    * Opening a shift is now a real, counted event.
@@ -417,15 +563,33 @@ function AppContent({ onSignOut }: { onSignOut: () => void }) {
     }
   };
 
+  if (!selectedBranch) {
+    return (
+      <BranchSelectionGate
+        branches={branches}
+        source={branchSource}
+        snapshotFetchedAt={snapshotFetchedAt}
+        referenceError={referenceError}
+        dataStatus={dataStatus}
+        dataError={dataError}
+        onSelect={selectBranch}
+        onRefresh={reloadData}
+        onSignOut={onSignOut}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen">
       <div className="flex-1 min-h-0">
         <MainLayout activeTab={activeTab} setActiveTab={setActiveTab} onSignOut={onSignOut}>
           <Suspense
             fallback={
-              <div className="flex items-center justify-center gap-3 py-24 text-slate-400">
-                <span className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm">جارٍ تحميل الشاشة…</span>
+              <div className="flex min-h-[22rem] items-center justify-center p-6">
+                <StandardProgress
+                  label="جارٍ فتح مساحة العمل"
+                  detail="يتم تحميل الشاشة المطلوبة دون تعطيل العمليات الأخرى"
+                />
               </div>
             }
           >
@@ -433,19 +597,11 @@ function AppContent({ onSignOut }: { onSignOut: () => void }) {
           </Suspense>
         </MainLayout>
       </div>
-      <BottomStatusBar
-        shift={shift}
-        syncStatus={
-          sync.syncStatus === 'syncing'
-            ? 'syncing'
-            : (sync.pendingCount > 0 || !sync.isOnline) ? 'offline' : 'synced'
-        }
-        lastBackupTime={sync.lastSyncTime}
-        pendingCount={sync.pendingCount}
-        branchLabel={selectedBranch ? selectedBranch.name : undefined}
-        baseCurrency={tenant?.baseCurrency || 'SAR'}
-        onOpenAppInstaller={() => setActiveTab('settings')}
-      />
+      {/*
+        The terminal health line now lives inside MainLayout (fed directly
+        from the session and the offline queue — no defaulted props), so the
+        shell renders exactly one status bar.
+      */}
       {/*
         The counted opening float. Prompts on first entry into a closed shift,
         and is the ONLY path that can set `openingCash`. Dismissing it leaves
@@ -490,6 +646,196 @@ interface LoginSession {
    * shift's opening figure, which is exactly how a variance disappears.
    */
 }
+
+const AuthenticatedWorkspace: React.FC<{
+  session: LoginSession;
+  onSignOut: () => void;
+}> = ({ session, onSignOut }) => {
+  const { branches, authority, snapshotFetchedAt, error, refresh } = useEntitlement();
+  const identity = readSignedIdentity();
+
+  if (!identity) {
+    return (
+      <div role="alert" className="min-h-screen grid place-items-center p-6 text-center">
+        <div className="max-w-md space-y-3">
+          <h1 className="font-semibold">تعذّر التحقق من هوية المؤسسة</h1>
+          <p className="text-sm text-slate-500">انتهت الجلسة أو تعذّر استعادتها. سجّل الدخول مجددًا.</p>
+          <button type="button" onClick={onSignOut} className="px-4 py-2 rounded-lg bg-slate-900 text-white">
+            تسجيل الخروج
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const referenceBranches: Branch[] = branches
+    .filter((branch) => branch.allowed)
+    .map((branch) => ({ ...branch, manager: branch.manager || '' }));
+
+  return (
+    <DataProvider
+      operator={{ username: session.user.username, name: session.user.name, role: session.user.role }}
+      referenceBranches={referenceBranches}
+      tenantId={identity.tenantId}
+      initialBranchId={session.branch?.id}
+    >
+      <AppContent
+        onSignOut={onSignOut}
+        branchSource={authority}
+        snapshotFetchedAt={snapshotFetchedAt}
+        referenceError={error}
+      />
+      <BranchRefresh refresh={refresh} />
+    </DataProvider>
+  );
+};
+
+const BranchRefresh: React.FC<{ refresh: () => void }> = ({ refresh }) => {
+  useEffect(() => {
+    const retry = () => { if (navigator.onLine) refresh(); };
+    window.addEventListener('online', retry);
+    return () => window.removeEventListener('online', retry);
+  }, [refresh]);
+  return null;
+};
+
+const BranchSelectionGate: React.FC<{
+  branches: Branch[];
+  source: EntitlementAuthority;
+  snapshotFetchedAt: string | null;
+  referenceError: string;
+  dataStatus: string;
+  dataError: string;
+  onSelect: (branch: Branch) => void;
+  onRefresh: () => Promise<void>;
+  onSignOut: () => void;
+}> = ({
+  branches, source, snapshotFetchedAt, referenceError, dataStatus, dataError,
+  onSelect, onRefresh, onSignOut,
+}) => {
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [name, setName] = useState('');
+  const [city, setCity] = useState('');
+  const [formError, setFormError] = useState('');
+
+  const createBranch = async () => {
+    if (!name.trim()) { setFormError('اكتب اسم الفرع أولاً'); return; }
+    setBusy(true);
+    setFormError('');
+    try {
+      const res = await apiPost<{ item: Branch }>('/api/db/branches', {
+        name: name.trim(), city: city.trim(), address: '', phone: '',
+      });
+      if (res.item) {
+        try {
+          localStorage.setItem('dypos_branch', res.item.id);
+          sessionStorage.setItem('dypos_branch', res.item.id);
+        } catch { /* storage optional */ }
+        window.dispatchEvent(new CustomEvent('dypos:branch-changed'));
+        await onRefresh();
+      }
+    } catch (err: any) {
+      setFormError(err?.message || 'تعذّر إنشاء الفرع حالياً');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+  <main className="min-h-screen grid place-items-center bg-canvas text-ink p-4" dir="rtl">
+    <section className="w-full max-w-xl bg-surface border border-hairline rounded-xl p-5 sm:p-7 space-y-5" aria-labelledby="branch-selection-title">
+      <header>
+        <p className="text-xs text-muted">DyPOS · مساحة العمل</p>
+        <h1 id="branch-selection-title" className="text-xl font-semibold mt-1">اختر فرع العمل</h1>
+        <p className="text-sm text-muted mt-2 leading-relaxed">
+          لا نفتح المبيعات أو الوردية قبل تحديد فرع حقيقي تابع لمؤسستك.
+        </p>
+      </header>
+
+      {source === 'client' && (
+        <div role="status" className="border border-amber-300 bg-amber-50 text-amber-900 rounded-lg p-3 text-sm">
+          تعمل من نسخة محلية للقراءة فقط
+          <span className="block text-xs mt-1">
+            آخر مزامنة مع الخادم: {snapshotFetchedAt
+              ? new Date(snapshotFetchedAt).toLocaleString('ar-SA')
+              : 'غير معروفة'}
+          </span>
+          <span className="block text-xs mt-1">أي كتابة تتطلب اتصالًا بالخادم؛ لا تُنشأ فروع محليًا.</span>
+        </div>
+      )}
+
+      {source === 'local' && referenceError && (
+        <div role="alert" className="border border-rose-300 bg-rose-50 text-rose-800 rounded-lg p-3 text-sm">
+          لا توجد نسخة موثقة للفروع على هذا الجهاز. اتصل بالشبكة لإكمال تحديث بيانات المؤسسة.
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {branches.length > 0 && (
+          <div className="space-y-2" role="list" aria-label="الفروع المسموح بها">
+            {branches.map((branch) => (
+              <button
+                key={branch.id}
+                type="button"
+                onClick={() => onSelect(branch)}
+                className="w-full text-right border border-hairline rounded-lg px-4 py-3 hover:border-brand hover:bg-subtle focus-visible:outline-2 focus-visible:outline-brand"
+              >
+                <span className="block font-medium">{branch.name}</span>
+                {branch.city && <span className="block text-xs text-muted mt-1">{branch.city}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+      {dataStatus === 'loading' && branches.length === 0 ? (
+        <div className="py-8 flex justify-center">
+          <StandardProgress
+            label="جارٍ التحقق من فروع المؤسسة"
+            detail="لن يتم إنشاء فرع افتراضي؛ ننتظر الإجابة الموثقة من الخادم"
+          />
+        </div>
+      ) : branches.length === 0 && (
+          <div className="rounded-xl border border-brand-200 bg-brand-50 p-4 text-brand-900">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold">لا يوجد فرع مسجل بعد</p>
+                <p className="mt-1 text-xs">لن نخترع فرعاً افتراضياً. أضف الفرع الحقيقي ثم واصل إلى الشاشة الرئيسية.</p>
+              </div>
+              <button type="button" onClick={() => setAdding((value) => !value)} className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-bold text-white">
+                {adding ? 'إغلاق' : 'إضافة فرع'}
+              </button>
+            </div>
+            {adding && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <input value={name} onChange={(event) => setName(event.target.value)} placeholder="اسم الفرع" className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm" autoFocus />
+                <input value={city} onChange={(event) => setCity(event.target.value)} placeholder="المدينة (اختياري)" className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm" />
+                <button type="button" onClick={() => void createBranch()} disabled={busy} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50 sm:col-span-2">
+                  {busy ? 'جارٍ إنشاء الفرع…' : 'حفظ الفرع والمتابعة'}
+                </button>
+                {formError && <p className="text-xs text-rose-700 sm:col-span-2" role="alert">{formError}</p>}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {dataStatus === 'error' && dataError && (
+        <p className="text-xs text-amber-700">مصدر دليل الفروع مستقل عن بقية بيانات التشغيل؛ {dataError}</p>
+      )}
+
+      <footer className="flex items-center justify-between gap-3 border-t border-hairline pt-4">
+        <button type="button" onClick={() => void onRefresh()} className="px-3 py-2 rounded-lg border border-hairline text-sm hover:bg-subtle">
+          تحديث البيانات
+        </button>
+        <button type="button" onClick={onSignOut} className="px-3 py-2 rounded-lg text-sm text-rose-700 hover:bg-rose-50">
+          تسجيل الخروج
+        </button>
+      </footer>
+    </section>
+  </main>
+  );
+};
 
 /**
  * Shown when the session has no branch to work in.
@@ -536,45 +882,28 @@ const NoBranchNotice: React.FC<{
  * single place the rule is enforced, so no screen can bypass it.
  */
 function App() {
+  // Session keys are canonical in `services/dyposApi` (SESSION_KEY/TOKEN_KEY):
+  // the dead `AuthContext` (`localStorage dypos_session_v1`) is NOT read here.
   const [session, setSession] = useState<LoginSession | null>(() => {
-    const raw = sessionStorage.getItem('dypos_session');
+    const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     try { return JSON.parse(raw) as LoginSession; } catch { return null; }
   });
 
-  const [checking, setChecking] = useState(() => Boolean(sessionStorage.getItem('dypos_session')));
+  const [checking, setChecking] = useState(() => Boolean(sessionStorage.getItem(SESSION_KEY)));
   const [release, setRelease] = useState<string>('');
-  const [branches, setBranches] = useState<Branch[]>([]);
-  /** Set when the branch list could not be loaded, so the UI can offer a retry. */
-  const [branchesError, setBranchesError] = useState('');
-
-  /**
-   * The sign-in form cannot render without at least one branch to select, so
-   * this is the one request that must not fail silently: a 401 here previously
-   * left the operator staring at an endless boot spinner with no way forward.
-   */
-  const loadBranches = useCallback(() => {
-    setBranchesError('');
-    apiGet<{ items: Branch[] }>('/api/db/branches')
-      .then((r) => setBranches(r.items || []))
-      .catch((e: any) => {
-        setBranches([]);
-        setBranchesError(e?.message || 'تعذّر تحميل قائمة الفروع');
-      });
-  }, []);
 
   useEffect(() => {
-    loadBranches();
     apiGet<{ current: { version: string } | null }>('/api/release')
       .then((r) => setRelease(r.current?.version ?? ''))
       .catch(() => setRelease(''));
-  }, [loadBranches]);
+  }, []);
 
   // A stored session with a pending rotation must not open the application.
   useEffect(() => {
     if (!checking) return;
     if (!session || session.mustChangePassword) {
-      sessionStorage.removeItem('dypos_session');
+      sessionStorage.removeItem(SESSION_KEY);
       setSession(null);
     }
     setChecking(false);
@@ -582,7 +911,7 @@ function App() {
 
   const onAuthenticated = (user: {
     name: string; role: string; username?: string;
-    branch: Branch; mustChangePassword?: boolean;
+    branch: Branch | null; mustChangePassword?: boolean;
   }) => {
     /*
      * No cash figure crosses this boundary.
@@ -600,18 +929,23 @@ function App() {
         role: user.role,
         username: user.username ?? user.name,
       },
-      branch: { id: user.branch.id, name: user.branch.name },
+      branch: user.branch ? { id: user.branch.id, name: user.branch.name } : null,
       mustChangePassword: Boolean(user.mustChangePassword),
     };
-    sessionStorage.setItem('dypos_session', JSON.stringify(s));
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
     setSession(s);
   };
 
   const signOut = () => {
-    sessionStorage.removeItem('dypos_session');
-    sessionStorage.removeItem('dypos_token');
+    sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
     setSession(null);
   };
+
+  // Central 401 consumer: `dyposApi` already wiped token+snapshot on any 401
+  // outside login — this single subscription drops the React session with it,
+  // returning the shell to LoginView without per-screen expiry handling.
+  useEffect(() => onUnauthorized(() => setSession(null)), []);
 
   if (checking) {
     return (
@@ -624,7 +958,6 @@ function App() {
     );
   }
 
-  // The login shell expects at least one branch to select from.
   if (!session) {
     return (
       <AuthzProvider>
@@ -632,11 +965,7 @@ function App() {
             device report is most valuable BEFORE a session exists — it is
             how an operator checks a terminal they cannot yet sign into. */}
         <ToolsProvider>
-          {branches.length > 0
-            ? <LoginView branches={branches} onLogin={onAuthenticated} />
-            : branchesError
-              ? <BranchLoadError message={branchesError} onRetry={loadBranches} />
-              : <Booting />}
+          <LoginView onLogin={onAuthenticated} />
         </ToolsProvider>
       </AuthzProvider>
     );
@@ -649,7 +978,7 @@ function App() {
           username={session.user.username}
           onDone={() => {
             const next = { ...session, mustChangePassword: false };
-            sessionStorage.setItem('dypos_session', JSON.stringify(next));
+            sessionStorage.setItem(SESSION_KEY, JSON.stringify(next));
             setSession(next);
           }}
           onSignOut={signOut}
@@ -667,15 +996,7 @@ function App() {
       <ToolsProvider>
         <IndustryProvider>
           <EntitlementProvider>
-            <DataProvider
-              operator={{
-                username: session.user.username,
-                name: session.user.name,
-                role: session.user.role,
-              }}
-            >
-              <AppContent onSignOut={signOut} />
-            </DataProvider>
+            <AuthenticatedWorkspace session={session} onSignOut={signOut} />
           </EntitlementProvider>
           <InstallPrompt />
           <UpdateNotice />
