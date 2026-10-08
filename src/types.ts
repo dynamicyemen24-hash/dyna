@@ -133,6 +133,8 @@ export interface AuditLogEntry {
 }
 
 export interface ShiftInfo {
+  /** Server-issued pos_sessions identifier when the shift is open. */
+  id?: string;
   isOpen: boolean;
   cashierName: string;
   startTime: string;
