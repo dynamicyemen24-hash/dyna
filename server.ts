@@ -383,6 +383,18 @@ export async function createApp(): Promise<Express> {
       }
 
       const id = b.id || makeId('inv');
+    const shiftId = typeof b.shiftId === 'string' ? b.shiftId.trim() : null;
+    if (shiftId) {
+      const shift = (await client.query(
+        `SELECT id FROM dypos.pos_sessions
+           WHERE id = $1 AND tenant_id = $2 AND branch_id = $3 AND status = 'open'`,
+        [shiftId, tenant, b.branchId ?? null],
+      )).rows[0];
+      if (!shift) {
+        await client.query('ROLLBACK');
+        return fail(res, 409, 'الوردية غير مفتوحة أو لا تتبع هذا الفرع');
+      }
+    }
 
       /*
        * ══ PRICES AND TAX ARE COMPUTED HERE, NOT SENT BY THE CLIENT ═══════
@@ -534,8 +546,8 @@ export async function createApp(): Promise<Express> {
            (id, tenant_id, invoice_number, branch_id, customer_name,
             cashier_name, subtotal, tax, discount, total,
             payment_method, status, currency_code, exchange_rate, items, timestamp,
-            idempotency_key)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17)
+            idempotency_key, shift_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18)
          RETURNING *`,
         [
           id, tenant, invoiceNumber, b.branchId ?? null, b.customerName ?? 'عميل نقدي',
@@ -543,7 +555,7 @@ export async function createApp(): Promise<Express> {
           b.paymentMethod ?? 'mada', 'completed',
           b.currencyCode ?? 'SAR', Number(b.exchangeRate ?? 1),
           JSON.stringify(items), b.timestamp ?? new Date().toISOString(),
-          idempotencyKey,
+          idempotencyKey, shiftId,
         ],
       );
 
