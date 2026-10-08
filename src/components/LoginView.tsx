@@ -752,14 +752,14 @@ export const LoginView: React.FC<{
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center p-1.5 shadow-lg transition-colors duration-300 ${
               themeMode === 'light' ? 'bg-slate-950 border border-brand-500/30' : 'bg-slate-900 border border-brand-500/30'
             }`}>
-              <img src="/favicon.ico" alt="منصة التجارة Icon" className="w-full h-full object-contain" />
+              <img src="/favicon.ico" alt="دينا Icon" className="w-full h-full object-contain" />
             </div>
             <div className="hidden sm:block">
               <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white transition-colors duration-300">
                 شركة المنافذ الذكية للبرمجيات
               </h1>
-              <p className="text-xs font-medium text-brand-500 font-mono">
-                منصة التجارة · Smart Ports Software
+<p className="text-xs font-medium text-brand-500 font-mono">
+دينا: منصة التجارة الذكية · Smart Ports Software
               </p>
             </div>
           </div>
@@ -966,7 +966,7 @@ export const LoginView: React.FC<{
 
             <div className="mt-6 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
               <span>© {new Date().getFullYear()} شركة المنافذ الذكية للبرمجيات</span>
-              <span className="font-bold text-brand-400 font-mono">Smart Ports · منصة التجارة SaaS</span>
+              <span className="font-bold text-brand-400 font-mono">Smart Ports · دينا: منصة التجارة الذكية SaaS</span>
             </div>
           </div>
         </div>

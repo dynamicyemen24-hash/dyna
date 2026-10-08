@@ -754,7 +754,7 @@ const BranchSelectionGate: React.FC<{
   <main className="min-h-screen grid place-items-center bg-canvas text-ink p-4" dir="rtl">
     <section className="w-full max-w-xl bg-surface border border-hairline rounded-xl p-5 sm:p-7 space-y-5" aria-labelledby="branch-selection-title">
       <header>
-        <p className="text-xs text-muted">نظام التجارة الذكية · مساحة العمل</p>
+        <p className="text-xs text-muted">دينا: منصة التجارة الذكية</p>
         <h1 id="branch-selection-title" className="text-xl font-semibold mt-1">اختر فرع العمل</h1>
         <p className="text-sm text-muted mt-2 leading-relaxed">
           لا نفتح المبيعات أو الوردية قبل تحديد فرع حقيقي تابع لمؤسستك.

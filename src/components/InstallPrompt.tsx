@@ -29,10 +29,10 @@ import {
 type Platform = ReturnType<typeof detectPlatform>;
 
 const SHARE_TITLE =
-  'منصة التجارة';
+  'دينا';
 
 const SHARE_TEXT =
-  'افتح منصة التجارة للوصول إلى نظام إدارة الأعمال والمبيعات.';
+  'افتح دينا للوصول إلى نظام إدارة الأعمال والمبيعات.';
 
 const COPY_FEEDBACK_MS = 2200;
 
@@ -372,7 +372,7 @@ const InstallPrompt: React.FC = () => {
                   text-slate-900
                 "
               >
-                ثبّت منصة التجارة على جهازك
+                ثبّت دينا على جهازك
               </h2>
 
               <p
@@ -443,7 +443,7 @@ const InstallPrompt: React.FC = () => {
               leading-5
               text-slate-400
             ">
-              يمكنك تجاهل هذه الرسالة — سيستمر منصة التجارة
+              يمكنك تجاهل هذه الرسالة — سيستمر دينا
               في العمل بشكل طبيعي.
             </p>
           </section>
@@ -561,7 +561,7 @@ const NativeInstall: React.FC<NativeInstallProps> = ({
               size={15}
               aria-hidden="true"
             />
-            تثبيت منصة التجارة الآن
+            تثبيت دينا الآن
           </>
         )}
       </button>
@@ -571,7 +571,7 @@ const NativeInstall: React.FC<NativeInstallProps> = ({
 
 const IOSInstallGuide: React.FC = () => (
   <ol
-    aria-label="خطوات تثبيت منصة التجارة على iPhone أو iPad"
+    aria-label="خطوات تثبيت دينا على iPhone أو iPad"
     className="space-y-3"
   >
     {[
