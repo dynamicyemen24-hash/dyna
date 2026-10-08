@@ -727,12 +727,6 @@ export function registerAuthRoutes(app: Express) {
     const totalSales = Number(sales.rows[0].total_sales);
     const cashSales = Number(sales.rows[0].cash_sales);
 
-    const alreadyClosed = (await pool.query(
-      `SELECT id FROM dypos.pos_sessions WHERE id = $1 AND status = 'closed'`,
-      [shiftId],
-    )).rows[0];
-    if (alreadyClosed) return fail(res, 400, 'تم إغلاق هذه الوردية بالفعل');
-
     const expectedCash = Number(shift.opening_cash || 0) + cashSales;
     const difference = closingCash - expectedCash;
 
