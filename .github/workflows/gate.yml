@@ -229,6 +229,7 @@ database:
     # Production is commit-driven: main may publish only after the exact
     # artifact passed the verification gate. workflow_dispatch remains available
     # for an explicit production replay when needed.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
 
     steps:
       - uses: actions/checkout@v4
