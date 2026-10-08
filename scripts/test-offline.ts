@@ -186,6 +186,10 @@ section('6. the persistence key is tenant-scoped');
     'work queued with no identity must be inert, not attributed to whoever signs in next');
   check('the tenant is read from the signed session token',
     /dypos_session_v1/.test(code) && /tenantId/.test(code));
+  check('JWT tenant decoding reads the payload segment, not the JOSE header',
+    /const parts = token\\.split\\('\\.'\\)/.test(code)
+      && /parts\\[1\\]/.test(code),
+    'reading token.slice(0, firstDot) decodes the header and strands real queues in __unclaimed__');
   check('the tenant is NOT taken from the rewritable localStorage claim',
     !/scopedKey[\s\S]{0,400}getItem\('dypos_tenant'\)/.test(code),
     'rememberTenant() is a client-writable string, not an identity');
