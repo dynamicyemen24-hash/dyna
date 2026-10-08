@@ -384,7 +384,11 @@ export async function createApp(): Promise<Express> {
 
       const id = b.id || makeId('inv');
     const shiftId = typeof b.shiftId === 'string' ? b.shiftId.trim() : null;
-    if (shiftId) {
+    if (!shiftId) {
+      await client.query('ROLLBACK');
+      return fail(res, 409, 'افتح وردية فعّالة قبل تسجيل المبيعات');
+    }
+    {
       const shift = (await client.query(
         `SELECT id FROM dypos.pos_sessions
            WHERE id = $1 AND tenant_id = $2 AND branch_id = $3 AND status = 'open'`,
@@ -940,8 +944,8 @@ app.get('/api/tenant/context', async (req, res) => {
           `INSERT INTO dypos.invoices (
              id, tenant_id, invoice_number, branch_id, cashier_name,
              customer_name, subtotal, tax, discount, total, payment_method,
-             status, items, timestamp)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+             status, items, timestamp, shift_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
            ON CONFLICT (id) DO UPDATE SET
              status = EXCLUDED.status, total = EXCLUDED.total,
              subtotal = EXCLUDED.subtotal, tax = EXCLUDED.tax,
@@ -953,6 +957,7 @@ app.get('/api/tenant/context', async (req, res) => {
             tx.paymentMethod || 'mada', tx.status || 'completed',
             JSON.stringify(items),
             tx.timestamp || new Date().toISOString(),
+            tx.shiftId || null,
           ],
         );
         txInserted++;
