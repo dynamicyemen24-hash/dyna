@@ -189,7 +189,6 @@ interface VisualState {
   themeMode: ThemeMode;
 
   currentTime: string;
-  announcementIdx: number;
   /* REMOVED: `testingHw` (fake health panel) and `ssoLoading` (unprovisioned
      SSO) — both surfaces were deleted rather than hidden. */
 }
@@ -259,43 +258,6 @@ export const LoginView: React.FC<{
     const timer = setInterval(() => {
       setTimerTick((t) => t + 1);
     }, 30_000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const [announcementIdx, setAnnouncementIdx] = useState(0);
-  /*
-   * Rotating notices on the login screen.
-   *
-   * ══ THE LINE THAT WAS REMOVED, AND WHY ═══════════════════════════════════
-   * The third notice read:
-   *
-   *     "النظام متوافق 100% مع متطلبات هيئة الزكاة والضريبة والجمارك
-   *      (ZATCA Phase 2)"
-   *
-   * — "The system is 100% compliant with ZATCA Phase 2 requirements."
-   *
-   * It was a literal in this array. Nothing was ever validated, generated,
-   * stamped or transmitted: there is no XML invoice, no cryptographic stamp, no
-   * QR code and no connection to ZATCA's Fatoora platform anywhere in this
-   * codebase. The claim was false, and it was the single most dangerous string
-   * in the product, because it is the one a business acts on.
-   *
-   * ZATCA itself does not certify software vendors in the way the market
-   * advertises. The real test is whether invoices your system produces are
-   * accepted by Fatoora on YOUR data — which is a fact about a deployment, not
-   * about a product page. So no fixed sentence here can assert it truthfully.
-   *
-   * A VAT rate and an invoice format are also tenant configuration, not product
-   * constants, so any notice about them would be untrue for some tenants.
-   */
-  const announcements = [
-    '🔔 تنبيه الوردية: تم تحديث أسعار الصرف اليومية للعملات الأجنبية وفق نشرة البنك المركزي.',
-    '⚡ تذكير: يجب مطابقة إجمالي النقدية في الدرج مع الفواتير قبل تسليم الوردية.',
-  ];
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setAnnouncementIdx((prev) => (prev + 1) % announcements.length);
-    }, 5000);
     return () => clearInterval(timer);
   }, []);
 
@@ -797,10 +759,10 @@ return (
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center p-4 z-10 w-full pt-4">
+      <main className="flex-1 flex items-center justify-center px-4 pt-2 pb-6 z-10 w-full">
         <div className="w-full max-w-6xl rounded-3xl shadow-2xl backdrop-blur-2xl grid grid-cols-1 lg:grid-cols-12 overflow-hidden border transition-colors duration-300 bg-surface/90 border-hairline">
           {/* Right / form side — spans the visual right in LTR and is handled with logical layout for RTL */}
-          <div className="lg:col-span-7 p-6 sm:p-10 flex flex-col justify-between relative">
+          <div className="lg:col-span-7 p-5 sm:p-8 flex flex-col justify-between relative">
             <div>
               {/* Surface mode switcher */}
               <AuthModeSwitcher
