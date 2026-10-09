@@ -248,11 +248,17 @@ export const LoginView: React.FC<{
    */
   const [tenant, setTenant] = useState<string>(TENANT_IS_PINNED ? '' : tenantId());
 
-  const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('ar-SA'));
+  const [timerTick, setTimerTick] = useState(0);
+  const currentTime = useMemo(
+    // Recomputed only when the 30s heartbeat ticks — not every second.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => new Date().toLocaleTimeString('ar-SA'),
+    [timerTick],
+  );
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date().toLocaleTimeString('ar-SA'));
-    }, 1000);
+      setTimerTick((t) => t + 1);
+    }, 30_000);
     return () => clearInterval(timer);
   }, []);
 
@@ -405,23 +411,19 @@ export const LoginView: React.FC<{
   }, []);
 
   // ---- UX: remember-me persistence ----
+  // The operator's name is restored once on mount when "remember me" was set.
+  // Nothing here clears it — a timer that blanks the field mid-login turns a
+  // saved name into a trap, and progress saves are scoped to non-credential
+  // steps so a password is never written to storage.
   useEffect(() => {
-    const saved = sessionStorage.getItem('dypos_remember_username');
-    if (saved) {
-      setUsername(saved);
-      // Clear remembered username after first input to avoid staying stale
-      const timer = setTimeout(() => setUsername(''), 1500);
-      return () => clearTimeout(timer);
+    try {
+      const saved = sessionStorage.getItem('dypos_remember_username');
+      if (saved && !usernameRef.current?.value) setUsername(saved);
+    } catch {
+      // Storage disabled: login proceeds without remembrance.
     }
-    // Save progress if navigating away from login screen
-    if (authStep !== 'credentials') {
-      try {
-        sessionStorage.setItem('dypos_login_progress', JSON.stringify({ username, password }));
-      } catch {
-        // Storage disabled: progress lost gracefully
-      }
-    }
-  }, [authStep, username, password]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Restore progress on mount if we navigated away previously
   useEffect(() => {
@@ -573,17 +575,19 @@ export const LoginView: React.FC<{
       }
 
       // The server withheld the session: a second factor is outstanding.
-      // Intelligent MFA: only require 2FA if rememberMe is NOT checked.
-      // If rememberMe IS checked, trusted device → skip MFA and proceed directly.
-      if ('mfaRequired' in res && !rememberMe) {
+      // The factor is NEVER skipped client-side. "Remember me" only pre-fills
+      // the username on this device — it cannot waive a server-required
+      // challenge, because the server issues no session token until the code
+      // verifies. Skipping here would read `res.session` off a challenge
+      // response and crash on `s.token` (or worse, accept a forged shape).
+      if ('mfaRequired' in res) {
         setMfaChallenge(res);
         setOtpDigits(Array.from({ length: res.digits }, () => ''));
         setAuthStep('2fa');
         return;
       }
 
-      // At this point either: (a) no MFA required, or (b) rememberMe is checked
-      // and server allowed session without 2FA (trusted device). Proceed to login.
+      // The server issued a session (no factor outstanding). Proceed to login.
       // Type-safe access: res is guaranteed to have .session at this point.
       const sessionRes = res as { session: AuthedSession };
       const s = sessionRes.session;
