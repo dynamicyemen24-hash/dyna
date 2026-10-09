@@ -46,7 +46,7 @@ enabled = true
 
 [vars]
 DEFAULT_TENANT = "royal-global-hq"
-APP_NAME = "DyPOS — نظام إدارة المنشآت التجارية"
+APP_NAME = "دينا — منصة التجارة الذكية"
 # DATABASE_URL belongs in Worker SECRETS, never in this committed file:
 #   npx wrangler secret put DATABASE_URL
 # A plaintext connection string here is uploaded with every deploy and readable

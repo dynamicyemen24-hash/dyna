@@ -717,7 +717,7 @@ export const LoginView: React.FC<{
    */
 return (
     <div
-      className="min-h-screen flex flex-col bg-[var(--t-canvas)] text-[var(--t-ink)] font-['Cairo',sans-serif] transition-colors duration-300"
+      className="min-h-screen flex flex-col bg-[var(--t-canvas)] text-[var(--t-ink)] font-['Cairo',sans-serif] transition-colors duration-300 pb-safe"
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
       {/* Header */}

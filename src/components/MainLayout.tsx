@@ -251,7 +251,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       : (!sync.isOnline || sync.pendingCount > 0) ? 'offline' : 'synced';
 
   return (
-    <div className="flex h-screen bg-canvas text-ink overflow-hidden" dir="rtl">
+    <div className="flex h-screen bg-canvas text-ink overflow-hidden pt-safe pb-safe" dir="rtl">
       {/* Keyboard users land here first: one keypress to reach the workspace. */}
       <a
         href="#dypos-workspace"

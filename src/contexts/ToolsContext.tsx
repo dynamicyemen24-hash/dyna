@@ -165,7 +165,7 @@ export const ToolShell: React.FC<{
         aria-modal="true"
         aria-label={meta.title}
         tabIndex={-1}
-        className="w-full sm:max-w-3xl h-[92vh] sm:h-auto sm:max-h-[86vh] flex flex-col bg-surface text-ink rounded-t-2xl sm:rounded-2xl border border-hairline elev-2 overflow-hidden outline-none"
+        className="w-full sm:max-w-3xl h-[92vh] sm:h-auto sm:max-h-[86vh] flex flex-col bg-surface text-ink rounded-t-2xl sm:rounded-2xl border border-hairline elev-2 overflow-hidden outline-none pb-safe"
       >
         <header className="flex items-start justify-between gap-3 px-4 sm:px-5 py-3 border-b border-hairline shrink-0">
           <div className="min-w-0">
