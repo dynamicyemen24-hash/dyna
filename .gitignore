@@ -20,6 +20,9 @@ coverage/
 .wrangler/
 .wrangler-dry/
 
+# Built edge bundle (regenerated via wrangler/esbuild; never source).
+dist-edge/
+
 # End-to-end / scratch run artifacts produced by the scripts in `scripts/`.
 screens-e2e.out
 e2e.out

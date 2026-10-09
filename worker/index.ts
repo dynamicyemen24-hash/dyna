@@ -1,4 +1,4 @@
-﻿/**
+/**
  * دينا: منصة التجارة الذكية — Cloudflare Worker API.
  *
  * Runs on the Cloudflare edge and talks to Neon over the serverless HTTP
@@ -750,6 +750,453 @@ function getSql(env: Env) {
  * of a tenant for a protected route is the verified token.
  */
 let env_default: string | undefined;
+
+// ---------------------------------------------------------------------------
+// Identity / enrollment � edge mirrors of the Express engines
+// (server/identityEngine.ts, server/policyEngine.ts, server/enrollmentEngine.ts)
+// ---------------------------------------------------------------------------
+// WHY COPIES AND NOT IMPORTS
+// The Worker bundles worker/index.ts alone over Web Crypto + the Neon HTTP
+// driver; the server engines use Node `crypto` and the pooled `pg` client. The
+// on-disk format is identical (same digest, same tables), so a tenant enrolled
+// on the edge is the same tenant Express would read � only the primitives and
+// the SQL driver differ, and each copy is labelled `Edge` below.
+//
+// `resolvePrerequisites` is a PURE function (no I/O), so its edge mirror is a
+// literal copy of server/policyEngine.ts � if the two ever disagreed, the edge
+// would grant access on a policy the on-premise build refuses.
+type PrereqDecision =
+  | 'READY' | 'CREATE_DEFAULT_BRANCH' | 'REQUIRE_VERIFICATION'
+  | 'REQUIRE_ADMIN' | 'REQUIRE_SUBSCRIPTION' | 'BLOCKED_BY_POLICY';
+
+interface PrereqInputEdge {
+  tenantExists: boolean;
+  tenantStatus?: 'active' | 'pending' | 'disabled';
+  userExists: boolean;
+  userStatus?: 'active' | 'locked' | 'disabled' | 'pending';
+  branchExists: boolean;
+  userHasBranchAccess: boolean;
+  deviceTrusted: boolean;
+  subscriptionStatus?: 'active' | 'trial' | 'expired' | 'pending';
+  allowDefaultBranchCreation?: boolean;
+}
+
+interface PrereqResultEdge {
+  decision: PrereqDecision;
+  fixable: boolean;
+  actions: string[];
+  reason: string;
+  blockUntil?: string[];
+}
+
+/** Literal mirror of `resolvePrerequisites` in server/policyEngine.ts. */
+function resolvePrerequisitesEdge(input: PrereqInputEdge): PrereqResultEdge {
+  if (!input.tenantExists) {
+    return {
+      decision: 'REQUIRE_VERIFICATION', fixable: false,
+      actions: ['verify_tenant_identity', 'request_enrollment'],
+      reason: 'The tenant is not yet verified or does not exist.',
+      blockUntil: ['tenant_validation'],
+    };
+  }
+  if (input.tenantStatus === 'disabled') {
+    return {
+      decision: 'BLOCKED_BY_POLICY', fixable: false,
+      actions: ['contact_admin', 'review_tenant_status'],
+      reason: 'The tenant is disabled by policy.',
+      blockUntil: ['tenant_reactivation'],
+    };
+  }
+  if (input.userStatus === 'disabled' || input.userStatus === 'locked') {
+    return {
+      decision: 'REQUIRE_VERIFICATION', fixable: false,
+      actions: ['verify_account_status', 'reset_access'],
+      reason: 'The user cannot operate until the account is validated or re-enabled.',
+      blockUntil: ['account_status'],
+    };
+  }
+  if (input.subscriptionStatus === 'expired' || input.subscriptionStatus === 'pending') {
+    return {
+      decision: 'REQUIRE_SUBSCRIPTION', fixable: false,
+      actions: ['renew_subscription', 'restore_access'],
+      reason: 'The subscription is not active enough to authorize work.',
+      blockUntil: ['subscription_activation'],
+    };
+  }
+  if (!input.userExists) {
+    return {
+      decision: 'REQUIRE_VERIFICATION', fixable: false,
+      actions: ['verify_user_identity', 'assign_access'],
+      reason: 'No user mapping is valid for this tenant yet.',
+      blockUntil: ['user_validation'],
+    };
+  }
+  if (!input.branchExists && input.allowDefaultBranchCreation) {
+    return {
+      decision: 'CREATE_DEFAULT_BRANCH', fixable: true,
+      actions: ['create_default_branch', 'attach_user_to_branch', 'record_audit_event'],
+      reason: 'The tenant exists and policy allows a default branch to be created safely.',
+      blockUntil: ['branch_creation'],
+    };
+  }
+  if (!input.branchExists && !input.allowDefaultBranchCreation) {
+    return {
+      decision: 'REQUIRE_ADMIN', fixable: false,
+      actions: ['contact_admin', 'assign_branch_owner', 'request_default_branch'],
+      reason: 'No branch exists and creating one is disallowed by policy.',
+      blockUntil: ['branch_provisioning_approval'],
+    };
+  }
+  if (!input.userHasBranchAccess) {
+    return {
+      decision: 'REQUIRE_ADMIN', fixable: false,
+      actions: ['grant_branch_access', 'review_rbac_policy'],
+      reason: 'The user is valid but has no access to the chosen branch.',
+      blockUntil: ['branch_access_assignment'],
+    };
+  }
+  if (!input.deviceTrusted) {
+    return {
+      decision: 'REQUIRE_VERIFICATION', fixable: false,
+      actions: ['verify_device', 'challenge_owner', 'register_device'],
+      reason: 'The device is not accepted for this tenant�s trusted environment.',
+      blockUntil: ['device_binding'],
+    };
+  }
+  return {
+    decision: 'READY', fixable: true,
+    actions: ['continue_session'],
+    reason: 'Tenant, user, branch, subscription and device are all acceptable for work.',
+  };
+}
+// --- identity resolution ---------------------------------------------------
+type IdentityDecisionState =
+  | 'VERIFIED_EXISTING_TENANT' | 'PENDING_VERIFICATION' | 'NEW_TENANT'
+  | 'EXISTING_TENANT_NO_BRANCH' | 'EXISTING_USER_NO_ACCESS' | 'AMBIGUOUS_IDENTITY';
+
+interface IdentityStateEdge {
+  state: IdentityDecisionState;
+  tenantId?: string;
+  userId?: string;
+  branchId?: string;
+  reason: string;
+  proofRequired?: string[];
+  confidence: number;
+}
+
+interface IdentityInputEdge {
+  tenantName: string;
+  tenantCode: string;
+  ownerName: string;
+  username: string;
+  email: string;
+  phone: string;
+  branchName: string;
+  deviceFingerprint: string;
+}
+
+/** Mirror of `normalize` in server/identityEngine.ts. */
+const normalizeEdge = (v?: string): string =>
+  (v ?? '').trim().toLowerCase().replace(/\s+/g, ' ').normalize('NFKC');
+
+/** Mirror of `resolveIdentityIntent` in server/identityEngine.ts (pure). */
+function resolveIdentityIntentEdge(input: {
+  tenantName: string; tenantCode: string; username: string;
+  email: string; phone: string; branchName: string; deviceFingerprint: string;
+  existingTenants: Array<{ tenantId: string; tenantName: string; normalizedName: string; enrollmentCode?: string }>;
+  existingUsers: Array<{ userId: string; tenantId: string; username: string; normalizedUsername: string; email?: string; normalizedEmail?: string; phone?: string; normalizedPhone?: string }>;
+  existingBranches: Array<{ branchId: string; name: string; normalizedName: string }>;
+}): IdentityStateEdge {
+  const tenantName = input.tenantName ?? '';
+  const tenantCode = input.tenantCode ?? '';
+  const username = input.username ?? '';
+  const email = normalizeEdge(input.email);
+  const phone = normalizeEdge(input.phone);
+  const branchName = normalizeEdge(input.branchName);
+
+  const strong = (a?: string, b?: string): boolean => {
+    const aa = normalizeEdge(a);
+    const bb = normalizeEdge(b);
+    return !!aa && !!bb && aa === bb;
+  };
+
+  const matchedTenant = input.existingTenants.find((tenant) => {
+    if (tenantCode && tenant.enrollmentCode) {
+      if (normalizeEdge(tenant.enrollmentCode) === normalizeEdge(tenantCode)) return true;
+    }
+    return strong(tenant.tenantName, tenantName) || strong(tenant.normalizedName, normalizeEdge(tenantName));
+  });
+
+  const matchedUser = input.existingUsers.find((user) => {
+    const sameUsername = strong(user.username, username) || strong(user.normalizedUsername, normalizeEdge(username));
+    const sameEmail = strong(user.email, email) || strong(user.normalizedEmail, email);
+    const samePhone = strong(user.phone, phone) || strong(user.normalizedPhone, phone);
+    return sameUsername || sameEmail || samePhone;
+  });
+
+  const matchedBranch = input.existingBranches.find((branch) =>
+    strong(branch.name, branchName) || strong(branch.normalizedName, branchName));
+
+  if (matchedTenant && matchedUser && matchedUser.tenantId === matchedTenant.tenantId) {
+    if (!matchedBranch) {
+      return {
+        state: 'EXISTING_TENANT_NO_BRANCH',
+        tenantId: matchedTenant.tenantId, userId: matchedUser.userId,
+        reason: 'Tenant and user match, but no validated branch exists for this tenant.',
+        proofRequired: ['tenant_verification', 'branch_policy_check'],
+        confidence: 94,
+      };
+    }
+    return {
+      state: 'VERIFIED_EXISTING_TENANT',
+      tenantId: matchedTenant.tenantId, userId: matchedUser.userId, branchId: matchedBranch.branchId,
+      reason: 'The identity resolved to an existing, verified tenant and user.',
+      confidence: 98,
+    };
+  }
+
+  if (matchedTenant && !matchedUser) {
+    return {
+      state: 'PENDING_VERIFICATION',
+      tenantId: matchedTenant.tenantId,
+      reason: 'Tenant exists but the user identity requires proof before access is granted.',
+      proofRequired: ['ownership_verification', 'user_identity_match'],
+      confidence: 81,
+    };
+  }
+
+  if (matchedUser && !matchedTenant) {
+    return {
+      state: 'EXISTING_USER_NO_ACCESS',
+      userId: matchedUser.userId,
+      reason: 'User exists but is not associated with a verified tenant for this onboarding flow.',
+      proofRequired: ['tenant_mapping_check', 'access_policy_validation'],
+      confidence: 80,
+    };
+  }
+
+  if (matchedTenant && matchedUser && matchedUser.tenantId !== matchedTenant.tenantId) {
+    return {
+      state: 'AMBIGUOUS_IDENTITY',
+      reason: 'The user and tenant are mapped to different organizations; do not auto-link.',
+      proofRequired: ['tenant_user_correlation', 'session_rebinding'],
+      confidence: 35,
+    };
+  }
+
+  if (!matchedTenant && !matchedUser && (tenantName || tenantCode || email || phone || username)) {
+    return {
+      state: 'NEW_TENANT',
+      reason: 'No canonical tenant or user match was found; this is a new enrollment path requiring a transaction-safe setup.',
+      proofRequired: ['tenant_enrollment', 'subscription_setup', 'owner_user', 'default_branch'],
+      confidence: 60,
+    };
+  }
+
+  return {
+    state: 'AMBIGUOUS_IDENTITY',
+    reason: 'Identity is not conclusive enough for automatic enrollment or access. Request explicit proof.',
+    proofRequired: ['canonical_identity_reconciliation', 'manual_review'],
+    confidence: 22,
+  };
+}
+
+const q = (v: string): string => `'${v.replace(/'/g, "''")}'`;
+
+// --- identity resolution against the database -------------------------------
+/** Resolves an identity against the database. Mirrors `resolveExistingIdentity`
+ * in server/enrollmentEngine.ts, pinned to the deployment tenant (`env_default`)
+ * so a client cannot probe another merchant's tenants. */
+async function resolveIdentityEdge(env: Env, input: IdentityInputEdge): Promise<IdentityStateEdge> {
+  const tenantRows = await getSql(env)`
+    SELECT t.id AS tenant_id,
+           t.name AS tenant_name,
+           t.is_active,
+           COALESCE((SELECT COUNT(*) FROM dypos.branches b WHERE b.tenant_id = t.id), 0) AS branch_count,
+           t.enrollment_code
+      FROM dypos.tenants t
+     WHERE t.is_active IS NOT FALSE
+       AND (${env_default}::text IS NULL OR t.id = ${env_default})`;
+  const userRows = await getSql(env)`
+    SELECT id, tenant_id, username, email, phone, is_active, locked_until
+      FROM dypos.users
+     WHERE is_active IS NOT FALSE
+       AND (${env_default}::text IS NULL OR tenant_id = ${env_default})`;
+  const branchRows = await getSql(env)`
+    SELECT id, tenant_id, name, is_active
+      FROM dypos.branches
+     WHERE is_active IS NOT FALSE
+       AND (${env_default}::text IS NULL OR tenant_id = ${env_default})`;
+
+  return resolveIdentityIntentEdge({
+    tenantName: input.tenantName,
+    tenantCode: input.tenantCode,
+    username: input.username,
+    email: input.email,
+    phone: input.phone,
+    branchName: input.branchName,
+    deviceFingerprint: input.deviceFingerprint,
+    existingTenants: (tenantRows as any[]).map((r) => ({
+      tenantId: r.tenant_id as string,
+      tenantName: r.tenant_name as string,
+      normalizedName: normalizeEdge(r.tenant_name as string),
+    })),
+    existingUsers: (userRows as any[]).map((r) => ({
+      userId: r.id as string,
+      tenantId: r.tenant_id as string,
+      username: r.username as string,
+      normalizedUsername: normalizeEdge(r.username as string),
+      email: (r.email as string) || undefined,
+      normalizedEmail: normalizeEdge(r.email as string | undefined),
+      phone: (r.phone as string) || undefined,
+      normalizedPhone: normalizeEdge(r.phone as string | undefined),
+    })),
+    existingBranches: (branchRows as any[]).map((r) => ({
+      branchId: r.id as string,
+      name: r.name as string,
+      normalizedName: normalizeEdge(r.name as string),
+    })),
+  });
+}
+
+async function enrollTenantEdge(
+  env: Env, input: {
+    tenantName: string; tenantCode: string; ownerName: string;
+    username: string; email: string; phone: string; password: string;
+    branchName: string; deviceFingerprint: string; idempotencyKey?: string;
+  },
+): Promise<IdentityStateEdge & { idempotencyKey?: string }> {
+  const tenantName = (input.tenantName || '').trim();
+  const ownerName = (input.ownerName || '').trim();
+  const username = (input.username || '').trim();
+  const email = (input.email || '').trim();
+  const phone = (input.phone || '').trim();
+
+  if (!tenantName || !ownerName || !username || !input.password) {
+    return {
+      state: 'AMBIGUOUS_IDENTITY',
+      reason: 'Tenant name, owner name, username and password are required before any enrollment attempt.',
+      proofRequired: ['tenant_name', 'owner_name', 'username', 'password'],
+      confidence: 10,
+    };
+  }
+
+  const strength = checkPasswordStrength(input.password, username);
+  if (!strength.ok) {
+    return {
+      state: 'AMBIGUOUS_IDENTITY',
+      reason: strength.problems[0] || 'The password does not meet the strength policy.',
+      proofRequired: ['stronger_password'],
+      confidence: 12,
+    };
+  }
+
+  const idempotencyKey = input.idempotencyKey
+    || `${normalizeEdge(tenantName)}:${normalizeEdge(username)}:${normalizeEdge(email)}:${normalizeEdge(phone)}`;
+
+  const prior = await getSql(env)`SELECT result_json FROM dypos.identity_idempotency WHERE key = ${idempotencyKey}`;
+  if (prior[0]?.result_json) {
+    const payload = prior[0].result_json;
+    return {
+      state: payload.state,
+      tenantId: payload.tenantId,
+      userId: payload.userId,
+      branchId: payload.branchId,
+      reason: payload.reason || 'Existing idempotent enrollment result was restored.',
+      proofRequired: payload.proofRequired || [],
+      confidence: payload.confidence || 100,
+      idempotencyKey,
+    };
+  }
+
+  const existing = await resolveIdentityEdge(env, {
+    tenantName: input.tenantName,
+    tenantCode: input.tenantCode,
+    ownerName: input.ownerName,
+    username: input.username,
+    email: input.email,
+    phone: input.phone,
+    branchName: input.branchName,
+    deviceFingerprint: input.deviceFingerprint,
+  });
+  if (existing.state !== 'NEW_TENANT') {
+    return { ...existing, idempotencyKey };
+  }
+
+  const tenantId = `tenant-${makeId('t').replace(/-/g, '').slice(0, 20)}`;
+  const branchId = `branch-${makeId('b').replace(/-/g, '').slice(0, 20)}`;
+  const userId = `user-${makeId('u').replace(/-/g, '').slice(0, 20)}`;
+  const subId = `sub-${makeId('s').replace(/-/g, '').slice(0, 20)}`;
+  const outboxId = `outbox-${makeId('o').replace(/-/g, '').slice(0, 18)}`;
+
+  const iterations = MAX_ITERATIONS;
+  const salt = randomHex(16);
+  const hash = await hashPasswordEdge(input.password, salt, iterations);
+
+  const branchName = input.branchName.trim() || 'المركز الرئيسي';
+  const enrollCode = input.tenantCode.trim() || tenantId;
+  const deviceFingerprint = input.deviceFingerprint.trim();
+
+  const result = {
+    state: 'NEW_TENANT' as const,
+    tenantId,
+    userId,
+    branchId,
+    reason: 'New tenant, subscription, owner user and default branch created inside one transaction.',
+    proofRequired: ['tenant_enrollment', 'subscription_setup', 'owner_user', 'default_branch'],
+    confidence: 100,
+    idempotencyKey,
+  };
+  const resultJson = JSON.stringify(result).replace(/'/g, "''");
+
+  const batch = `
+    BEGIN;
+    INSERT INTO dypos.tenants (id, name, owner_company, brand_name, is_active, metadata, created_at, updated_at)
+      VALUES (${q(tenantId)}, ${q(tenantName)}, ${q(ownerName)}, ${q(`${tenantName} - DyPOS`)}, TRUE, ${q(JSON.stringify({ enrollmentCode: enrollCode, source: 'identity-engine' }))}::jsonb, NOW(), NOW())
+      ON CONFLICT (id) DO NOTHING;
+    INSERT INTO dypos.subscriptions (id, tenant_id, customer_id, plan_id, status, start_date, end_date, auto_renew, metadata, created_at)
+      VALUES (${q(subId)}, ${q(tenantId)}, NULL, 'plan-enterprise', 'active', CURRENT_DATE, CURRENT_DATE + INTERVAL '365 days', TRUE, ${q(JSON.stringify({ plan: 'enterprise', source: 'identity-engine' }))}::jsonb, NOW())
+      ON CONFLICT DO NOTHING;
+    INSERT INTO dypos.branches (id, tenant_id, name, location, city, phone, is_active, created_at)
+      VALUES (${q(branchId)}, ${q(tenantId)}, ${q(branchName)}, 'Head Office', 'الرياض', ${phone ? q(phone) : 'NULL'}, TRUE, NOW())
+      ON CONFLICT (id) DO NOTHING;
+    INSERT INTO dypos.users (id, tenant_id, branch_id, username, password_hash, password_salt, password_iterations, password_algo, name, role, is_active, created_at)
+      VALUES (${q(userId)}, ${q(tenantId)}, ${q(branchId)}, ${q(username)}, ${q(hash)}, ${q(salt)}, ${iterations}, 'pbkdf2-sha512', ${q(ownerName)}, 'admin', TRUE, NOW())
+      ON CONFLICT (id) DO NOTHING;
+    INSERT INTO dypos.user_branch_access (user_id, branch_id)
+      VALUES (${q(userId)}, ${q(branchId)})
+      ON CONFLICT (user_id, branch_id) DO NOTHING;
+    INSERT INTO dypos.audit_logs (tenant_id, user_id, user_name, action, table_name, record_id, new_data, timestamp)
+      VALUES (${q(tenantId)}, ${q(userId)}, ${q(ownerName)}, 'tenant_enroll', 'tenants', ${q(tenantId)}, ${q(JSON.stringify({ tenantName, ownerName, branchName }))}::jsonb, NOW());
+    INSERT INTO dypos.identity_outbox (id, tenant_id, kind, payload, status, attempts, created_at, updated_at)
+      VALUES (${q(outboxId)}, ${q(tenantId)}, 'tenant_enrollment', ${q(JSON.stringify({ tenantId, userId, branchId, state: 'NEW_TENANT', source: 'identity_engine' }))}::jsonb, 'queued', 0, NOW(), NOW());
+    INSERT INTO dypos.identity_idempotency (key, tenant_id, result_json, created_at)
+      VALUES (${q(idempotencyKey)}, ${q(tenantId)}, ${q(resultJson)}::jsonb, NOW())
+      ON CONFLICT (key) DO NOTHING;
+    COMMIT;
+  `;
+
+  try {
+    await getSql(env).unsafe(batch);
+  } catch (error: any) {
+    await audit(env, tenantId, username, 'enroll_failed', new Request('https://x/'), String(error?.message || 'enroll_error'));
+    throw error;
+  }
+
+  if (deviceFingerprint) {
+    try {
+      await getSql(env)`INSERT INTO dypos.device_trust
+        (device_id, tenant_id, user_id, fingerprint, status)
+        VALUES (${makeId('dev')}, ${tenantId}, ${userId}, ${deviceFingerprint}, 'pending')
+        ON CONFLICT (fingerprint) DO NOTHING`;
+    } catch (error) {
+      console.warn('[dypos-worker] device_trust enrollment write failed', error);
+    }
+  }
+
+  return result;
+}
+
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -3282,3 +3729,4 @@ async function completeProduction(
 
   return json({ item, consumed });
 }
+
