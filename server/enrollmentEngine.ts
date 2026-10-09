@@ -6,6 +6,16 @@ import { resolveIdentityIntent, type IdentityResolutionInput } from './identityE
 export interface EnrollmentInput {
   tenantName: string;
   tenantCode?: string;
+  /**
+   * Enroll the owner into this EXISTING tenant instead of minting a new one.
+   *
+   * WHY: a single-tenant deployment pins every login to one tenant
+   * (`DEFAULT_TENANT`). Registering an owner into a fresh random tenant there
+   * would create an account login can never find — login searches only the
+   * pinned tenant — so the account could be created and be permanently unable
+   * to sign in. Passing the pinned tenant here makes the new owner loginnable.
+   */
+  targetTenantId?: string;
   ownerName: string;
   username: string;
   email?: string;
@@ -123,6 +133,92 @@ export async function enrollTenantSafely(input: EnrollmentInput): Promise<Enroll
       confidence: payload.confidence || 100,
       idempotencyKey,
     };
+  }
+
+  // ── PINNED-TENANT ENROLLMENT ──────────────────────────────────────────────
+  // When a caller names an existing tenant (the single-tenant deployment pins
+  // every login to `DEFAULT_TENANT`), the owner must be created INSIDE that
+  // tenant — not in a fresh random one login will never search. Reuse an
+  // existing active branch if the tenant has one, otherwise create the default.
+  if (input.targetTenantId) {
+    const targetTenantId = String(input.targetTenantId).trim();
+    const tenantCheck = await pool.query(
+      `SELECT id, name FROM dypos.tenants WHERE id = $1 AND is_active IS NOT FALSE`,
+      [targetTenantId],
+    );
+    if (!tenantCheck.rows[0]) {
+      return {
+        state: 'AMBIGUOUS_IDENTITY',
+        reason: 'Tenant not found or inactive.',
+        proofRequired: ['valid_target_tenant'],
+        confidence: 20,
+      };
+    }
+
+    const branchRes = await pool.query(
+      `SELECT id FROM dypos.branches WHERE tenant_id = $1 AND is_active IS NOT FALSE
+         ORDER BY created_at ASC LIMIT 1`,
+      [targetTenantId],
+    );
+    const branchId = branchRes.rows[0]?.id || `branch-${makeId('b').replace(/-/g, '').slice(0, 20)}`;
+    const userId = `user-${makeId('u').replace(/-/g, '').slice(0, 20)}`;
+    const credential = await hashPassword(input.password as string);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      if (!branchRes.rows[0]) {
+        await client.query(
+          `INSERT INTO dypos.branches (id, tenant_id, name, location, city, phone, is_active, created_at)
+           VALUES ($1, $2, COALESCE($3, 'المركز الرئيسي'), 'Head Office', 'الرياض', $4, TRUE, NOW())
+           ON CONFLICT (id) DO NOTHING`,
+          [branchId, targetTenantId, input.branchName || 'المركز الرئيسي', phone || null],
+        );
+      }
+      await client.query(
+        `INSERT INTO dypos.users (
+           id, tenant_id, branch_id, username, password_hash, password_salt,
+           password_iterations, password_algo, name, role, is_active, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin', TRUE, NOW())
+         ON CONFLICT (id) DO NOTHING`,
+        [userId, targetTenantId, branchId, username, credential.hash, credential.salt,
+         credential.iterations, credential.algo, ownerName],
+      );
+      await client.query(
+        `INSERT INTO dypos.user_branch_access (user_id, branch_id)
+         VALUES ($1, $2)
+         ON CONFLICT (user_id, branch_id) DO NOTHING`,
+        [userId, branchId],
+      );
+      await client.query(
+        `INSERT INTO dypos.audit_logs (tenant_id, user_id, user_name, action, table_name, record_id, new_data, timestamp)
+         VALUES ($1, $2, $3, 'tenant_enroll', 'tenants', $4, $5, NOW())`,
+        [targetTenantId, userId, ownerName, targetTenantId, { tenantName, ownerName, username, pinned: true }],
+      );
+      const result: EnrollmentResult = {
+        state: 'VERIFIED_EXISTING_TENANT',
+        tenantId: targetTenantId,
+        userId,
+        branchId,
+        reason: 'Owner user created inside the pinned tenant that login searches.',
+        proofRequired: ['owner_user', 'branch_access'],
+        confidence: 100,
+        idempotencyKey,
+      };
+      await client.query(
+        `INSERT INTO dypos.identity_idempotency (key, tenant_id, result_json, created_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (key) DO NOTHING`,
+        [idempotencyKey, targetTenantId, result],
+      );
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   const existingIdentity = await resolveExistingIdentity(input);

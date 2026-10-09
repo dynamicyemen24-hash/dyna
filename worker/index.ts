@@ -299,10 +299,10 @@ function addSecurityHeaders(response: Response): Response {
   headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   // CSP in reportOnly mode initially — monitor before enforcing
   headers.set('Content-Security-Policy-Report-Only',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: https:; connect-src 'self' https://*.neon.tech; " +
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; script-src-elem 'self' 'unsafe-inline'; worker-src 'self'; style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' data: https:; connect-src 'self' https://*.neon.tech https://dyposcloud.smartportssoft.com https://*.cloudflareinsights.com; " +
     "font-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'; " +
-    "form-action 'self'; report-uri /api/security/csp-report");
+    "form-action 'self' mailto:; report-uri /api/security/csp-report");
   headers.set('Referrer-Policy', 'strict-origins-when-cross-origin');
   headers.set('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), ' +
     'payment=(), usb=(), magnetometer=(), gyroscope=(), fullscreen=(self)');
@@ -1286,7 +1286,7 @@ export default {
 
     try {
       // --- Public endpoints: the only way in, and the release stamp ---------
-      if (path === '/auth/login' || path === '/auth/change-password'
+      if (path === '/auth/login' || path === '/auth/register' || path === '/auth/change-password'
         || path === '/auth/password-policy' || path === '/auth/mfa/verify') {
         /*
          * `/auth/mfa/verify` belongs here for the same reason `/auth/login`
@@ -1303,7 +1303,9 @@ export default {
          * both are guessing surfaces.
          */
         if (path !== '/auth/password-policy' && path !== '/auth/mfa/verify') {
-          const verdict = rateLimitVerdict(path === '/auth/login' ? 'login' : 'change-password', request);
+          const bucket = path === '/auth/login' ? 'login'
+            : path === '/auth/register' ? 'register' : 'change-password';
+          const verdict = rateLimitVerdict(bucket, request);
           if (verdict.limited) {
             return json({ error: 'عدد كبير من المحاولات — أعد المحاولة لاحقاً' }, 429, {
               'retry-after': String(verdict.retryAfterSec),
@@ -1311,8 +1313,10 @@ export default {
           }
         }
         const response = await authRoute(method, path, env, body, request, requestId);
-        if (path === '/auth/login' || path === '/auth/change-password') {
-          rateNoteVerdict(path === '/auth/login' ? 'login' : 'change-password', request, response.status);
+        if (path === '/auth/login' || path === '/auth/change-password' || path === '/auth/register') {
+          const bucket = path === '/auth/login' ? 'login'
+            : path === '/auth/register' ? 'register' : 'change-password';
+          rateNoteVerdict(bucket, request, response.status);
         }
         /*
          * `/auth/mfa/verify` needs NO separate bucket: it is already inside the
@@ -1605,6 +1609,76 @@ if (!tenant) {
   // Safe to expose: it reveals nothing about the stored credential.
   if (path === '/auth/password-policy' && method === 'POST') {
     return json(checkPasswordStrength(String(body?.password || ''), body?.username));
+  }
+
+  // Self-registration: create the owner INSIDE the pinned deployment tenant
+  // (`tenant`, resolved above from `env_default`) so the account lands where
+  // login searches. Mirrors Express `/api/auth/register`, which was previously
+  // unreachable on this edge because the path fell through to the token gate.
+  if (path === '/auth/register' && method === 'POST') {
+    const ownerName = String(body?.name || '').trim();
+    const username = String(body?.username || '').trim().toLowerCase();
+    const password = String(body?.password || '');
+    const email = body?.email ? String(body.email).trim().toLowerCase() : undefined;
+    const phone = body?.phone ? String(body.phone).trim() : undefined;
+
+    if (!ownerName || !username || !password) {
+      return fail(400, 'الاسم والاسم المستخدم وكلمة المرور مطلوبة', path, method, requestId);
+    }
+    const strength = checkPasswordStrength(password, username);
+    if (!strength.ok) {
+      return json({ error: strength.problems[0], problems: strength.problems }, 422);
+    }
+
+    // Idempotent: a repeat of the same owner returns the existing account rather
+    // than erroring or creating a duplicate row.
+    const existingUser = await getSql(env)`
+      SELECT id FROM dypos.users WHERE tenant_id = ${tenant} AND username = ${username} LIMIT 1`;
+    if (existingUser[0]) {
+      const r = json({ ok: true, state: 'VERIFIED_EXISTING_TENANT', tenantId: tenant, userId: existingUser[0].id });
+      const ikey = req.headers.get('Idempotency-Key');
+      if (ikey) cacheIdempotencyKey(ikey, r);
+      return r;
+    }
+
+    const iterations = MAX_ITERATIONS;
+    const salt = randomHex(16);
+    const hash = await hashPasswordEdge(password, salt, iterations);
+    const userId = `user-${makeId('u').replace(/-/g, '').slice(0, 20)}`;
+
+    // Reuse the tenant's first active branch, or create the default one.
+    const branchRows = await getSql(env)`
+      SELECT id FROM dypos.branches WHERE tenant_id = ${tenant} AND is_active IS NOT FALSE
+        ORDER BY created_at ASC LIMIT 1`;
+    let branchId = branchRows[0]?.id as string | undefined;
+    if (!branchId) {
+      branchId = `branch-${makeId('b').replace(/-/g, '').slice(0, 20)}`;
+      await getSql(env)`
+        INSERT INTO dypos.branches (id, tenant_id, name, location, city, phone, is_active, created_at)
+        VALUES (${branchId}, ${tenant}, 'المركز الرئيسي', 'Head Office', 'الرياض', ${phone ?? null}, TRUE, NOW())
+        ON CONFLICT (id) DO NOTHING`;
+    }
+
+    await getSql(env)`
+      INSERT INTO dypos.users (
+        id, tenant_id, branch_id, username, password_hash, password_salt,
+        password_iterations, password_algo, name, role, is_active, created_at
+      ) VALUES (
+        ${userId}, ${tenant}, ${branchId}, ${username}, ${hash}, ${salt},
+        ${iterations}, 'pbkdf2-sha512', ${ownerName}, 'admin', TRUE, NOW()
+      ) ON CONFLICT (id) DO NOTHING`;
+
+    await getSql(env)`
+      INSERT INTO dypos.user_branch_access (user_id, branch_id)
+      VALUES (${userId}, ${branchId})
+      ON CONFLICT (user_id, branch_id) DO NOTHING`;
+
+    await audit(env, tenant, username, 'tenant_enroll', req, 'pinned_register');
+
+    const r = json({ ok: true, state: 'VERIFIED_EXISTING_TENANT', tenantId: tenant, userId });
+    const ikey = req.headers.get('Idempotency-Key');
+    if (ikey) cacheIdempotencyKey(ikey, r);
+    return r;
   }
 
   if (path === '/auth/login' && method === 'POST') {

@@ -951,6 +951,33 @@ export function registerAuthRoutes(app: Express) {
     }),
   );
 
+  /** Creates a new account (owner, tenant, branch and user) via enrolment. */
+  app.post('/api/auth/register', authRateLimit('register'), asyncRoute(async (req, res) => {
+    const { name, email, username, password } = req.body || {};
+    if (!name || !username || !password) {
+      return fail(res, 400, 'الاسم والاسم المستخدم وكلمة المرور مطلوبة');
+    }
+    if (typeof password !== 'string' || password.length < 12) {
+      return fail(res, 422, 'كلمة المرور يجب أن تكون 12 حرفاً على الأقل');
+    }
+    if (!/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+      return fail(res, 422, 'كلمة المرور يجب أن تحتوي على حرف كبير ورقم واحد على الأقل');
+    }
+    const result = await enrollTenantSafely({
+      tenantName: String(name).trim(),
+      ownerName: String(name).trim(),
+      username: String(username).trim().toLowerCase(),
+      email: email ? String(email).trim().toLowerCase() : undefined,
+      phone: undefined,
+      password,
+      // Register the owner INTO the pinned tenant that login searches. Minting a
+      // fresh random tenant here produced accounts that could be created but
+      // never sign in — login resolves only DEFAULT_TENANT.
+      targetTenantId: DEFAULT_TENANT,
+    });
+    res.json({ ok: true, state: result.state, tenantId: result.tenantId, userId: result.userId });
+  }));
+
   /** Redeems a reset token and sets a new password. */
   app.post('/api/auth/reset-password', authRateLimit('reset-password'), asyncRoute(async (req, res) => {
     const { token, newPassword } = req.body || {};

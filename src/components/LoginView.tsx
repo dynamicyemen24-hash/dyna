@@ -4,6 +4,7 @@ import { themeService, ThemeMode, THEME_CONFIGS } from '../services/themeService
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { ToolLauncher } from '../contexts/ToolsContext';
 import { apiGet, apiPost, rememberTenant, TENANT_IS_PINNED, tenantId } from '../services/dyposApi';
+import { RegistrationView } from './RegistrationView';
 import { ScaleHALWidget } from './ScaleHALWidget';
 
 /**
@@ -153,7 +154,7 @@ interface AuthFlowState {
   password: string;
   showPassword: boolean;
   rememberMe: boolean;
-  authStep: 'credentials' | '2fa' | 'unlock_account';
+  authStep: 'credentials' | 'register' | '2fa' | 'unlock_account';
   otpDigits: string[];
   authBusy: boolean;
   authError: string;
@@ -342,6 +343,35 @@ export const LoginView: React.FC<{
   const [mfaChallenge, setMfaChallenge] = useState<MfaChallenge | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState('');
+  /*
+   * ---- Operational intelligence: honest feedback for honest failures ----
+   *
+   * The server returns 401 for every login failure by design (unknown user,
+   * wrong password, inactive, and locked accounts are all indistinguishable —
+   * that is what stops the endpoint from revealing which accounts exist). But
+   * a steady run of 401s on ONE terminal after SIX attempts is an actionable
+   * state, not random noise: the account is either locked or the credential is
+   * being retyped wrong. So the screen keeps its own consecutive-failure
+   * counter and, past the threshold, escalates the message to name the next
+   * step (wait, check the lock, call the supervisor) instead of inviting
+   * another blind retry that extends the lock.
+   *
+   * Nothing here bypasses a server verdict — cooldown REFUSES to send a
+   * request, it never forges a session; the count resets the moment a sign-in
+   * succeeds, so a working credential is never punished for the past.
+   */
+  const [consecutiveFails, setConsecutiveFails] = useState(0);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [cooldownTick, setCooldownTick] = useState(0);
+  useEffect(() => {
+    if (cooldownUntil === null) return;
+    if (Date.now() >= cooldownUntil) {
+      setCooldownUntil(null);
+      return;
+    }
+    const t = setTimeout(() => setCooldownTick((n) => n + 1), 1_000);
+    return () => clearTimeout(t);
+  }, [cooldownUntil, cooldownTick]);
   const [authedUser, setAuthedUser] = useState<StandardAuthParams | null>(null);
   const usernameRef = useRef<HTMLInputElement | null>(null);
   const passwordRef = useRef<HTMLInputElement | null>(null);
@@ -472,6 +502,17 @@ export const LoginView: React.FC<{
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (authBusy) return;
+    /*
+     * Respect the screen's own cooldown: refusing to fire while it stands is
+     * what keeps blind retries from grinding a lockout counter higher. The
+     * countdown is derived from Date.now(), so it cannot be skipped by
+     * remounting.
+     */
+    if (cooldownUntil !== null && Date.now() < cooldownUntil) {
+      const secs = Math.ceil((cooldownUntil - Date.now()) / 1_000);
+      setAuthError(`انتظر ${secs} ثانية قبل المحاولة التالية — المحاولة الآن تُطيل القفل فقط.`);
+      return;
+    }
     setAuthBusy(true);
     setAuthError('');
     try {
@@ -538,6 +579,13 @@ export const LoginView: React.FC<{
       const sessionRes = res as { session: AuthedSession };
       const s = sessionRes.session;
       sessionStorage.setItem('dypos_token', s.token);
+      /*
+       * A working credential clears the ledger: the operator proved the
+       * account, so whatever failures preceded it belong to a session that
+       * no longer exists.
+       */
+      setConsecutiveFails(0);
+      setCooldownUntil(null);
       setAuthedUser({
         name: s.user.name,
         role: s.user.role,
@@ -547,12 +595,32 @@ export const LoginView: React.FC<{
       // Note: navigation to main screen is handled by parent onAuthenticated
       // callback after session is stored. No need to set authStep here.
     } catch (err: any) {
-      // Map common authentication errors to user-friendly messages
+      // Map common authentication errors to user-friendly messages.
+      //
+      // 401 stays generic BY SERVER DESIGN (unknown user, wrong password,
+      // inactive, and locked are one indistinguishable refusal). But past
+      // the fifth consecutive 401 on this terminal, the DIRECTED message
+      // below replaces the generic one: it names the lock and the next
+      // step instead of inviting a sixth blind retry. The server data is
+      // not read here — the OPINION comes from counting, and the ACTION
+      // (60s cooldown) refuses to send, never to bypass.
+      const nextFails = err.status === 401 ? consecutiveFails + 1 : consecutiveFails;
+      if (err.status === 401) setConsecutiveFails(nextFails);
       let message = 'تعذّر تسجيل الدخول';
       if (err.status) {
         switch (err.status) {
           case 401:
-            message = 'اسم المستخدم أو كلمة المرور غير صحيحة — تأكد من المدخلات وحاول مرة أخرى';
+            if (nextFails >= 6) {
+              setCooldownUntil(Date.now() + 60_000);
+              message = 'ست محاولات فاشلة متتالية — الحساب على الأرجح مقفل الآن. انتظر دقيقة كاملة، تحقق من اسم المستخدم حرفاً بحرف، ثم حاول مرة واحدة. إن استمر الفشل فاطلب من المشرف فك القفل.';
+            } else if (nextFails >= 3) {
+              message = `اسم المستخدم أو كلمة المرور غير صحيحة (${nextFails} من 5 قبل التهدئة) — راجع الحروف الكبيرة/الصغيرة وتأكد أن المؤسسة المختارة هي مؤسستك.`;
+            } else {
+              message = 'اسم المستخدم أو كلمة المرور غير صحيحة — تأكد من المدخلات وحاول مرة أخرى';
+            }
+            break;
+          case 423:
+            message = 'الحساب مقفل مؤقتاً بعد محاولات فاشلة — انتظر انتهاء مدة القفل ثم حاول مرة واحدة، أو راجع مشرف النظام';
             break;
           case 403:
             message = 'حسابك مقفل أو غير مفعل — راجع مشرف النظام';
@@ -797,9 +865,25 @@ return (
                   onSubmit={handleLoginSubmit}
                   onTwoFactorSuccess={() => setAuthStep('2fa')}
                   onAccountUnlock={() => setAuthStep('unlock_account')}
+                  onShowRegister={() => setAuthStep('register')}
+                  consecutiveFails={consecutiveFails}
+                  cooldownUntil={cooldownUntil}
                   passwordStrength={passwordStrength}
                   themeMode={themeMode}
                 />
+              ) : authStep === 'register' ? (
+                <div>
+                  <RegistrationView />
+                  <div className="mt-4 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setAuthStep('credentials')}
+                      className="text-brand hover:underline text-xs font-bold"
+                    >
+                      عودة إلى تسجيل الدخول
+                    </button>
+                  </div>
+                </div>
               ) : authStep === '2fa' ? (
                 <TwoFactorGate
                   otpDigits={otpDigits}
@@ -1092,6 +1176,9 @@ interface CredentialsFormProps {
   onSubmit: (e: React.FormEvent) => void;
   onTwoFactorSuccess: () => void;
   onAccountUnlock: () => void;
+  onShowRegister: () => void;
+  consecutiveFails: number;
+  cooldownUntil: number | null;
   /* REMOVED: onSsoLogin/ssoLoading — federated SSO is not provisioned. */
   passwordStrength: number;
   themeMode: ThemeMode;
@@ -1127,6 +1214,9 @@ const CredentialsForm = React.forwardRef<HTMLInputElement, CredentialsFormProps>
       onSubmit,
       onTwoFactorSuccess,
       onAccountUnlock,
+      onShowRegister,
+      consecutiveFails,
+      cooldownUntil,
       passwordStrength,
       themeMode,
     },
@@ -1210,6 +1300,10 @@ const CredentialsForm = React.forwardRef<HTMLInputElement, CredentialsFormProps>
                   فك قفل الحساب؟
                 </button>
                 <span className="text-muted dark:text-muted">·</span>
+                <button type="button" onClick={onShowRegister} className="text-brand hover:underline">
+                  تسجيل حساب جديد
+                </button>
+                <span className="text-muted dark:text-muted">·</span>
                 <a href="mailto:support@smartports.sa" className="text-brand hover:underline">
                   نسيت كلمة المرور؟
                 </a>
@@ -1225,11 +1319,19 @@ const CredentialsForm = React.forwardRef<HTMLInputElement, CredentialsFormProps>
 
             <button
               type="submit"
-              disabled={authBusy}
+              disabled={authBusy || (cooldownUntil !== null && Date.now() < cooldownUntil)}
               className="w-full bg-gradient-to-r from-brand-600 to-teal-600 hover:from-brand-500 hover:to-teal-500 text-white py-3 rounded-xl text-xs font-black transition-all shadow-xl shadow-brand-600/25 flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-60 disabled:cursor-wait"
             >
               {authBusy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-              <span>{authBusy ? 'جارٍ التحقق من كلمة المرور…' : 'تسجيل الدخول وبدء الوردية'}</span>
+              <span>
+                {authBusy
+                  ? 'جارٍ التحقق من كلمة المرور…'
+                  : cooldownUntil !== null && Date.now() < cooldownUntil
+                    ? `تهدئة — حاول بعد ${Math.ceil((cooldownUntil - Date.now()) / 1_000)} ث`
+                    : consecutiveFails > 0 && consecutiveFails < 6
+                      ? `تسجيل الدخول وبدء الوردية (${consecutiveFails}/5)`
+                      : 'تسجيل الدخول وبدء الوردية'}
+              </span>
             </button>
           </div>
         )}
