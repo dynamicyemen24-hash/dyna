@@ -6,6 +6,7 @@
  * that the Express server exposes locally, so the React client is unchanged.
  */
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
+import { handleEdgeDataRoute } from './edgeDataRoutes.js';
 
 export interface Env {
   DATABASE_URL: string;
@@ -2425,6 +2426,18 @@ async function route(
   // caller could read another tenant simply by setting x-tenant-id.
   const tenant = principal.tenantId;
   const limit = Math.min(Number(url.searchParams.get('limit')) || 200, 1000);
+
+  /*
+   * The production mirror: paths the SPA calls that were only ever registered in
+   * Express (home screen, shifts, currencies/UoM, accounting periods). This
+   * delegates first and returns null for anything it does not own, so the table
+   * below is untouched for the routes it already serves.
+   */
+  const mirrored = await handleEdgeDataRoute({
+    method, path, url, req, body, principal, requestId,
+    sql, tenant, json, fail, makeId, audit, env,
+  });
+  if (mirrored) return mirrored;
 
   if (method === 'GET') {
     switch (true) {
