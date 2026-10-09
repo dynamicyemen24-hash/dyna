@@ -247,12 +247,19 @@ jobs:
 
       # Apply numbered database migrations before the application is exposed.
       #
-      # ── WHY THIS STEP NO LONGER BLOCKS THE DEPLOY ──────────────────────────
+      # ── WHY THIS NO LONGER BLOCKS THE DEPLOY ───────────────────────────────
       # It used to run unconditionally. When the DATABASE_URL workflow secret is
       # empty it exits 1 HERE — before "Publish to Cloudflare" — so every push
       # failed the gate and the Worker kept serving the previous dist/: the
       # frontend shipped nothing, not because the build was wrong but because an
       # optional pre-step was misconfigured. That coupling is the defect.
+      #
+      # `secrets` is deliberately NOT referenced in an `if:` — GitHub does not
+      # expose the secrets context to step-level conditionals, and doing so
+      # makes the workflow fail to parse before any job is created (a run that
+      # "completes" in 0s with no jobs). The emptiness check therefore lives in
+      # the shell, where a missing credential is a warning and a clean exit,
+      # never a deploy-stopping error.
       #
       # Migrations are idempotent and the production-safe ones are backwards
       # compatible with the verified artifact, so the honest behaviour is to
@@ -261,15 +268,14 @@ jobs:
       # missing database secret is a configuration gap to be filled, never a
       # defect in the artifact being shipped.
       - name: Apply production database migrations
-        if: ${{ secrets.DATABASE_URL != '' }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx tsx scripts/migrate.ts
-
-      - name: Notice — database migrations skipped (no DATABASE_URL secret)
-        if: ${{ secrets.DATABASE_URL == '' }}
         run: |
-          echo "::warning::DATABASE_URL workflow secret is empty — database migrations were SKIPPED for this deploy. Apply them out-of-band with the credential set, and add secrets.DATABASE_URL to re-enable them in the gate."
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::warning::DATABASE_URL workflow secret is empty — database migrations were SKIPPED for this deploy. Apply them out-of-band with the credential set, and add secrets.DATABASE_URL to re-enable them in the gate."
+            exit 0
+          fi
+          npx tsx scripts/migrate.ts
 
       # The `verify` job built this exact `dist/`. Rebuilding it here would
       # defeat the purpose: the bytes that passed the gate would not be the bytes
