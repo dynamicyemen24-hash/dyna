@@ -141,7 +141,7 @@ jobs:
           path: dist
           retention-days: 7
 
-database:
+  database:
     name: integration suites (needs DATABASE_URL)
     runs-on: ubuntu-latest
     timeout-minutes: 20
