@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { apiDelete, apiPost, apiPut, apiGet, sar, ListResponse } from '../services/dyposApi';
 import {
-  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal,
+  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal, ConfirmDialog,
   Field, Input, TextArea, PrimaryButton, GhostButton, Stat, Card,
 } from './ui/Primitives';
 
@@ -42,6 +42,8 @@ export const ServicesView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  /* Service awaiting confirmation before it is destroyed. */
+  const [pendingDelete, setPendingDelete] = useState<Service | null>(null);
   const [search, setSearch] = useState('');
   const [onlyActive, setOnlyActive] = useState(false);
   const [modal, setModal] = useState(false);
@@ -124,10 +126,14 @@ export const ServicesView: React.FC = () => {
     }
   };
 
-  const remove = async (s: Service) => {
-    if (!confirm(`حذف الخدمة «${s.name}»؟`)) return;
+  const remove = (s: Service) => setPendingDelete(s);
+
+  const confirmDelete = async () => {
+    const target = pendingDelete;
+    setPendingDelete(null);
+    if (!target) return;
     try {
-      await apiDelete(`/api/db/services/${s.id}`);
+      await apiDelete(`/api/db/services/${target.id}`);
       setToast({ kind: 'ok', msg: 'تم حذف الخدمة' });
       load();
     } catch (e: any) {
@@ -280,6 +286,16 @@ export const ServicesView: React.FC = () => {
       </Modal>
 
       {toast && <Toast kind={toast.kind} message={toast.msg} onClose={() => setToast(null)} />}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="حذف خدمة"
+        message={pendingDelete ? `سيتم حذف الخدمة «${pendingDelete.name}» نهائياً.` : ''}
+        confirmLabel="حذف"
+        tone="err"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 };

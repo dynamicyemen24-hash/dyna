@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Factory, Plus, Trash2, PlayCircle, Boxes, Layers } from 'lucide-react';
 import { apiDelete, apiPost, apiGet, ListResponse } from '../services/dyposApi';
 import {
-  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal,
+  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal, ConfirmDialog,
   Field, Input, TextArea, Select, PrimaryButton, GhostButton, Stat, Card,
 } from './ui/Primitives';
 
@@ -56,6 +56,10 @@ export const ProductionView: React.FC = () => {
   const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState('');
+  /* Order awaiting confirmation before it is completed (consumes stock). */
+  const [pendingComplete, setPendingComplete] = useState<ProdOrder | null>(null);
+  /* Order awaiting confirmation before it is destroyed. */
+  const [pendingDelete, setPendingDelete] = useState<ProdOrder | null>(null);
   const [form, setForm] = useState({
     productId: '', recipeId: '', quantity: '10', notes: '',
   });
@@ -118,14 +122,16 @@ export const ProductionView: React.FC = () => {
     }
   };
 
-  const complete = async (o: ProdOrder) => {
-    if (!confirm(
-      `سيتم استهلاك مكونات الوصفة (FEFO) وإضافة ${o.quantity} من «${o.product_name}» للمخزون. متابعة؟`,
-    )) return;
-    setBusyId(o.id);
+  const complete = (o: ProdOrder) => setPendingComplete(o);
+
+  const confirmComplete = async () => {
+    const target = pendingComplete;
+    setPendingComplete(null);
+    if (!target) return;
+    setBusyId(target.id);
     try {
-      const res: any = await apiPost(`/api/db/production/${o.id}/complete`, {
-        completedQty: Number(o.quantity),
+      const res: any = await apiPost(`/api/db/production/${target.id}/complete`, {
+        completedQty: Number(target.quantity),
       });
       const consumed = res.consumed?.length || 0;
       setToast({ kind: 'ok', msg: `تم إتمام الإنتاج — استُهلك ${consumed} مكوّن` });
@@ -137,10 +143,14 @@ export const ProductionView: React.FC = () => {
     }
   };
 
-  const remove = async (o: ProdOrder) => {
-    if (!confirm('حذف أمر الإنتاج؟')) return;
+  const remove = (o: ProdOrder) => setPendingDelete(o);
+
+  const confirmDelete = async () => {
+    const target = pendingDelete;
+    setPendingDelete(null);
+    if (!target) return;
     try {
-      await apiDelete(`/api/db/production/${o.id}`);
+      await apiDelete(`/api/db/production/${target.id}`);
       setToast({ kind: 'ok', msg: 'تم الحذف' });
       load();
     } catch (e: any) {
@@ -309,6 +319,26 @@ export const ProductionView: React.FC = () => {
       </Modal>
 
       {toast && <Toast kind={toast.kind} message={toast.msg} onClose={() => setToast(null)} />}
+
+      <ConfirmDialog
+        open={pendingComplete !== null}
+        title="إتمام أمر الإنتاج"
+        message={pendingComplete ? `سيتم استهلاك مكونات الوصفة (FEFO) وإضافة ${pendingComplete.quantity} من «${pendingComplete.product_name}» للمخزون.` : ''}
+        confirmLabel="تأكيد الإنتاج"
+        tone="brand"
+        onConfirm={confirmComplete}
+        onCancel={() => setPendingComplete(null)}
+      />
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="حذف أمر إنتاج"
+        message={pendingDelete ? `سيتم حذف أمر الإنتاج الخاص بـ «${pendingDelete.product_name}» نهائياً.` : ''}
+        confirmLabel="حذف"
+        tone="err"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 };

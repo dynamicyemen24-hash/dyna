@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Truck, Plus, Trash2, MapPin, PackageCheck } from 'lucide-react';
 import { apiDelete, apiPatch, apiPost, apiGet, sar, fmtDateTime, ListResponse } from '../services/dyposApi';
 import {
-  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal,
+  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal, ConfirmDialog,
   Field, Input, TextArea, Select, PrimaryButton, GhostButton, Stat, Card,
 } from './ui/Primitives';
 
@@ -47,6 +47,8 @@ export const DeliveryView: React.FC = () => {
   const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  /* Delivery order awaiting confirmation before it is destroyed. */
+  const [pendingDelete, setPendingDelete] = useState<Delivery | null>(null);
   const [form, setForm] = useState({
     customerName: '', customerPhone: '', address: '',
     zoneId: '', amountDue: '', driverName: '', notes: '',
@@ -126,10 +128,14 @@ export const DeliveryView: React.FC = () => {
     }
   };
 
-  const remove = async (d: Delivery) => {
-    if (!confirm('حذف طلب التوصيل؟')) return;
+  const remove = (d: Delivery) => setPendingDelete(d);
+
+  const confirmDelete = async () => {
+    const target = pendingDelete;
+    setPendingDelete(null);
+    if (!target) return;
     try {
-      await apiDelete(`/api/db/deliveries/${d.id}`);
+      await apiDelete(`/api/db/deliveries/${target.id}`);
       setToast({ kind: 'ok', msg: 'تم الحذف' });
       load();
     } catch (e: any) {
@@ -270,6 +276,16 @@ export const DeliveryView: React.FC = () => {
       </Modal>
 
       {toast && <Toast kind={toast.kind} message={toast.msg} onClose={() => setToast(null)} />}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="حذف طلب توصيل"
+        message={pendingDelete ? `سيتم حذف طلب التوصيل الخاص بـ «${pendingDelete.customer_name}» نهائياً.` : ''}
+        confirmLabel="حذف"
+        tone="err"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 };

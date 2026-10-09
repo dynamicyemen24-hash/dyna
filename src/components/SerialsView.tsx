@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Hash, Plus, Trash2, Smartphone, ShieldCheck } from 'lucide-react';
 import { apiDelete, apiPatch, apiPost, apiGet, fmtDate, ListResponse } from '../services/dyposApi';
 import {
-  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal,
+  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal, ConfirmDialog,
   Field, Input, Select, PrimaryButton, GhostButton, Stat, Card,
 } from './ui/Primitives';
 
@@ -37,6 +37,8 @@ export const SerialsView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  /* Serial awaiting confirmation before it is destroyed. */
+  const [pendingDelete, setPendingDelete] = useState<Serial | null>(null);
   const [form, setForm] = useState({ productId: '', serialNumber: '', imei: '', warrantyEnd: '' });
 
   const load = useCallback(async () => {
@@ -110,10 +112,14 @@ export const SerialsView: React.FC = () => {
     }
   };
 
-  const remove = async (s: Serial) => {
-    if (!confirm('حذف هذا الرقم التسلسلي؟')) return;
+  const remove = (s: Serial) => setPendingDelete(s);
+
+  const confirmDelete = async () => {
+    const target = pendingDelete;
+    setPendingDelete(null);
+    if (!target) return;
     try {
-      await apiDelete(`/api/db/serials/${s.id}`);
+      await apiDelete(`/api/db/serials/${target.id}`);
       setToast({ kind: 'ok', msg: 'تم الحذف' });
       load();
     } catch (e: any) {
@@ -245,6 +251,16 @@ export const SerialsView: React.FC = () => {
       </Modal>
 
       {toast && <Toast kind={toast.kind} message={toast.msg} onClose={() => setToast(null)} />}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="حذف رقم تسلسلي"
+        message={pendingDelete ? `سيتم حذف الرقم التسلسلي «${pendingDelete.serial_number}» نهائياً.` : ''}
+        confirmLabel="حذف"
+        tone="err"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 };

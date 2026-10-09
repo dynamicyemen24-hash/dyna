@@ -154,6 +154,14 @@ export const RetailPOS: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
 
   /*
+   * The pay button's old `alert()` is announced here instead. With no gateway
+   * wired up the button cannot capture money, so it must say so clearly — but a
+   * blocking native dialog on a till is a dead screen while it is open. This
+   * notice states the same fact without freezing the register.
+   */
+  const [payNotice, setPayNotice] = useState('');
+
+  /*
    * The loader that fetches the catalogue lives at the top of this component,
    * alongside the tenant's VAT rate. A SECOND loader used to sit here, fetching
    * `/api/db/products` again and — on failure — logging "using mock data" while
@@ -801,6 +809,16 @@ export const RetailPOS: React.FC = () => {
             </div>
           )}
 
+          {payNotice && (
+            <div
+              role="status"
+              className="mb-3 rounded-xl border border-warn/30 bg-warn-soft p-3 text-[11.5px] leading-relaxed text-warn-strong"
+            >
+              <p className="font-bold">لا توجد بوابة دفع مربوطة</p>
+              <p className="mt-1 opacity-90">{payNotice}</p>
+            </div>
+          )}
+
           <button
             onClick={() => {
               /*
@@ -808,11 +826,15 @@ export const RetailPOS: React.FC = () => {
                * looked armed, and did nothing. A till screen whose only "sell"
                * control is inert is worse than one without it — the operator
                * presses it, waits, and re-keys the sale.
+               *
+               * It still cannot capture money with no gateway configured, so it
+               * now states that inline rather than through a blocking `alert()`
+               * that froze the register while it was open.
                */
               if (!canProceed || !totalKnown) return;
-              alert(
-                `إجمالي ${total.toFixed(2)} ر.س عبر ${paymentMode === 'single' ? 'دفع واحد' : 'دفع متعدد'}. `
-                + 'لا توجد بوابة دفع مربوطة بعد — لن يُسجَّل أي بيع.',
+              setPayNotice(
+                `الإجمالي ${total.toFixed(2)} ر.س (${paymentMode === 'single' ? 'دفع واحد' : 'دفع متعدد'}) `
+                + 'لن يُسجَّل أي بيع حتى تُربط بوابة دفع.',
               );
             }}
             disabled={!canProceed || !totalKnown}

@@ -4,7 +4,7 @@ import {
   apiDelete, apiPatch, apiPost, apiGet, sar, fmtDateTime, ListResponse,
 } from '../services/dyposApi';
 import {
-  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal,
+  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal, ConfirmDialog,
   Field, Input, TextArea, Select, PrimaryButton, GhostButton, Stat, Card,
 } from './ui/Primitives';
 
@@ -52,6 +52,8 @@ export const AppointmentsView: React.FC = () => {
   const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  /* Held appointment awaiting confirmation before it is destroyed. */
+  const [pendingDelete, setPendingDelete] = useState<Appointment | null>(null);
   const [form, setForm] = useState({
     serviceId: '', customerName: '', customerPhone: '',
     start: toLocalInput(new Date(Date.now() + 3600_000)), notes: '',
@@ -138,10 +140,14 @@ export const AppointmentsView: React.FC = () => {
     }
   };
 
-  const remove = async (a: Appointment) => {
-    if (!confirm('حذف هذا الموعد؟')) return;
+  const remove = (a: Appointment) => setPendingDelete(a);
+
+  const confirmDelete = async () => {
+    const target = pendingDelete;
+    setPendingDelete(null);
+    if (!target) return;
     try {
-      await apiDelete(`/api/db/appointments/${a.id}`);
+      await apiDelete(`/api/db/appointments/${target.id}`);
       setToast({ kind: 'ok', msg: 'تم حذف الموعد' });
       load();
     } catch (e: any) {
@@ -284,6 +290,17 @@ export const AppointmentsView: React.FC = () => {
       </Modal>
 
       {toast && <Toast kind={toast.kind} message={toast.msg} onClose={() => setToast(null)} />}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="حذف موعد"
+        message={pendingDelete ? `سيُحذف موعد «${pendingDelete.customer_name}» نهائياً. لا يمكن التراجع عن هذه العملية.` : ''}
+        confirmLabel="حذف"
+        cancelLabel="إلغاء"
+        tone="err"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 };

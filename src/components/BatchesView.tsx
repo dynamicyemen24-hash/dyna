@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Clock, Plus, Trash2, AlertTriangle, PackageCheck } from 'lucide-react';
 import { apiDelete, apiPost, apiGet, sar, fmtDate, ListResponse } from '../services/dyposApi';
 import {
-  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal,
+  ScreenHeader, Pill, Loading, ErrorBox, EmptyState, Toast, Modal, ConfirmDialog,
   Field, Input, Select, PrimaryButton, GhostButton, Stat, Card,
 } from './ui/Primitives';
 
@@ -47,6 +47,8 @@ export const BatchesView: React.FC = () => {
   const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  /* Batch awaiting confirmation before it is destroyed. */
+  const [pendingDelete, setPendingDelete] = useState<Batch | null>(null);
   const [form, setForm] = useState({
     productId: '', batchNumber: '', quantity: '100', cost: '0', expiryDate: '',
   });
@@ -106,10 +108,14 @@ export const BatchesView: React.FC = () => {
     }
   };
 
-  const remove = async (b: Batch) => {
-    if (!confirm(`حذف التشغيلة ${b.batch_number}؟`)) return;
+  const remove = (b: Batch) => setPendingDelete(b);
+
+  const confirmDelete = async () => {
+    const target = pendingDelete;
+    setPendingDelete(null);
+    if (!target) return;
     try {
-      await apiDelete(`/api/db/batches/${b.id}`);
+      await apiDelete(`/api/db/batches/${target.id}`);
       setToast({ kind: 'ok', msg: 'تم الحذف' });
       load();
     } catch (e: any) {
@@ -228,6 +234,16 @@ export const BatchesView: React.FC = () => {
       </Modal>
 
       {toast && <Toast kind={toast.kind} message={toast.msg} onClose={() => setToast(null)} />}
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="حذف تشغيلة"
+        message={pendingDelete ? `سيتم حذف التشغيلة «${pendingDelete.batch_number}» نهائياً.` : ''}
+        confirmLabel="حذف"
+        tone="err"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 };

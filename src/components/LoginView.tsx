@@ -387,22 +387,6 @@ export const LoginView: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Restore progress on mount if we navigated away previously
-  useEffect(() => {
-    const saved = sessionStorage.getItem('dypos_login_progress');
-    if (saved) {
-      const data = JSON.parse(saved);
-      setUsername(data.username);
-      setPassword(data.password);
-      // Clear saved progress after restoring
-      try {
-        sessionStorage.removeItem('dypos_login_progress');
-      } catch {
-        // Storage disabled
-      }
-    }
-  }, []);
-
   // ---- UX: password strength ----
   const passwordStrength = useMemo(() => {
     if (!password) return 0;

@@ -124,6 +124,14 @@ export const POSView: React.FC<POSViewProps> = ({
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>(DEFAULT_CURRENCIES[1]); // USD default
 
   /*
+   * Barcode lookups that find nothing are announced here instead of with a
+   * blocking `alert()`. The old call froze the till and swallowed the operator's
+   * keyboard focus; an inline notice keeps the register responsive and says the
+   * same thing without hijacking the main thread.
+   */
+  const [barcodeNotice, setBarcodeNotice] = useState('');
+
+  /*
    * ══ THE FABRICATED READING THIS REPLACES ════════════════════════════════
    * This state was seeded with a weight of 1.45 kg and `isStable: true`, and a
    * subscription to a gateway whose "readings" were `Math.random()` noise. So the
@@ -295,8 +303,9 @@ export const POSView: React.FC<POSViewProps> = ({
       onAddToCart(product);
       audioBeep();
       setBarcodeInput('');
+      setBarcodeNotice('');
     } else {
-      alert('لم يتم العثور على منتج بهذا الباركود أو الكود');
+      setBarcodeNotice('لم يتم العثور على منتج بهذا الباركود أو الكود');
     }
   };
 
@@ -477,6 +486,15 @@ export const POSView: React.FC<POSViewProps> = ({
                 إضافة
               </button>
             </form>
+
+            {barcodeNotice && (
+              <p
+                role="status"
+                className="self-center rounded-lg border border-warn/30 bg-warn-soft px-3 py-1.5 text-[11.5px] font-bold text-warn-strong"
+              >
+                {barcodeNotice}
+              </p>
+            )}
 
             <button
               onClick={startCamera}

@@ -20,6 +20,14 @@ compatibility_date = "2026-09-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
+# Account scope. This is a non-secret identifier (not a credential): wrangler
+# needs it to know WHICH account to deploy to. Without it, deploys fail with
+# "More than one account available" or fall back to an account inferred from an
+# OAuth session that may not exist on this machine. Committing it means the
+# deploy target is fixed in the repo and never depends on a local login.
+# The token stays in secrets (CLOUDFLARE_API_TOKEN), never here.
+account_id = "ce1007ca229319e79c9305f0b954536a"
+
 # ---------------------------------------------------------------------
 # Customer domain
 #

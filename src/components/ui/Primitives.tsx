@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, Inbox } from 'lucide-react';
 
 /* ------------------------------ Page shell ------------------------------ */
@@ -209,6 +209,94 @@ export const Modal: React.FC<{
           </button>
         </div>
         <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+};
+
+/* ---------------------------- ConfirmDialog ---------------------------- */
+/* Accessible confirmation for destructive actions.
+ *
+ * Every admin screen used the browser's native `confirm()` before this
+ * existed: unstyled, not themeable, not announced as an alert by screen
+ * readers, and blocking the main thread. A till operator deleting an
+ * appointment should get the same themed, keyboard-dismissible confirmation
+ * the rest of the product uses. Escape cancels, and the confirm action is
+ * autofocused so destroying data always costs one deliberate keystroke more
+ * than the operator already spent to open it.
+ */
+export const ConfirmDialog: React.FC<{
+  open: boolean;
+  title: string;
+  message?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: 'err' | 'brand';
+  onConfirm: () => void;
+  onCancel: () => void;
+}> = ({
+  open,
+  title,
+  message,
+  confirmLabel = 'تأكيد',
+  cancelLabel = 'إلغاء',
+  tone = 'err',
+  onConfirm,
+  onCancel,
+}) => {
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    confirmRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-subtle backdrop-blur-sm p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-md surface-card elev-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby={message ? 'confirm-dialog-desc' : undefined}
+      >
+        <div className="p-5 space-y-3">
+          <h3 id="confirm-dialog-title" className="text-base font-semibold text-ink flex items-center gap-2">
+            <AlertCircle size={18} className={tone === 'err' ? 'text-err' : 'text-brand'} />
+            {title}
+          </h3>
+          {message && (
+            <p id="confirm-dialog-desc" className="text-sm text-muted leading-relaxed">
+              {message}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-hairline bg-subtle/40">
+          <GhostButton type="button" onClick={onCancel}>{cancelLabel}</GhostButton>
+          <button
+            ref={confirmRef}
+            type="button"
+            onClick={onConfirm}
+            className={`px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all inline-flex items-center gap-2 ${
+              tone === 'err'
+                ? 'bg-err hover:brightness-110'
+                : 'bg-brand-600 hover:bg-brand-500'
+            }`}
+          >
+            {confirmLabel}
+          </button>
+        </div>
       </div>
     </div>
   );
