@@ -50,22 +50,22 @@ export const BranchesView: React.FC<BranchesViewProps> = ({
   return (
     <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-canvas text-ink">
       <div className="mb-6">
-        <h2 className="text-xl font-black text-white flex items-center gap-2">
-          <Building2 className="w-6 h-6 text-brand-400" />
+        <h2 className="text-xl font-black text-ink flex items-center gap-2">
+          <Building2 className="w-6 h-6 text-brand" />
           إدارة الفروع وورديات الكاشير (Z-Report)
         </h2>
-        <p className="text-xs text-slate-400 mt-0.5">إدارة فروع المؤسسة، فتح وإغلاق الورديات، ومتابعة النقدية الافتتاحية</p>
+        <p className="text-xs text-faint mt-0.5">إدارة فروع المؤسسة، فتح وإغلاق الورديات، ومتابعة النقدية الافتتاحية</p>
       </div>
 
       {/* Shift Control Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-6 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="surface-card rounded-2xl p-6 mb-6 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-hairline">
           <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Clock className="w-5 h-5 text-brand-400" />
+            <h3 className="text-base font-bold text-ink flex items-center gap-2">
+              <Clock className="w-5 h-5 text-brand" />
               حالة الوردية الحالية
             </h3>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-faint mt-1">
               {shift.isOpen ? `الوردية مفتوحة بواسطة الكاشير: ${shift.cashierName} منذ ${shift.startTime}` : 'الوردية مغلقة حالياً. يرجى فتح وردية جديدة لبدء المبيعات.'}
             </p>
           </div>
@@ -75,7 +75,7 @@ export const BranchesView: React.FC<BranchesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setDialogOpen(true)}
-                className="bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 px-6 py-2.5 rounded-xl text-xs font-bold transition-all"
+                className="bg-err-soft border border-err/30 text-err-strong hover:bg-rose-500/20 px-6 py-2.5 rounded-xl text-xs font-bold transition-all"
               >
                 إغلاق الوردية (Z-Report)
               </button>
@@ -93,16 +93,16 @@ export const BranchesView: React.FC<BranchesViewProps> = ({
 
         {shift.isOpen && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
-            <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-              <span className="text-xs text-slate-400 block mb-1">إجمالي مبيعات الوردية</span>
-              <span className="text-xl font-black text-brand-400 font-mono">{shift.totalSales.toLocaleString()} ر.س</span>
+            <div className="bg-subtle p-4 rounded-xl border border-hairline">
+              <span className="text-xs text-faint block mb-1">إجمالي مبيعات الوردية</span>
+              <span className="text-xl font-black text-brand font-mono">{shift.totalSales.toLocaleString()} ر.س</span>
             </div>
-            <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-              <span className="text-xs text-slate-400 block mb-1">عدد الفواتير المصدرة</span>
-              <span className="text-xl font-black text-white font-mono">{shift.transactionsCount} فاتورة</span>
+            <div className="bg-subtle p-4 rounded-xl border border-hairline">
+              <span className="text-xs text-faint block mb-1">عدد الفواتير المصدرة</span>
+              <span className="text-xl font-black text-ink font-mono">{shift.transactionsCount} فاتورة</span>
             </div>
-            <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-              <span className="text-xs text-slate-400 block mb-1">النقدية في الدرج</span>
+            <div className="bg-subtle p-4 rounded-xl border border-hairline">
+              <span className="text-xs text-faint block mb-1">النقدية في الدرج</span>
               <span className="text-xl font-black text-teal-400 font-mono">{(shift.openingCash + shift.cashSales).toLocaleString()} ر.س</span>
             </div>
           </div>
@@ -110,7 +110,7 @@ export const BranchesView: React.FC<BranchesViewProps> = ({
       </div>
 
       {/* Branches List */}
-      <h3 className="text-sm font-bold text-white mb-4">فروع المؤسسة المتاحة</h3>
+      <h3 className="text-sm font-bold text-ink mb-4">فروع المؤسسة المتاحة</h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {branches.map((b) => {
           const isSelected = selectedBranch.id === b.id;
@@ -118,33 +118,33 @@ export const BranchesView: React.FC<BranchesViewProps> = ({
             <div
               key={b.id}
               onClick={() => onSelectBranch(b)}
-              className={`bg-slate-900 border rounded-2xl p-5 cursor-pointer transition-all ${
-                isSelected ? 'border-brand-500 bg-brand-950/10 shadow-lg shadow-brand-500/10' : 'border-slate-800 hover:border-slate-700'
+              className={`bg-surface border rounded-2xl p-5 cursor-pointer transition-all ${
+                isSelected ? 'border-brand bg-brand-soft shadow-lg shadow-brand-500/10' : 'border-hairline hover:border-hairline'
               }`}
             >
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-bold text-white">{b.name}</h4>
+                <h4 className="text-sm font-bold text-ink">{b.name}</h4>
                 {isSelected && (
-                  <span className="bg-brand-500/10 text-brand-400 border border-brand-500/20 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                  <span className="bg-brand-soft text-brand border border-brand/20 px-2 py-0.5 rounded-full text-[10px] font-semibold">
                     الفرع الحالي
                   </span>
                 )}
               </div>
 
-              <div className="space-y-2 text-xs text-slate-400 mb-4">
+              <div className="space-y-2 text-xs text-faint mb-4">
                 <div className="flex items-center gap-2">
-                  <MapPin className="w-3.5 h-3.5 text-slate-500" />
+                  <MapPin className="w-3.5 h-3.5 text-muted" />
                   <span>{b.city} - {b.address}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Phone className="w-3.5 h-3.5 text-slate-500" />
+                  <Phone className="w-3.5 h-3.5 text-muted" />
                   <span className="font-mono">{b.phone}</span>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-                <span className="text-[11px] text-brand-400 font-medium">نشط وعمليات مزامنة لحظية</span>
-                <ShieldCheck className="w-4 h-4 text-brand-400" />
+              <div className="pt-3 border-t border-hairline flex items-center justify-between">
+                <span className="text-[11px] text-brand font-medium">نشط وعمليات مزامنة لحظية</span>
+                <ShieldCheck className="w-4 h-4 text-brand" />
               </div>
             </div>
           );

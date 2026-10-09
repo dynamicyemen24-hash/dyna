@@ -77,18 +77,18 @@ const MetricCard: React.FC<{
   change: number | null;
   sub: string;
 }> = ({ label, value, change, sub }) => (
-  <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-3xl">
-    <p className="text-slate-500 text-sm font-bold mb-2">{label}</p>
+  <div className="bg-subtle border border-hairline p-6 rounded-3xl">
+    <p className="text-muted text-sm font-bold mb-2">{label}</p>
     <div className="flex items-baseline gap-3 mb-1">
       <h3 className="text-2xl font-black text-numeric">{value}</h3>
       {change !== null && (
-        <span className={`text-xs font-bold flex items-center ${change >= 0 ? 'text-brand-400' : 'text-rose-400'}`}>
+        <span className={`text-xs font-bold flex items-center ${change >= 0 ? 'text-brand' : 'text-err-strong'}`}>
           {change >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
           {Math.abs(change)}%
         </span>
       )}
     </div>
-    <p className="text-xs text-slate-500">{sub}</p>
+    <p className="text-xs text-muted">{sub}</p>
   </div>
 );
 export const IntelligenceCenter: React.FC = () => {
@@ -174,8 +174,8 @@ return (
             <BrainCircuit size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-black text-white">مركز الذكاء التنفيذي</h1>
-            <p className="text-sm text-slate-500">
+            <h1 className="text-2xl font-black text-ink">مركز الذكاء التنفيذي</h1>
+            <p className="text-sm text-muted">
               تحليل مباشر لسجلات الفواتير — بلا تقديرات
             </p>
           </div>
@@ -189,9 +189,9 @@ return (
         a whole one is the failure this screen used to cause with invented data.
       */}
       {failed.length > 0 && (
-        <div role="alert" className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4">
+        <div role="alert" className="rounded-2xl border border-warn/30 bg-warn-soft p-4">
           <div className="flex items-start gap-3">
-            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-400" />
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-warn-strong" />
             <div>
               <p className="text-sm font-bold text-amber-200">
                 تعذّر قراءة {failed.length === 1 ? 'مصدر واحد' : `${failed.length} مصادر`} —
@@ -204,13 +204,13 @@ return (
       )}
 
       {loading ? (
-        <div role="status" className="py-20 text-center text-slate-400 text-sm">
+        <div role="status" className="py-20 text-center text-faint text-sm">
           جارٍ قراءة التقارير…
         </div>
       ) : !hasData ? (
-        <div className="rounded-2xl border border-slate-800 p-10 text-center">
-          <BarChart3 size={32} className="mx-auto mb-3 text-slate-600" />
-          <p className="text-sm text-slate-400">لا توجد فواتير مكتملة لعرضها بعد.</p>
+        <div className="rounded-2xl border border-hairline p-10 text-center">
+          <BarChart3 size={32} className="mx-auto mb-3 text-muted" />
+          <p className="text-sm text-faint">لا توجد فواتير مكتملة لعرضها بعد.</p>
         </div>
       ) : (
         <>
@@ -242,14 +242,14 @@ return (
             />
           </div>
 {/* ---- Revenue trend, from the daily series -------------------- */}
-          <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8">
+          <section className="surface-card rounded-[2rem] p-8">
             <div className="flex items-center gap-4 mb-6">
-              <div className="p-3 bg-brand-500/10 rounded-2xl text-brand-400">
+              <div className="p-3 bg-brand-soft rounded-2xl text-brand">
                 <BarChart3 size={24} />
               </div>
               <div>
-                <h3 className="text-xl font-black text-white">إيراد آخر 30 يوماً</h3>
-                <p className="text-sm text-slate-500">يومياً، من فواتير الحالة المكتملة</p>
+                <h3 className="text-xl font-black text-ink">إيراد آخر 30 يوماً</h3>
+                <p className="text-sm text-muted">يومياً، من فواتير الحالة المكتملة</p>
               </div>
             </div>
 
@@ -263,7 +263,7 @@ return (
                     : d.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' });
                   return (
                     <li key={p.day} className="group flex flex-1 flex-col items-center gap-1">
-                      <span className="text-2xs text-slate-400 opacity-0 group-hover:opacity-100">
+                      <span className="text-2xs text-faint opacity-0 group-hover:opacity-100">
                         {sar(p.revenue)}
                       </span>
                       <div
@@ -272,13 +272,13 @@ return (
                         role="img"
                         aria-label={`${label}: ${sar(p.revenue)} · ${p.invoices} فاتورة`}
                       />
-                      <span className="text-2xs text-slate-500">{label}</span>
+                      <span className="text-2xs text-muted">{label}</span>
                     </li>
                   );
                 })}
               </ul>
             ) : (
-              <p className="py-10 text-center text-sm text-slate-500">
+              <p className="py-10 text-center text-sm text-muted">
                 لا توجد فواتير مكتملة في آخر 30 يوماً.
               </p>
             )}
@@ -286,10 +286,10 @@ return (
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* ---- Branch performance, from the server -------------------- */}
-            <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8">
-              <h3 className="text-xl font-black text-white mb-6">أداء الفروع</h3>
+            <section className="surface-card rounded-[2rem] p-8">
+              <h3 className="text-xl font-black text-ink mb-6">أداء الفروع</h3>
               {branches.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">
+                <p className="py-8 text-center text-sm text-muted">
                   لا توجد مبيعات مسجّلة لأي فرع.
                 </p>
               ) : (
@@ -297,12 +297,12 @@ return (
                   {branches.slice(0, 8).map((b) => (
                     <li key={b.branch_id}>
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-xs font-bold text-slate-200">{b.name}</span>
-                        <span className="text-xs text-numeric text-slate-400">
+                        <span className="text-xs font-bold text-ink">{b.name}</span>
+                        <span className="text-xs text-numeric text-faint">
                           {sar(b.revenue)} · {b.invoices} فاتورة
                         </span>
                       </div>
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-subtle">
                         <div
                           className="h-full rounded-full bg-brand-500"
                           style={{
@@ -318,13 +318,13 @@ return (
               )}
             </section>
 {/* ---- Category mix, from the server -------------------------- */}
-            <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8">
-              <h3 className="text-xl font-black text-white mb-6 flex items-center gap-2">
-                <PieChart size={20} className="text-blue-400" />
+            <section className="surface-card rounded-[2rem] p-8">
+              <h3 className="text-xl font-black text-ink mb-6 flex items-center gap-2">
+                <PieChart size={20} className="text-info-strong" />
                 توزيع المبيعات حسب الفئة
               </h3>
               {categories.length === 0 || categoryTotal <= 0 ? (
-                <p className="py-8 text-center text-sm text-slate-500">
+                <p className="py-8 text-center text-sm text-muted">
                   لا توجد مبيعات مصنّفة بعد.
                 </p>
               ) : (
@@ -332,12 +332,12 @@ return (
                   {categories.slice(0, 8).map((c, i) => (
                     <li key={c.name}>
                       <div className="flex items-baseline justify-between gap-3">
-                        <span className="text-xs font-bold text-slate-200">{c.name}</span>
-                        <span className="text-xs text-numeric text-slate-400">
+                        <span className="text-xs font-bold text-ink">{c.name}</span>
+                        <span className="text-xs text-numeric text-faint">
                           {sar(c.value)} · {Math.round((c.value / categoryTotal) * 100)}%
                         </span>
                       </div>
-                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-subtle">
                         <div
                           className={`h-full rounded-full ${SERIES[i % SERIES.length]}`}
                           style={{ width: `${Math.max((c.value / categoryTotal) * 100, 1)}%` }}
@@ -356,11 +356,11 @@ return (
             should be able to see it came from the invoice ledger and where to
             check it — the difference between a figure and a claim.
           */}
-          <footer className="flex items-start gap-3 rounded-2xl border border-slate-800 p-4">
-            <ShieldCheck size={16} className="mt-0.5 shrink-0 text-brand-400" />
-            <p className="text-xs leading-relaxed text-slate-400">
+          <footer className="flex items-start gap-3 rounded-2xl border border-hairline p-4">
+            <ShieldCheck size={16} className="mt-0.5 shrink-0 text-brand" />
+            <p className="text-xs leading-relaxed text-faint">
               كل الأرقام أعلاه مقروءة مباشرة من سجل الفواتير (الحالة = مكتملة) عبر
-              <code className="text-slate-300"> /api/db/reports</code>.
+              <code className="text-muted"> /api/db/reports</code>.
               لا توجد قيم تقديرية في هذه الشاشة.
             </p>
           </footer>

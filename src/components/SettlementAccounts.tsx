@@ -143,20 +143,20 @@ export const SettlementAccounts: React.FC = () => {
   };
 
   const inputClass =
-    'w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500';
+    'w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-xs text-ink focus:outline-none focus:border-brand';
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-white flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-brand-400" />
+        <h3 className="text-sm font-bold text-ink flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-brand" />
           <span>Bank settlement accounts</span>
         </h3>
         <button
           type="button"
           onClick={() => void load()}
           disabled={state === 'loading'}
-          className="text-[11px] text-slate-400 hover:text-white flex items-center gap-1 disabled:opacity-50"
+          className="text-[11px] text-faint hover:text-ink flex items-center gap-1 disabled:opacity-50"
         >
           <RefreshCw className={`w-3 h-3 ${state === 'loading' ? 'animate-spin' : ''}`} />
           <span>Refresh</span>
@@ -167,7 +167,7 @@ export const SettlementAccounts: React.FC = () => {
           set one up simply does not have bank transfer yet, and the till says so
           rather than offering someone else's account. */}
       {state === 'ready' && accounts.length === 0 && (
-        <div className="rounded-xl border border-dashed border-slate-700 p-4 text-center text-xs text-slate-400">
+        <div className="rounded-xl border border-dashed border-hairline p-4 text-center text-xs text-faint">
           No settlement accounts configured. Bank transfer stays unavailable at the
           till until one is added.
         </div>
@@ -185,15 +185,15 @@ export const SettlementAccounts: React.FC = () => {
           {accounts.map((a) => (
             <li
               key={a.id}
-              className="rounded-xl border border-slate-800 bg-slate-950/40 p-3 flex items-start justify-between gap-3"
+              className="rounded-xl border border-hairline bg-subtle p-3 flex items-start justify-between gap-3"
             >
               <div className="min-w-0">
-                <p className="text-xs font-mono text-brand-300 break-all">{formatIban(a.iban)}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <p className="text-xs font-mono text-brand-strong break-all">{formatIban(a.iban)}</p>
+                <p className="text-[11px] text-faint mt-0.5">
                   {[a.bankName, a.holderName].filter(Boolean).join(' — ') || 'No bank name'}
                 </p>
                 {a.isDefault && (
-                  <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-amber-300">
+                  <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-warn-strong">
                     <Star className="w-3 h-3" /> Default account
                   </span>
                 )}
@@ -206,7 +206,7 @@ export const SettlementAccounts: React.FC = () => {
                     disabled={busy}
                     title="Make default"
                     aria-label="Make default"
-                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-50"
+                    className="p-1.5 rounded-lg bg-subtle hover:bg-hairline text-muted disabled:opacity-50"
                   >
                     <Star className="w-3.5 h-3.5" />
                   </button>
@@ -217,7 +217,7 @@ export const SettlementAccounts: React.FC = () => {
                   disabled={busy}
                   title="Deactivate"
                   aria-label="Deactivate"
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-900/60 text-slate-300 disabled:opacity-50"
+                  className="p-1.5 rounded-lg bg-subtle hover:bg-red-900/60 text-muted disabled:opacity-50"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -228,13 +228,13 @@ export const SettlementAccounts: React.FC = () => {
       )}
 
       {notice && (
-        <p className={`text-[11px] ${notice.kind === 'ok' ? 'text-emerald-400' : 'text-amber-400'}`}>
+        <p className={`text-[11px] ${notice.kind === 'ok' ? 'text-ok-strong' : 'text-warn-strong'}`}>
           {notice.text}
         </p>
       )}
 
-      <form onSubmit={submit} className="rounded-xl border border-slate-800 p-3 space-y-2 bg-slate-950/30">
-        <p className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+      <form onSubmit={submit} className="rounded-xl border border-hairline p-3 space-y-2 bg-subtle">
+        <p className="text-[11px] font-bold text-muted flex items-center gap-1.5">
           <Plus className="w-3.5 h-3.5" /> Add an account
         </p>
         <input
@@ -248,7 +248,7 @@ export const SettlementAccounts: React.FC = () => {
         />
         {/* The hint appears BEFORE submit, so a merchant is not taught the format
             through a failed round trip. */}
-        {form.iban && problem && <p className="text-[10px] text-amber-400">{problem}</p>}
+        {form.iban && problem && <p className="text-[10px] text-warn-strong">{problem}</p>}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <input
             value={form.bankName}

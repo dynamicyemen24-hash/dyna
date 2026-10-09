@@ -1,5 +1,5 @@
 ﻿/**
- * DyPOS Enterprise — Cloudflare Worker API.
+ * دينا: منصة التجارة الذكية — Cloudflare Worker API.
  *
  * Runs on the Cloudflare edge and talks to Neon over the serverless HTTP
  * driver (no TCP, no connection pool). Serves the same /api/db/* contract
@@ -3022,7 +3022,7 @@ async function route(
       // Import dynamically to avoid bundle size if not used
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const systemInstruction = `أنت المساعد الذكي لنظام DyPOS من تطوير شركة المنافذ الذكية للبرمجيات (Smart Ports Software).
+      const systemInstruction = `أنت المساعد الذكي لمنصة «دينا: منصة التجارة الذكية» من تطوير شركة المنافذ الذكية للبرمجيات (Smart Ports Software).
 مهمتك تحليل البيانات المالية والمخزون والمبيعات، وتقديم توصيات استراتيجية دقيقة وموثوقة للمسؤولين وأمناء الصندوق باللغة العربية والإنجليزية. لا تذكر أي تفاصيل تقنية عن البنية التحتية أو قواعد البيانات في ردودك.
 السياق الحالي للنظام: ${JSON.stringify(context || {})}`;
       const response = await ai.models.generateContent({

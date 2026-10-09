@@ -30,12 +30,12 @@ interface Delivery {
 }
 
 const FLOW: Record<string, { label: string; tone: string; next?: string; nextLabel?: string }> = {
-  pending: { label: 'بانتظار الإسناد', tone: 'bg-slate-800 text-slate-400 border-slate-700', next: 'assigned', nextLabel: 'إسناد للسائق' },
-  assigned: { label: 'مُسند', tone: 'bg-sky-500/10 text-sky-300 border-sky-500/30', next: 'picked_up', nextLabel: 'استلام' },
-  picked_up: { label: 'تم الاستلام', tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', next: 'on_the_way', nextLabel: 'في الطريق' },
+  pending: { label: 'بانتظار الإسناد', tone: 'bg-subtle text-faint border-hairline', next: 'assigned', nextLabel: 'إسناد للسائق' },
+  assigned: { label: 'مُسند', tone: 'bg-info-soft text-info-strong border-info/30', next: 'picked_up', nextLabel: 'استلام' },
+  picked_up: { label: 'تم الاستلام', tone: 'bg-warn-soft text-warn-strong border-warn/30', next: 'on_the_way', nextLabel: 'في الطريق' },
   on_the_way: { label: 'في الطريق', tone: 'bg-violet-500/10 text-violet-300 border-violet-500/30', next: 'delivered', nextLabel: 'تسليم' },
-  delivered: { label: 'مُسلّم', tone: 'bg-brand-500/10 text-brand-300 border-brand-500/30' },
-  cancelled: { label: 'ملغي', tone: 'bg-rose-500/10 text-rose-300 border-rose-500/30' },
+  delivered: { label: 'مُسلّم', tone: 'bg-brand-soft text-brand-strong border-brand/30' },
+  cancelled: { label: 'ملغي', tone: 'bg-err-soft text-err-strong border-err/30' },
 };
 
 export const DeliveryView: React.FC = () => {
@@ -149,18 +149,18 @@ export const DeliveryView: React.FC = () => {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="إجمالي الطلبات" value={String(stats.total)} icon={Truck} />
-        <Stat label="قيد التنفيذ" value={String(stats.active)} tone="text-amber-400" />
-        <Stat label="مُسلّمة" value={String(stats.delivered)} tone="text-brand-400" icon={PackageCheck} />
+        <Stat label="قيد التنفيذ" value={String(stats.active)} tone="text-warn-strong" />
+        <Stat label="مُسلّمة" value={String(stats.delivered)} tone="text-brand" icon={PackageCheck} />
         <Stat label="أرسوم مُحصّلة" value={sar(stats.fees)} tone="text-teal-400" />
       </div>
 
       <Card className="overflow-hidden">
-        <div className="p-4 border-b border-slate-800 flex flex-wrap gap-2">
+        <div className="p-4 border-b border-hairline flex flex-wrap gap-2">
           {[['all', 'الكل'], ['pending', 'بانتظار'], ['assigned', 'مُسند'],
             ['on_the_way', 'في الطريق'], ['delivered', 'مُسلّم']].map(([k, l]) => (
             <button key={k} onClick={() => setFilter(k)}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                filter === k ? 'bg-teal-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+                filter === k ? 'bg-teal-600 text-white' : 'bg-hairline/40 text-faint hover:bg-hairline'}`}>
               {l}
             </button>
           ))}
@@ -169,23 +169,23 @@ export const DeliveryView: React.FC = () => {
         {loading ? <Loading /> : error ? <ErrorBox message={error} onRetry={load} />
           : visible.length === 0 ? <EmptyState message="لا توجد طلبات توصيل" />
           : (
-            <div className="divide-y divide-slate-800">
+            <div className="divide-y divide-hairline">
               {visible.map((d) => {
                 const f = FLOW[d.status] || FLOW.pending;
                 return (
-                  <div key={d.id} className="p-4 flex flex-wrap items-center gap-4 hover:bg-slate-800/20">
+                  <div key={d.id} className="p-4 flex flex-wrap items-center gap-4 hover:bg-hairline/60/20">
                     <div className="flex-1 min-w-[220px]">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold">{d.customer_name}</span>
                         {d.customer_phone && (
-                          <span className="text-xs text-slate-500" dir="ltr">{d.customer_phone}</span>
+                          <span className="text-xs text-muted" dir="ltr">{d.customer_phone}</span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+                      <p className="text-xs text-faint mt-1 flex items-center gap-1">
                         <MapPin size={12} className="shrink-0" />
                         <span className="truncate">{d.address}</span>
                       </p>
-                      <p className="text-[11px] text-slate-500 mt-1">
+                      <p className="text-[11px] text-muted mt-1">
                         {d.zone_name ? `${d.zone_name} · ` : ''}
                         {d.driver_name ? `السائق: ${d.driver_name}` : 'لم يُسند سائق'}
                         {d.estimated_minutes ? ` · ~${d.estimated_minutes} دقيقة` : ''}
@@ -193,7 +193,7 @@ export const DeliveryView: React.FC = () => {
                     </div>
                     <div className="text-left">
                       <p className="font-black text-teal-400">{sar(d.amount_due)}</p>
-                      <p className="text-[11px] text-slate-500">رسوم: {sar(d.fee)}</p>
+                      <p className="text-[11px] text-muted">رسوم: {sar(d.fee)}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       <Pill tone={f.tone}>{f.label}</Pill>
@@ -204,7 +204,7 @@ export const DeliveryView: React.FC = () => {
                         </button>
                       )}
                       <button onClick={() => remove(d)}
-                        className="p-2 rounded-lg text-slate-400 hover:text-rose-400"
+                        className="p-2 rounded-lg text-faint hover:text-err-strong"
                         aria-label="حذف">
                         <Trash2 size={16} />
                       </button>

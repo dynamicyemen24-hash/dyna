@@ -869,10 +869,10 @@ return (
                 />
               )}
 
-              <div className="mt-4 pt-3 border-t border-slate-800/80 text-center flex items-center justify-between text-[10px] text-slate-500 transition-colors duration-300">
+              <div className="mt-4 pt-3 border-t border-hairline/80 text-center flex items-center justify-between text-[10px] text-muted transition-colors duration-300">
                 <span>تطوير شركة المنافذ الذكية للبرمجيات (Smart Ports Software)</span>
                 <div className="flex items-center gap-3">
-                  <a href="mailto:support@smartports.sa" className="hover:text-brand-400 flex items-center gap-1">
+                  <a href="mailto:support@smartports.sa" className="hover:text-brand flex items-center gap-1">
                     <LifeBuoy className="w-3 h-3" /> الدعم الفني
                   </a>
                 </div>
@@ -896,7 +896,7 @@ return (
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent p-3 flex flex-col justify-end">
                   <span className="text-[10px] text-cyan-300 font-mono font-bold tracking-wider">SMART PORTS SOFTWARE</span>
-                  <p className="text-xs font-black text-white">منصة دينا السحابية لإدارة التجارة والأعمال</p>
+                  <p className="text-xs font-black text-ink">منصة دينا السحابية لإدارة التجارة والأعمال</p>
                 </div>
               </div>
 
@@ -905,10 +905,10 @@ return (
                 <span>جاهزية التشغيل والربط المباشر</span>
               </div>
 
-              <h2 className="text-xl font-black text-white leading-snug mb-2">
+              <h2 className="text-xl font-black text-ink leading-snug mb-2">
                 حالة الأجهزة والاعتمادات الرسمية
               </h2>
-              <p className="text-xs text-slate-400 leading-relaxed mb-4">
+              <p className="text-xs text-faint leading-relaxed mb-4">
                 فحص تلقائي شامل لطابعة الفواتير، الميزان الإلكتروني، التوثيق الضريبي، والمزامنة السحابية.
               </p>
 
@@ -921,16 +921,16 @@ return (
                 opens); the button below launches it, and the scale widget
                 beneath is the real HAL frame, not a verdict.
               */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 mb-4 space-y-2.5">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
-                  <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Terminal className="w-4 h-4 text-brand-400" /> حالة الأجهزة التشغيلية
+              <div className="bg-surface p-4 rounded-2xl border border-hairline mb-4 space-y-2.5">
+                <div className="flex items-center justify-between pb-2 border-b border-hairline/80">
+                  <span className="text-xs font-bold text-ink flex items-center gap-1.5">
+                    <Terminal className="w-4 h-4 text-brand" /> حالة الأجهزة التشغيلية
                   </span>
                   <ToolLauncher
                     tool="devices"
                     icon={RefreshCw}
                     label="التقرير الكامل"
-                    className="text-[10px] bg-slate-900 hover:bg-slate-800 text-brand-400 border border-brand-500/30 px-2 py-0.5 rounded-lg font-bold inline-flex items-center gap-1 cursor-pointer"
+                    className="text-[10px] bg-surface hover:bg-hairline/60 text-brand border border-brand/30 px-2 py-0.5 rounded-lg font-bold inline-flex items-center gap-1 cursor-pointer"
                   />
                 </div>
                 <ScaleHALWidget />
@@ -939,9 +939,9 @@ return (
               <LiveNetworkMetrics themeMode={themeMode} />
             </div>
 
-            <div className="mt-6 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
+            <div className="mt-6 pt-3 border-t border-hairline/80 text-[11px] text-faint flex items-center justify-between">
               <span>© {new Date().getFullYear()} شركة المنافذ الذكية للبرمجيات</span>
-              <span className="font-bold text-brand-400 font-mono">Smart Ports · دينا: منصة التجارة الذكية SaaS</span>
+              <span className="font-bold text-brand font-mono">Smart Ports · دينا: منصة التجارة الذكية SaaS</span>
             </div>
           </div>
         </div>
@@ -988,7 +988,7 @@ const AuthModeSwitcher: React.FC<AuthModeSwitcherProps> = ({
         }}
         className={`flex-1 py-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
           inputMode === mode && !isBreakGlassMode
-            ? 'bg-[var(--t-brand)] text-white shadow-md'
+            ? 'bg-[var(--t-brand)] text-ink shadow-md'
             : 'text-[var(--t-muted)] hover:text-[var(--t-ink)]'
         }`}
         aria-pressed={inputMode === mode && !isBreakGlassMode}
@@ -1003,7 +1003,7 @@ const AuthModeSwitcher: React.FC<AuthModeSwitcherProps> = ({
       type="button"
       onClick={() => setIsBreakGlassMode(true)}
       className={`flex-1 py-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-        isBreakGlassMode ? 'bg-rose-600 text-white shadow-md animate-pulse' : 'text-rose-400 hover:text-rose-300'
+        isBreakGlassMode ? 'bg-rose-600 text-white shadow-md animate-pulse' : 'text-err-strong hover:text-err-strong'
       }`}
       title="وضع التجاوز الطارئ عند غياب الكاشير"
     >
@@ -1036,16 +1036,16 @@ const BreakGlassPasscode: React.FC<BreakGlassPasscodeProps> = ({
   themeMode,
 }) => (
   <form onSubmit={onLogin} className="space-y-4 bg-rose-950/30 border border-rose-500/40 p-5 rounded-2xl animate-in zoom-in-95 duration-200">
-    <div className="flex items-center gap-2 text-rose-300 text-xs font-bold border-b border-rose-500/30 pb-2">
-      <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+    <div className="flex items-center gap-2 text-err-strong text-xs font-bold border-b border-err/30 pb-2">
+      <ShieldAlert className="w-4 h-4 text-err-strong shrink-0" />
       <span>وضع التجاوز الطارئ للمشرف (Break-Glass Passcode)</span>
     </div>
-    <p className="text-[11px] text-slate-300">
+    <p className="text-[11px] text-muted">
       يُستخدم هذا الخيار فقط عند غياب أمين الصندوق وبدء الوردية العاجلة بواسطة رمز المشرف الموثق.
     </p>
 
     <div>
-      <label className="block text-[11px] font-bold text-slate-200 mb-1">رمز المشرف التفويضي:</label>
+      <label className="block text-[11px] font-bold text-ink mb-1">رمز المشرف التفويضي:</label>
       <input
         type="password"
         required
@@ -1053,7 +1053,7 @@ const BreakGlassPasscode: React.FC<BreakGlassPasscodeProps> = ({
         onChange={(e) => setSupervisorPasscode(e.target.value)}
         onFocus={() => setAuthError('')}
         placeholder="أدخل رمز المشرف السري..."
-        className="w-full bg-slate-950 border border-rose-500/50 rounded-xl px-4 py-2 text-xs text-white font-mono focus:outline-none focus:border-rose-400"
+        className="w-full bg-ink border border-rose-500/50 rounded-xl px-4 py-2 text-xs text-surface font-mono focus:outline-none focus:border-rose-400"
       />
     </div>
 
@@ -1067,7 +1067,7 @@ const BreakGlassPasscode: React.FC<BreakGlassPasscodeProps> = ({
 
     {authError && (
       <div className="flex items-start gap-2 rounded-xl border border-rose-500/40 bg-rose-950/60 px-3 py-2.5">
-        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+        <AlertTriangle className="w-4 h-4 text-err-strong shrink-0 mt-0.5" />
         <span className="text-[11px] text-rose-200 leading-relaxed">
           {authError}
         </span>
@@ -1245,22 +1245,22 @@ const CredentialsForm = React.forwardRef<HTMLInputElement, CredentialsFormProps>
         {inputMode !== 'biometric' && (
           <div className="space-y-3">
             <div className="flex items-center justify-between text-[11px] pt-1">
-              <label className="flex items-center gap-2 cursor-pointer text-slate-400 hover:text-white">
+              <label className="flex items-center gap-2 cursor-pointer text-faint hover:text-ink">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded bg-slate-950 border-slate-800 text-brand-500 focus:ring-0"
+                  className="rounded bg-surface border-hairline text-brand-500 focus:ring-0"
                 />
                 <span>تذكر بيانات الدخول للجهاز الحالي</span>
               </label>
 
               <div className="flex items-center gap-2">
-                <button type="button" onClick={onAccountUnlock} className="text-amber-400 hover:underline">
+                <button type="button" onClick={onAccountUnlock} className="text-warn-strong hover:underline">
                   فك قفل الحساب؟
                 </button>
-                <span className="text-slate-600 dark:text-slate-600">·</span>
-                <a href="mailto:support@smartports.sa" className="text-brand-400 hover:underline">
+                <span className="text-muted dark:text-muted">·</span>
+                <a href="mailto:support@smartports.sa" className="text-brand hover:underline">
                   نسيت كلمة المرور؟
                 </a>
               </div>
@@ -1268,7 +1268,7 @@ const CredentialsForm = React.forwardRef<HTMLInputElement, CredentialsFormProps>
 
             {authError && (
               <div className="flex items-start gap-2 rounded-xl border border-rose-500/40 bg-rose-950/60 px-3 py-2.5">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <AlertTriangle className="w-4 h-4 text-err-strong shrink-0 mt-0.5" />
                 <span className="text-[11px] text-rose-200 leading-relaxed">{authError}</span>
               </div>
             )}
@@ -1290,9 +1290,9 @@ const CredentialsForm = React.forwardRef<HTMLInputElement, CredentialsFormProps>
           they only promised an unconfigured feature. A deployment that wires
           federation gets its own buttons pointing at a real session exchange.
         */}
-        <p className="pt-2 border-t border-slate-800 text-[10px] text-slate-500 text-center leading-relaxed">
+        <p className="pt-2 border-t border-hairline text-[10px] text-muted text-center leading-relaxed">
           الدخول الموحّد (SSO) غير مهيّأ على هذا الخادم — للدعم:{' '}
-          <a href="mailto:support@smartports.sa" className="text-brand-400 hover:underline">
+          <a href="mailto:support@smartports.sa" className="text-brand hover:underline">
             support@smartports.sa
           </a>
         </p>
@@ -1379,11 +1379,11 @@ const TwoFactorGate: React.FC<TwoFactorGateProps> = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-4 animate-in zoom-in-95 duration-200">
       <div className="bg-subtle p-4 rounded-2xl border border-brand/40 text-center">
-        <div className="w-10 h-10 rounded-full bg-brand-500/20 text-brand-400 flex items-center justify-center mx-auto mb-2 border border-brand-500/30">
+        <div className="w-10 h-10 rounded-full bg-brand-500/20 text-brand flex items-center justify-center mx-auto mb-2 border border-brand/30">
           <Smartphone className="w-5 h-5" />
         </div>
-        <h3 className="text-xs font-black text-white">التحقق الآمن بخطوتين</h3>
-        <p className="text-[11px] text-slate-400 mt-1">
+        <h3 className="text-xs font-black text-ink">التحقق الآمن بخطوتين</h3>
+        <p className="text-[11px] text-faint mt-1">
           أدخل رمز الأمان المكون من 6 أرقام المولد على تطبيق التحقق لحساب ({username})
         </p>
 
@@ -1399,7 +1399,7 @@ const TwoFactorGate: React.FC<TwoFactorGateProps> = ({
               onChange={(e) => handleDigitChange(idx, e.target.value)}
               onKeyDown={(e) => handleKeyDown(idx, e)}
               onPaste={idx === 0 ? handlePaste : undefined}
-              className="w-9 h-11 bg-slate-900 border border-slate-700 rounded-xl text-center text-lg font-bold text-brand-400 focus:outline-none focus:border-brand-500"
+              className="w-9 h-11 bg-surface border border-hairline rounded-xl text-center text-lg font-bold text-brand focus:outline-none focus:border-brand"
             />
           ))}
         </div>
@@ -1413,14 +1413,14 @@ const TwoFactorGate: React.FC<TwoFactorGateProps> = ({
           else's sign-in. The code is now generated per attempt on the server and
           delivered out-of-band, so there is nothing to display.
         */}
-        <p className="text-[10px] text-slate-400 leading-relaxed">
+        <p className="text-[10px] text-faint leading-relaxed">
           أُرسل رمز التحقق إلى قناة التسجيل المعتمدة لديك، وينتهي خلال دقائق.
         </p>
       </div>
 
       {authError && (
         <div className="flex items-start gap-2 rounded-xl border border-rose-500/40 bg-rose-950/60 px-3 py-2.5">
-          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+          <AlertTriangle className="w-4 h-4 text-err-strong shrink-0 mt-0.5" />
           <span className="text-[11px] text-rose-200 leading-relaxed">{authError}</span>
         </div>
       )}
@@ -1429,7 +1429,7 @@ const TwoFactorGate: React.FC<TwoFactorGateProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+          className="flex-1 bg-subtle hover:bg-hairline text-muted py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
         >
           رجوع
         </button>
@@ -1456,17 +1456,17 @@ interface AccountUnlockFormProps {
 }
 
 const AccountUnlockForm: React.FC<AccountUnlockFormProps> = ({ themeMode, onCancel }) => (
-  <div className="space-y-4 bg-slate-950 p-5 rounded-2xl border border-amber-500/30 animate-in zoom-in-95 duration-200">
-    <div className="flex items-center gap-2 text-amber-400 text-xs font-bold pb-2 border-b border-slate-800">
+  <div className="space-y-4 bg-surface p-5 rounded-2xl border border-warn/30 animate-in zoom-in-95 duration-200">
+    <div className="flex items-center gap-2 text-warn-strong text-xs font-bold pb-2 border-b border-hairline">
       <BadgeAlert className="w-4 h-4" />
       <span>فك قفل الحساب الذاتي (Account Self-Unlock)</span>
     </div>
-    <p className="text-[11px] text-slate-300">
+    <p className="text-[11px] text-muted">
       فك القفل يتم عبر مشرف النظام فقط — لا تُرسل أي رموز تلقائياً من هنا.
       راسل الدعم مع ذكر اسم المستخدم ليُعاد تفعيل الحساب:
     </p>
     <div className="flex gap-2">
-      <button type="button" onClick={onCancel} className="flex-1 bg-slate-800 text-slate-300 py-2 rounded-xl text-xs font-bold">
+      <button type="button" onClick={onCancel} className="flex-1 bg-subtle text-muted py-2 rounded-xl text-xs font-bold">
         إلغاء
       </button>
       <a
@@ -1508,13 +1508,13 @@ const OperatingContext: React.FC<OperatingContextProps> = ({
 }) => (
   <div className="grid gap-2">
     <div>
-      <label className="block text-[11px] font-bold text-slate-300 mb-1">الفرع التشغيلي:</label>
+      <label className="block text-[11px] font-bold text-muted mb-1">الفرع التشغيلي:</label>
       {branches === null ? (
-        <div className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-slate-500">
+        <div className="w-full bg-surface border border-hairline rounded-xl px-2.5 py-2 text-xs text-muted">
           جارٍ تحميل فروع المؤسسة…
         </div>
       ) : branches.length === 0 ? (
-        <div className="w-full bg-amber-950/40 border border-amber-600/40 rounded-xl px-2.5 py-2 text-xs text-amber-300">
+        <div className="w-full bg-amber-950/40 border border-amber-600/40 rounded-xl px-2.5 py-2 text-xs text-warn-strong">
           لا توجد فروع مسجّلة لهذه المؤسسة — راجع مدير النظام.
         </div>
       ) : (
@@ -1528,7 +1528,7 @@ const OperatingContext: React.FC<OperatingContextProps> = ({
             const found = (branches ?? []).find((item) => item.id === e.target.value);
             if (found) setBranch(found);
           }}
-          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-xs text-white font-semibold focus:outline-none focus:border-brand-500 cursor-pointer"
+          className="w-full bg-surface border border-hairline rounded-xl px-2.5 py-2 text-xs text-ink font-semibold focus:outline-none focus:border-brand cursor-pointer"
         >
           {branches.map((b) => (
             <option key={b.id} value={b.id} className="bg-slate-900 text-white">
@@ -1624,11 +1624,11 @@ const StandardCredentials = React.forwardRef<HTMLInputElement, StandardCredentia
       */}
       {!tenantPinned && setTenant && (
         <div className="mb-3">
-          <label className="block text-[11px] font-bold text-slate-300 mb-1">
+          <label className="block text-[11px] font-bold text-muted mb-1">
             المؤسسة (اختياري):
           </label>
           <div className="relative">
-            <Building className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <Building className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-faint pointer-events-none" />
             <input
               type="text"
               value={tenant ?? ''}
@@ -1636,7 +1636,7 @@ const StandardCredentials = React.forwardRef<HTMLInputElement, StandardCredentia
               placeholder="معرّف المؤسسة — اتركه فارغاً للمستأجر الافتراضي"
               autoComplete="organization"
               /*
-                Themed rather than fixed. This field was `bg-slate-700/50 … text-white`,
+                Themed rather than fixed. This field was `bg-slate-700/50 … text-ink`,
                 which meant that on the LIGHT and high-contrast themes the operator
                 got white-on-grey inside a white card — the one control on the
                 login screen that stayed dark regardless of the theme chosen.
@@ -1659,9 +1659,9 @@ const StandardCredentials = React.forwardRef<HTMLInputElement, StandardCredentia
         only mislead. The username field below takes the freed column.
       */}
       <div>
-        <label className="block text-[11px] font-bold text-slate-300 mb-1">اسم المستخدم / البريد:</label>
+        <label className="block text-[11px] font-bold text-muted mb-1">اسم المستخدم / البريد:</label>
         <div className="relative">
-          <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-faint pointer-events-none" />
           <input
             ref={ref}
             type="text"
@@ -1669,18 +1669,18 @@ const StandardCredentials = React.forwardRef<HTMLInputElement, StandardCredentia
             placeholder="اسم المستخدم"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl pr-9 pl-3 py-2 text-xs text-white font-semibold focus:outline-none focus:border-brand-500"
+            className="w-full bg-surface border border-hairline rounded-xl pr-9 pl-3 py-2 text-xs text-ink font-semibold focus:outline-none focus:border-brand"
           />
         </div>
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="text-[11px] font-bold text-slate-300">كلمة المرور / الرمز السري:</label>
-          <span className="text-[10px] text-brand-400">رمز المرور صالح لمئتي يوم 🟢</span>
+          <label className="text-[11px] font-bold text-muted">كلمة المرور / الرمز السري:</label>
+          <span className="text-[10px] text-brand">رمز المرور صالح لمئتي يوم 🟢</span>
         </div>
         <div className="relative">
-          <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-faint pointer-events-none" />
           <input
             type={showPassword ? 'text' : 'password'}
             required
@@ -1688,7 +1688,7 @@ const StandardCredentials = React.forwardRef<HTMLInputElement, StandardCredentia
             onChange={(e) => setPassword(e.target.value)}
             placeholder="****"
             aria-label="كلمة المرور"
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl pr-9 pl-10 py-2 text-xs text-white font-semibold focus:outline-none focus:border-brand-500"
+            className="w-full bg-surface border border-hairline rounded-xl pr-9 pl-10 py-2 text-xs text-ink font-semibold focus:outline-none focus:border-brand"
           />
           {/* The reveal control was previously missing its opening tag, which left
               the <input> unterminated and the whole credentials form
@@ -1700,7 +1700,7 @@ const StandardCredentials = React.forwardRef<HTMLInputElement, StandardCredentia
             onClick={() => setShowPassword(!showPassword)}
             aria-label={showPassword ? 'إخفاء كلمة المرور' : 'عرض كلمة المرور'}
             aria-pressed={showPassword}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-brand-400 transition-colors"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-faint hover:text-brand transition-colors"
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
@@ -1717,7 +1717,7 @@ const StandardCredentials = React.forwardRef<HTMLInputElement, StandardCredentia
             />
           ))}
         </div>
-        <p className="text-[9px] mt-1 capitalize text-slate-400">
+        <p className="text-[9px] mt-1 capitalize text-faint">
           {passwordStrength === 0 && 'ضع كلمة مرور'}
           {passwordStrength === 1 && 'ضعيفة'}
           {passwordStrength === 2 && 'متوسطة'}
@@ -1744,9 +1744,9 @@ interface TouchNumpadProps {
 
 const TouchNumpad: React.FC<TouchNumpadProps> = ({ password, onKey, onDelete, onClear, themeMode }) => (
   <div className="space-y-2">
-    <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-center flex justify-between items-center px-4">
-      <span className="text-xs text-slate-400">الرمز السري المدخل:</span>
-      <span className="font-mono text-xl font-bold text-brand-400 tracking-widest">
+    <div className="bg-surface p-2.5 rounded-xl border border-hairline text-center flex justify-between items-center px-4">
+      <span className="text-xs text-faint">الرمز السري المدخل:</span>
+      <span className="font-mono text-xl font-bold text-brand tracking-widest">
         {password ? '•'.repeat(password.length) : '****'}
       </span>
     </div>
@@ -1757,7 +1757,7 @@ const TouchNumpad: React.FC<TouchNumpadProps> = ({ password, onKey, onDelete, on
           key={n}
           type="button"
           onClick={() => onKey(n)}
-          className="bg-slate-950 hover:bg-slate-800 text-white py-2 rounded-xl font-bold font-mono text-base border border-slate-800 active:scale-95 cursor-pointer transition-transform"
+          className="bg-surface hover:bg-hairline/60 text-ink py-2 rounded-xl font-bold font-mono text-base border border-hairline active:scale-95 cursor-pointer transition-transform"
         >
           {n}
         </button>
@@ -1765,21 +1765,21 @@ const TouchNumpad: React.FC<TouchNumpadProps> = ({ password, onKey, onDelete, on
       <button
         type="button"
         onClick={onDelete}
-        className="bg-slate-950 hover:bg-slate-800 text-amber-400 py-2 rounded-xl font-bold border border-slate-800 flex items-center justify-center active:scale-95 cursor-pointer transition-transform"
+        className="bg-surface hover:bg-hairline/60 text-warn-strong py-2 rounded-xl font-bold border border-hairline flex items-center justify-center active:scale-95 cursor-pointer transition-transform"
       >
         <Delete className="w-4 h-4" />
       </button>
       <button
         type="button"
         onClick={() => onKey('0')}
-        className="bg-slate-950 hover:bg-slate-800 text-white py-2 rounded-xl font-bold font-mono text-base border border-slate-800 active:scale-95 cursor-pointer transition-transform"
+        className="bg-surface hover:bg-hairline/60 text-ink py-2 rounded-xl font-bold font-mono text-base border border-hairline active:scale-95 cursor-pointer transition-transform"
       >
         0
       </button>
       <button
         type="button"
         onClick={onClear}
-        className="bg-slate-950 hover:bg-slate-800 text-rose-400 py-2 rounded-xl font-bold text-xs border border-slate-800 active:scale-95 cursor-pointer transition-transform"
+        className="bg-surface hover:bg-hairline/60 text-err-strong py-2 rounded-xl font-bold text-xs border border-hairline active:scale-95 cursor-pointer transition-transform"
       >
         مسح
       </button>
@@ -1799,16 +1799,16 @@ interface BiometricAuthProps {
 }
 
 const BiometricAuth: React.FC<BiometricAuthProps> = ({ bioScanning, bioSuccess, onTrigger, themeMode }) => (
-  <div className="bg-slate-950 p-5 rounded-2xl border border-brand-500/30 text-center space-y-3">
+  <div className="bg-surface p-5 rounded-2xl border border-brand/30 text-center space-y-3">
     <div className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center transition-all ${
-      bioScanning ? 'bg-amber-500/20 text-amber-400 animate-pulse border border-amber-500' :
-      bioSuccess ? 'bg-brand-500/20 text-brand-400 border border-brand-500' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
+      bioScanning ? 'bg-amber-500/20 text-warn-strong animate-pulse border border-amber-500' :
+      bioSuccess ? 'bg-brand-500/20 text-brand border border-brand' : 'bg-cyan-500/20 text-info-strong border border-cyan-500/40'
     }`}>
       <Fingerprint className="w-8 h-8" />
     </div>
 
-    <h3 className="text-xs font-bold text-white">التحقق بالبصمة البيومترية الآمنة</h3>
-    <p className="text-[11px] text-slate-400">
+    <h3 className="text-xs font-bold text-ink">التحقق بالبصمة البيومترية الآمنة</h3>
+    <p className="text-[11px] text-faint">
       ضع أصبعك على مستشعر البصمة أو وجهك أمام الكاميرا للتحقق الفوري من الهوية.
     </p>
 
@@ -1825,7 +1825,7 @@ const BiometricAuth: React.FC<BiometricAuthProps> = ({ bioScanning, bioSuccess, 
         </>
       ) : bioSuccess ? (
         <>
-          <CheckCircle2 className="w-4 h-4 text-brand-300" />
+          <CheckCircle2 className="w-4 h-4 text-brand-strong" />
           <span>تم التحقق بنجاح!</span>
         </>
       ) : (
@@ -1850,14 +1850,14 @@ const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({ themeMode }) => (
   <div className="space-y-3">
     <div className="grid grid-cols-3 gap-2">
       {[1, 2, 3].map((i) => (
-        <div key={i} className="h-10 bg-slate-800/50 rounded-xl animate-pulse" />
+        <div key={i} className="h-10 bg-subtle/50 rounded-xl animate-pulse" />
       ))}
     </div>
     <div className="space-y-2">
-      <div className="h-10 bg-slate-800/50 rounded-xl animate-pulse" />
-      <div className="h-10 bg-slate-800/50 rounded-xl animate-pulse" />
+      <div className="h-10 bg-subtle/50 rounded-xl animate-pulse" />
+      <div className="h-10 bg-subtle/50 rounded-xl animate-pulse" />
     </div>
-    <div className="h-11 bg-slate-800/50 rounded-xl animate-pulse" />
+    <div className="h-11 bg-subtle/50 rounded-xl animate-pulse" />
   </div>
 );
 
@@ -1897,15 +1897,15 @@ interface HardwareHealthPanelProps {
 
 const LiveNetworkMetrics: React.FC<{ themeMode: ThemeMode }> = () => (
   <div className="space-y-2 font-mono">
-    <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs">
-      <span className="text-slate-300 flex items-center gap-2">
-        <Server className="w-3.5 h-3.5 text-brand-400" /> سرعة استجابة السحابة
+    <div className="bg-surface p-2.5 rounded-xl border border-hairline/80 flex items-center justify-between text-xs">
+      <span className="text-muted flex items-center gap-2">
+        <Server className="w-3.5 h-3.5 text-brand" /> سرعة استجابة السحابة
       </span>
-      <span className="font-bold text-brand-400">12 ms</span>
+      <span className="font-bold text-brand">12 ms</span>
     </div>
 
-    <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs">
-      <span className="text-slate-300 flex items-center gap-2">
+    <div className="bg-surface p-2.5 rounded-xl border border-hairline/80 flex items-center justify-between text-xs">
+      <span className="text-muted flex items-center gap-2">
         <Activity className="w-3.5 h-3.5 text-teal-400" /> حالة المزامنة اللحظية
       </span>
       <span className="font-bold text-teal-400">نشطة وسليمة 🟢</span>

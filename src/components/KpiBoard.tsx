@@ -61,14 +61,14 @@ const directionIcon = (row: KpiRow) => {
   const above = row.value >= row.benchmark;
   const good = row.polarity === 'lower' ? !above : above;
   const Icon = above ? TrendingUp : TrendingDown;
-  return <Icon size={11} className={good ? 'text-brand-500' : 'text-rose-400'} />;
+  return <Icon size={11} className={good ? 'text-brand-500' : 'text-err-strong'} />;
 };
 
 const STATUS_STYLE: Record<string, { chip: string; icon: any; label: string }> = {
-  critical: { chip: 'bg-rose-50 text-rose-700 border-rose-200', icon: AlertTriangle, label: 'حرج' },
-  warn: { chip: 'bg-amber-50 text-amber-700 border-amber-200', icon: AlertTriangle, label: 'تحذير' },
-  ok: { chip: 'bg-brand-50 text-brand-700 border-brand-200', icon: CheckCircle2, label: 'مطابق' },
-  insufficient_data: { chip: 'bg-slate-50 text-slate-500 border-slate-200', icon: HelpCircle, label: 'بلا بيانات' },
+  critical: { chip: 'bg-err-soft text-err-strong border-err/30', icon: AlertTriangle, label: 'حرج' },
+  warn: { chip: 'bg-warn-soft text-warn-strong border-warn/30', icon: AlertTriangle, label: 'تحذير' },
+  ok: { chip: 'bg-brand-soft text-brand-strong border-brand/30', icon: CheckCircle2, label: 'مطابق' },
+  insufficient_data: { chip: 'bg-subtle text-muted border-hairline', icon: HelpCircle, label: 'بلا بيانات' },
 };
 
 /**
@@ -124,7 +124,7 @@ export const KpiBoardView: React.FC<{ branchId?: string }> = ({ branchId }) => {
 
   if (loading && !board) {
     return (
-      <div className="flex items-center justify-center gap-2 py-16 text-[12px] text-slate-400">
+      <div className="flex items-center justify-center gap-2 py-16 text-[12px] text-faint">
         <Loader2 size={14} className="animate-spin" /> جارٍ حساب المؤشرات من Neon…
       </div>
     );
@@ -134,21 +134,21 @@ return (
     <section className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <h2 className="text-[14px] font-semibold text-slate-900">لوحة المؤشرات القرارية</h2>
+          <h2 className="text-[14px] font-semibold text-ink">لوحة المؤشرات القرارية</h2>
           {board && (
             <div className="flex items-center gap-1.5">
               {board.summary.critical > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full border border-rose-200 bg-rose-50 text-[10px] font-semibold text-rose-700">
+                <span className="px-1.5 py-0.5 rounded-full border border-err/30 bg-err-soft text-[10px] font-semibold text-err-strong">
                   {board.summary.critical} حرج
                 </span>
               )}
               {board.summary.warn > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-[10px] font-semibold text-amber-700">
+                <span className="px-1.5 py-0.5 rounded-full border border-warn/30 bg-warn-soft text-[10px] font-semibold text-warn-strong">
                   {board.summary.warn} تحذير
                 </span>
               )}
               {board.summary.insufficient > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                <span className="px-1.5 py-0.5 rounded-full border border-hairline bg-subtle text-[10px] font-semibold text-muted">
                   {board.summary.insufficient} بلا بيانات
                 </span>
               )}
@@ -157,7 +157,7 @@ return (
         </div>
 
         <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1.5 text-[11.5px] text-slate-600">
+          <label className="flex items-center gap-1.5 text-[11.5px] text-muted">
             <input
               type="checkbox"
               checked={onlyProblems}
@@ -169,7 +169,7 @@ return (
           <button
             onClick={runNow}
             disabled={running}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-900 text-white text-[11.5px] font-medium hover:bg-slate-800 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-surface text-ink text-[11.5px] font-medium hover:bg-hairline/60 disabled:opacity-50"
           >
             {running ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
             احسب الآن
@@ -178,13 +178,13 @@ return (
       </header>
 
       {error && (
-        <div className="surface-muted border-rose-200 bg-rose-50 px-4 py-3 text-[12px] text-rose-700">
+        <div className="surface-muted border-err/30 bg-err-soft px-4 py-3 text-[12px] text-err-strong">
           {error}
         </div>
       )}
 
       {board && board.summary.ok > 0 && !onlyProblems && (
-        <p className="text-[11.5px] text-slate-400 flex items-center gap-1.5">
+        <p className="text-[11.5px] text-faint flex items-center gap-1.5">
           <CheckCircle2 size={12} className="text-brand-500" />
           {board.summary.ok} مؤشر مطابق للمعيار
         </p>
@@ -192,40 +192,40 @@ return (
 
       {groups.map((g) => (
         <div key={g.key} className="surface-card overflow-hidden">
-          <div className="px-5 py-2.5 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-[11.5px] font-semibold text-slate-700">{g.label}</h3>
-            <span className="text-[10px] text-slate-400">{g.rows.length} مؤشر</span>
+          <div className="px-5 py-2.5 border-b border-hairline flex items-center justify-between">
+            <h3 className="text-[11.5px] font-semibold text-ink">{g.label}</h3>
+            <span className="text-[10px] text-faint">{g.rows.length} مؤشر</span>
           </div>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-hairline">
             {g.rows.map((r) => {
               const st = STATUS_STYLE[r.status];
               const Icon = st.icon;
               return (
-                <li key={r.code} className="px-5 py-3 hover:bg-slate-50/70 transition-colors">
+                <li key={r.code} className="px-5 py-3 hover:bg-subtle/70 transition-colors">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-[12.5px] font-medium text-slate-800">{r.name}</span>
+                        <span className="text-[12.5px] font-medium text-ink">{r.name}</span>
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold ${st.chip}`}>
                           <Icon size={9} /> {st.label}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{r.narrative}</p>
+                      <p className="text-[11px] text-muted mt-1 leading-relaxed">{r.narrative}</p>
                       {r.status === 'critical' || r.status === 'warn' ? (
-                        <p className="text-[11px] text-slate-700 font-medium mt-1 flex items-start gap-1">
-                          <Bell size={10} className="mt-0.5 shrink-0 text-slate-400" />
+                        <p className="text-[11px] text-ink font-medium mt-1 flex items-start gap-1">
+                          <Bell size={10} className="mt-0.5 shrink-0 text-faint" />
                           {r.action}
                         </p>
                       ) : null}
                     </div>
 
                     <div className="text-left shrink-0">
-                      <p className="text-[15px] font-semibold text-slate-900 text-numeric flex items-center gap-1">
+                      <p className="text-[15px] font-semibold text-ink text-numeric flex items-center gap-1">
                         {directionIcon(r)}
                         {format(r.value, r.unit)}
                       </p>
                       {r.benchmark !== null && (
-                        <p className="text-[10px] text-slate-400 text-numeric mt-0.5">
+                        <p className="text-[10px] text-faint text-numeric mt-0.5">
                           المعيار {format(r.benchmark, r.unit)}
                         </p>
                       )}

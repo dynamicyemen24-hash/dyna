@@ -47,7 +47,7 @@ export const StandardProgress: React.FC<{
           <p className="text-sm font-semibold text-ink truncate">{label}</p>
           <p className="mt-1 text-[11px] text-muted truncate">{detail}</p>
         </div>
-        <Loader2 className="shrink-0 animate-spin text-brand-600" size={18} aria-hidden="true" />
+        <Loader2 className="shrink-0 animate-spin text-brand" size={18} aria-hidden="true" />
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-subtle" aria-hidden="true">
         <div className={`h-full rounded-full transition-all duration-500 ${bar} ${value === undefined ? 'w-2/5 animate-pulse' : ''}`} style={value === undefined ? undefined : { width: `${Math.max(0, Math.min(100, value))}%` }} />
@@ -189,7 +189,7 @@ export const Modal: React.FC<{
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-slate-950/45 backdrop-blur-sm p-4 sm:p-8"
+      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-subtle backdrop-blur-sm p-4 sm:p-8"
       onClick={onClose}
     >
       <div

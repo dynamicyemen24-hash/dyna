@@ -22,25 +22,25 @@ export const SmartAdvisorWidget: React.FC<SmartAdvisorWidgetProps> = ({
   if (advices.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 start-4 z-50 max-w-sm w-full bg-slate-950/95 backdrop-blur-xl border border-brand-500/40 rounded-2xl shadow-2xl p-4 text-slate-100 font-['Cairo',sans-serif]" dir="rtl">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+    <div className="fixed bottom-4 start-4 z-50 max-w-sm w-full bg-subtle backdrop-blur-xl border border-brand/40 rounded-2xl shadow-2xl p-4 text-ink font-['Cairo',sans-serif]" dir="rtl">
+      <div className="flex items-center justify-between pb-3 border-b border-hairline">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-400">
+          <div className="w-8 h-8 rounded-xl bg-brand-500/20 border border-brand/40 flex items-center justify-center text-brand">
             <Sparkles className="w-4 h-4 animate-pulse" />
           </div>
           <div>
-            <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+            <h4 className="text-xs font-bold text-ink flex items-center gap-1.5">
               <span>المستشار الذكي (AI Co-Pilot)</span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
             </h4>
-            <p className="text-[10px] text-slate-400">توجيه تشغيلي ذكي فوري</p>
+            <p className="text-[10px] text-faint">توجيه تشغيلي ذكي فوري</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
-            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            className="p-1 rounded-lg hover:bg-hairline/60 text-faint hover:text-ink transition-colors"
             aria-label="طي/إظهار المستشار"
           >
             {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
@@ -48,7 +48,7 @@ export const SmartAdvisorWidget: React.FC<SmartAdvisorWidgetProps> = ({
           <button
             type="button"
             onClick={() => setIsOpen(false)}
-            className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            className="p-1 rounded-lg hover:bg-hairline/60 text-faint hover:text-ink transition-colors"
             aria-label="إغلاق"
           >
             <X className="w-4 h-4" />
@@ -66,16 +66,16 @@ export const SmartAdvisorWidget: React.FC<SmartAdvisorWidgetProps> = ({
                   ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
                   : advice.type === 'success'
                   ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
-                  : 'bg-brand-950/40 border-brand-500/40 text-brand-100'
+                  : 'bg-brand-950/40 border-brand/40 text-brand-100'
               }`}
             >
               <div className="flex items-start gap-2">
                 {advice.type === 'warning' ? (
-                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-warn-strong shrink-0 mt-0.5" />
                 ) : advice.type === 'success' ? (
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <ShieldCheck className="w-4 h-4 text-ok-strong shrink-0 mt-0.5" />
                 ) : (
-                  <Info className="w-4 h-4 text-brand-400 shrink-0 mt-0.5" />
+                  <Info className="w-4 h-4 text-brand shrink-0 mt-0.5" />
                 )}
                 <div>
                   <h5 className="font-bold text-[11px]">{advice.title}</h5>

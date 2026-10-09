@@ -24,11 +24,11 @@ interface Batch {
 interface ProductOpt { id: string; name: string }
 
 const expiryTone = (days?: number | null) => {
-  if (days === null || days === undefined) return 'bg-slate-800 text-slate-400 border-slate-700';
-  if (days < 0) return 'bg-rose-500/10 text-rose-300 border-rose-500/30';
-  if (days <= 30) return 'bg-amber-500/10 text-amber-300 border-amber-500/30';
+  if (days === null || days === undefined) return 'bg-subtle text-faint border-hairline';
+  if (days < 0) return 'bg-err-soft text-err-strong border-err/30';
+  if (days <= 30) return 'bg-warn-soft text-warn-strong border-warn/30';
   if (days <= 90) return 'bg-yellow-500/10 text-yellow-300 border-yellow-500/30';
-  return 'bg-brand-500/10 text-brand-300 border-brand-500/30';
+  return 'bg-brand-soft text-brand-strong border-brand/30';
 };
 
 const expiryLabel = (days?: number | null) => {
@@ -123,23 +123,23 @@ export const BatchesView: React.FC = () => {
         icon={Clock}
         title="التشغيلات والصلاحية"
         subtitle="تتبع دفعات المخزون مع نظام FEFO وتنبيهات قرب الانتهاء."
-        accent="text-amber-400"
+        accent="text-warn-strong"
         actions={<PrimaryButton onClick={() => setModal(true)}><Plus size={18} /> تشغيله جديدة</PrimaryButton>}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="إجمالي التشغيلات" value={String(stats.total)} icon={PackageCheck} />
-        <Stat label="قاربت الانتهاء" value={String(stats.expiring)} tone="text-amber-400" icon={Clock} />
-        <Stat label="منتهية الصلاحية" value={String(stats.expired)} tone="text-rose-400" icon={AlertTriangle} />
-        <Stat label="قيمة المخزون" value={sar(stats.value)} tone="text-brand-400" />
+        <Stat label="قاربت الانتهاء" value={String(stats.expiring)} tone="text-warn-strong" icon={Clock} />
+        <Stat label="منتهية الصلاحية" value={String(stats.expired)} tone="text-err-strong" icon={AlertTriangle} />
+        <Stat label="قيمة المخزون" value={sar(stats.value)} tone="text-brand" />
       </div>
 
       <Card className="overflow-hidden">
-        <div className="p-4 border-b border-slate-800 flex flex-wrap gap-2">
+        <div className="p-4 border-b border-hairline flex flex-wrap gap-2">
           {[['all', 'الكل'], ['expiring', 'قاربت الانتهاء'], ['expired', 'منتهية']].map(([k, l]) => (
             <button key={k} onClick={() => setFilter(k)}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                filter === k ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+                filter === k ? 'bg-amber-600 text-white' : 'bg-hairline/40 text-faint hover:bg-hairline'}`}>
               {l}
             </button>
           ))}
@@ -151,7 +151,7 @@ export const BatchesView: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-right border-collapse">
                 <thead>
-                  <tr className="bg-slate-800/30 text-slate-500 text-xs font-black border-b border-slate-800">
+                  <tr className="bg-subtle/30 text-muted text-xs font-black border-b border-hairline">
                     <th className="p-4">رقم التشغيلة</th>
                     <th className="p-4">المنتج</th>
                     <th className="p-4">الكمية</th>
@@ -161,11 +161,11 @@ export const BatchesView: React.FC = () => {
                     <th className="p-4"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800">
+                <tbody className="divide-y divide-hairline">
                   {visible.map((b) => (
-                    <tr key={b.id} className="hover:bg-slate-800/20">
+                    <tr key={b.id} className="hover:bg-hairline/60/20">
                       <td className="p-4">
-                        <span className="font-mono text-xs bg-slate-800 px-2 py-1 rounded text-amber-300" dir="ltr">
+                        <span className="font-mono text-xs bg-subtle px-2 py-1 rounded text-warn-strong" dir="ltr">
                           {b.batch_number}
                         </span>
                       </td>
@@ -178,7 +178,7 @@ export const BatchesView: React.FC = () => {
                       <td className="p-4 font-bold">{sar(b.batch_value)}</td>
                       <td className="p-4">
                         <button onClick={() => remove(b)}
-                          className="p-2 rounded-lg text-slate-400 hover:text-rose-400"
+                          className="p-2 rounded-lg text-faint hover:text-err-strong"
                           aria-label="حذف">
                           <Trash2 size={16} />
                         </button>

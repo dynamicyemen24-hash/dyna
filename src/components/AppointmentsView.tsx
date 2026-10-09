@@ -30,12 +30,12 @@ interface ServiceOpt {
 }
 
 const STATUS: Record<string, { label: string; tone: string; next?: string }> = {
-  scheduled: { label: 'مجدول', tone: 'bg-sky-500/10 text-sky-300 border-sky-500/30', next: 'confirmed' },
+  scheduled: { label: 'مجدول', tone: 'bg-info-soft text-info-strong border-info/30', next: 'confirmed' },
   confirmed: { label: 'مؤكد', tone: 'bg-violet-500/10 text-violet-300 border-violet-500/30', next: 'in_progress' },
-  in_progress: { label: 'قيد التنفيذ', tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30', next: 'completed' },
-  completed: { label: 'مكتمل', tone: 'bg-brand-500/10 text-brand-300 border-brand-500/30' },
-  cancelled: { label: 'ملغي', tone: 'bg-slate-800 text-slate-500 border-slate-700' },
-  no_show: { label: 'لم يحضر', tone: 'bg-rose-500/10 text-rose-300 border-rose-500/30' },
+  in_progress: { label: 'قيد التنفيذ', tone: 'bg-warn-soft text-warn-strong border-warn/30', next: 'completed' },
+  completed: { label: 'مكتمل', tone: 'bg-brand-soft text-brand-strong border-brand/30' },
+  cancelled: { label: 'ملغي', tone: 'bg-subtle text-muted border-hairline' },
+  no_show: { label: 'لم يحضر', tone: 'bg-err-soft text-err-strong border-err/30' },
 };
 
 const toLocalInput = (d: Date) => {
@@ -161,20 +161,20 @@ export const AppointmentsView: React.FC = () => {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="مواعيد اليوم" value={String(counts.today)} icon={Calendar} />
-        <Stat label="قيد الانتظار" value={String(counts.pending)} tone="text-sky-400" icon={Clock} />
-        <Stat label="مكتملة" value={String(counts.done)} tone="text-brand-400" icon={CheckCircle2} />
+        <Stat label="قيد الانتظار" value={String(counts.pending)} tone="text-info-strong" icon={Clock} />
+        <Stat label="مكتملة" value={String(counts.done)} tone="text-brand" icon={CheckCircle2} />
         <Stat label="إيراد مُنجز" value={sar(counts.revenue)} tone="text-violet-400" />
       </div>
 
       <Card className="overflow-hidden">
-        <div className="p-4 border-b border-slate-800 flex flex-wrap gap-2">
+        <div className="p-4 border-b border-hairline flex flex-wrap gap-2">
           {[['all', 'الكل'], ['scheduled', 'مجدولة'], ['confirmed', 'مؤكدة'],
             ['in_progress', 'جارية'], ['completed', 'مكتملة'], ['cancelled', 'ملغاة']].map(([k, l]) => (
             <button key={k} onClick={() => setFilter(k)}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
                 filter === k
                   ? 'bg-violet-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+                  : 'bg-subtle text-faint hover:bg-hairline'}`}>
               {l}
             </button>
           ))}
@@ -183,16 +183,16 @@ export const AppointmentsView: React.FC = () => {
         {loading ? <Loading /> : error ? <ErrorBox message={error} onRetry={load} />
           : visible.length === 0 ? <EmptyState message="لا توجد مواعيد" />
           : (
-            <div className="divide-y divide-slate-800">
+            <div className="divide-y divide-hairline">
               {visible.map((a) => {
                 const st = STATUS[a.status] || STATUS.scheduled;
                 return (
-                  <div key={a.id} className="p-4 flex flex-wrap items-center gap-4 hover:bg-slate-800/20">
+                  <div key={a.id} className="p-4 flex flex-wrap items-center gap-4 hover:bg-hairline/60/20">
                     <div className="w-14 text-center shrink-0">
                       <p className="text-2xl font-black text-violet-400">
                         {new Date(a.scheduled_start).getDate()}
                       </p>
-                      <p className="text-[10px] text-slate-500">
+                      <p className="text-[10px] text-muted">
                         {new Date(a.scheduled_start).toLocaleDateString('ar-SA', { month: 'short' })}
                       </p>
                     </div>
@@ -200,34 +200,34 @@ export const AppointmentsView: React.FC = () => {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold">{a.customer_name}</span>
                         {a.customer_phone && (
-                          <span className="text-xs text-slate-500" dir="ltr">{a.customer_phone}</span>
+                          <span className="text-xs text-muted" dir="ltr">{a.customer_phone}</span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                      <p className="text-xs text-faint mt-1 flex items-center gap-2 flex-wrap">
                         <span className="text-violet-300">{a.service_name || 'خدمة'}</span>
                         <span>· {fmtDateTime(a.scheduled_start)}</span>
                         {a.employee_name && <span>· {a.employee_name}</span>}
                       </p>
-                      {a.notes && <p className="text-[11px] text-slate-500 mt-1">{a.notes}</p>}
+                      {a.notes && <p className="text-[11px] text-muted mt-1">{a.notes}</p>}
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="font-black text-sm">{sar(a.price)}</span>
                       <Pill tone={st.tone}>{st.label}</Pill>
                       {st.next && (
                         <button onClick={() => advance(a)} title="الحالة التالية"
-                          className="p-2 rounded-lg text-brand-400 hover:bg-slate-800 transition-colors"
+                          className="p-2 rounded-lg text-brand hover:bg-hairline/60 transition-colors"
                           aria-label="تحديث الحالة">
                           <PlayCircle size={17} />
                         </button>
                       )}
                       {a.status !== 'cancelled' && a.status !== 'completed' && (
                         <button onClick={() => cancel(a)}
-                          className="px-2 py-1 rounded-lg text-[11px] text-amber-400 hover:bg-slate-800">
+                          className="px-2 py-1 rounded-lg text-[11px] text-warn-strong hover:bg-hairline/60">
                           إلغاء
                         </button>
                       )}
                       <button onClick={() => remove(a)}
-                        className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800"
+                        className="p-2 rounded-lg text-faint hover:text-err-strong hover:bg-hairline/60"
                         aria-label="حذف">
                         <Trash2 size={16} />
                       </button>

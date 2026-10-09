@@ -488,20 +488,20 @@ export const RetailPOS: React.FC = () => {
           genuinely known and genuinely useful. The buttons that implied a queue
           are gone.
         */}
-          <span className="rounded-xl border border-slate-800 bg-slate-900 px-4 py-2 text-xs font-bold text-slate-400">
+          <span className="rounded-xl border border-hairline bg-surface px-4 py-2 text-xs font-bold text-faint">
             السلة الحالية{cart.length > 0 ? ` (${cart.length} صنف)` : ' (فارغة)'}
           </span>
             </div>
           </div>
 
           <div className="relative">
-            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-muted" size={20} />
             <input 
               type="text" 
               placeholder="ابحث بالاسم، الباركود أو الـ SKU..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-2xl py-3.5 pr-12 pl-4 focus:ring-2 focus:ring-brand-500/50 text-lg shadow-xl"
+              className="w-full surface-card rounded-2xl py-3.5 pr-12 pl-4 focus:ring-2 focus:ring-brand-500/50 text-lg shadow-xl"
             />
           </div>
           
@@ -511,7 +511,7 @@ export const RetailPOS: React.FC = () => {
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-6 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all ${
-                  selectedCategory === cat ? 'bg-brand-600 text-white shadow-lg shadow-brand-900/40' : 'bg-slate-900 text-slate-400 hover:bg-slate-800'
+                  selectedCategory === cat ? 'bg-brand-600 text-white shadow-lg shadow-brand-900/40' : 'bg-surface text-faint hover:bg-hairline/60'
                 }`}
               >
                 {cat}
@@ -528,16 +528,16 @@ export const RetailPOS: React.FC = () => {
             like a stocked shop.
           */}
           {isLoading ? (
-            <div className="p-10 text-center text-slate-500 text-sm">جارٍ تحميل المنتجات…</div>
+            <div className="p-10 text-center text-muted text-sm">جارٍ تحميل المنتجات…</div>
           ) : loadError ? (
             <div className="p-10 text-center">
-              <p className="text-rose-400 font-bold mb-2">تعذّر تحميل المنتجات</p>
-              <p className="text-slate-500 text-sm">
+              <p className="text-err-strong font-bold mb-2">تعذّر تحميل المنتجات</p>
+              <p className="text-muted text-sm">
                 الاتصال بالخادم فشل. لم تُعرض أي منتجات تفادياً لعرض بيانات غير حقيقية.
               </p>
             </div>
           ) : filteredProducts.length === 0 ? (
-            <div className="p-10 text-center text-slate-500 text-sm">
+            <div className="p-10 text-center text-muted text-sm">
               {products.length === 0
                 ? 'لا توجد منتجات في الكتالوج بعد. أضف منتجات من شاشة المخزون.'
                 : 'لا توجد منتجات مطابقة للبحث أو التصنيف المحدد.'}
@@ -548,9 +548,9 @@ export const RetailPOS: React.FC = () => {
               <div
                 key={p.id}
                 onClick={() => addToCart(p)}
-                className="bg-slate-900 border border-slate-800 p-4 rounded-2xl cursor-pointer hover:border-brand-500 hover:shadow-2xl hover:shadow-brand-900/20 transition-all group active:scale-95"
+                className="surface-card p-4 rounded-2xl cursor-pointer hover:border-brand hover:shadow-2xl hover:shadow-brand-900/20 transition-all group active:scale-95"
               >
-                <div className="w-full aspect-square bg-slate-800 rounded-xl mb-4 flex items-center justify-center text-slate-600 group-hover:text-brand-500 transition-colors relative overflow-hidden">
+                <div className="w-full aspect-square bg-subtle rounded-xl mb-4 flex items-center justify-center text-muted group-hover:text-brand-500 transition-colors relative overflow-hidden">
                   <Package size={48} />
                   {/*
                     The literal "مخزون: 12" printed on EVERY product tile is gone.
@@ -562,8 +562,8 @@ export const RetailPOS: React.FC = () => {
                     rather than as zero or as a guess.
                   */}
                   {p.stock !== null && (
-                    <div className="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-md px-2 py-1 rounded-lg border border-slate-700">
-                      <span className={`text-[10px] font-black ${p.stock <= 0 ? 'text-rose-400' : 'text-brand-400'}`}>
+                    <div className="absolute top-2 left-2 bg-subtle backdrop-blur-md px-2 py-1 rounded-lg border border-hairline">
+                      <span className={`text-[10px] font-black ${p.stock <= 0 ? 'text-err-strong' : 'text-brand'}`}>
                         مخزون: {p.stock}
                       </span>
                     </div>
@@ -571,7 +571,7 @@ export const RetailPOS: React.FC = () => {
                 </div>
                 <div className="space-y-1">
                   <h4 className="font-bold text-sm truncate">{p.name}</h4>
-                  <p className="text-xs text-slate-500">{p.category}</p>
+                  <p className="text-xs text-muted">{p.category}</p>
                   <div className="flex justify-between items-center pt-2">
                     {/*
                       `toFixed()` throws on NaN, so an unpriced product used to
@@ -580,10 +580,10 @@ export const RetailPOS: React.FC = () => {
                       it, because an unpriced line must stop the sale rather than
                       become a free one.
                     */}
-                    <span className={`font-black ${Number.isFinite(p.price) ? 'text-brand-400' : 'text-rose-400'}`}>
+                    <span className={`font-black ${Number.isFinite(p.price) ? 'text-brand' : 'text-err-strong'}`}>
                       {Number.isFinite(p.price) ? `${p.price.toFixed(2)} ر.س` : 'بدون سعر'}
                     </span>
-                    <span className="text-[10px] text-slate-600 font-mono">{p.sku}</span>
+                    <span className="text-[10px] text-muted font-mono">{p.sku}</span>
                   </div>
                 </div>
               </div>
@@ -604,44 +604,44 @@ export const RetailPOS: React.FC = () => {
           number range rather than one the browser made up.
         */}
         {receipt && (
-          <div className="p-6 border-b border-brand-500/20 bg-brand-500/5">
+          <div className="p-6 border-b border-brand/20 bg-brand-500/5">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-black text-brand-400">تمت عملية البيع</h3>
+              <h3 className="font-black text-brand">تمت عملية البيع</h3>
               <button
                 onClick={() => setReceipt(null)}
-                className="text-slate-400 hover:text-white text-xs font-bold"
+                className="text-faint hover:text-ink text-xs font-bold"
               >
                 إغلاق
               </button>
             </div>
-            <p className="text-xs text-slate-400 mb-1">
-              رقم الفاتورة: <span className="font-mono font-black text-brand-400">{receipt.invoiceNumber}</span>
+            <p className="text-xs text-faint mb-1">
+              رقم الفاتورة: <span className="font-mono font-black text-brand">{receipt.invoiceNumber}</span>
             </p>
             <div className="space-y-1 mt-3 text-xs">
               <div className="flex justify-between">
-                <span className="text-slate-400">المجموع قبل الضريبة</span>
+                <span className="text-faint">المجموع قبل الضريبة</span>
                 <span>{receipt.subtotal.toFixed(2)} ر.س</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">ضريبة القيمة المضافة</span>
+                <span className="text-faint">ضريبة القيمة المضافة</span>
                 <span>{receipt.tax.toFixed(2)} ر.س</span>
               </div>
-              <div className="flex justify-between pt-1 border-t border-slate-700/50 font-black text-base">
+              <div className="flex justify-between pt-1 border-t border-hairline/50 font-black text-base">
                 <span>الإجمالي</span>
-                <span className="text-brand-400">{receipt.total.toFixed(2)} ر.س</span>
+                <span className="text-brand">{receipt.total.toFixed(2)} ر.س</span>
               </div>
             </div>
-            <p className="text-[10px] text-slate-500 mt-3">
+            <p className="text-[10px] text-muted mt-3">
               الأرقام أعلاه كما سجّلها الخادم. المخزون حُدِّث بحركة مخزون مرتبطة بهذا الرقم.
             </p>
           </div>
         )}
 
         {/* Cart Area */}
-      <div className="w-[420px] bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl flex flex-col overflow-hidden relative">
-        <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/50 backdrop-blur-md sticky top-0 z-10">
+      <div className="w-[420px] bg-surface rounded-3xl border border-hairline shadow-2xl flex flex-col overflow-hidden relative">
+        <div className="p-6 border-b border-hairline flex justify-between items-center bg-subtle backdrop-blur-md sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-brand-500/10 text-brand-500 rounded-lg">
+            <div className="p-2 bg-brand-soft text-brand-500 rounded-lg">
               <ShoppingCart size={20} />
             </div>
             <h3 className="font-black text-xl">السلة ({cart.length})</h3>
@@ -660,7 +660,7 @@ export const RetailPOS: React.FC = () => {
               onClick={clearCart}
               aria-label="تفريغ السلة"
               title="تفريغ السلة"
-              className="text-slate-500 hover:text-rose-500 p-2 hover:bg-rose-500/10 rounded-lg transition-colors"
+              className="text-muted hover:text-rose-500 p-2 hover:bg-err-soft rounded-lg transition-colors"
             >
               <Trash2 size={20} />
             </button>
@@ -670,10 +670,10 @@ export const RetailPOS: React.FC = () => {
         {/* Cart Items */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-50 space-y-4">
+            <div className="h-full flex flex-col items-center justify-center text-muted opacity-50 space-y-4">
               <Layers size={64} strokeWidth={1} />
               <p className="font-bold text-lg">بانتظار إضافة أول صنف...</p>
-              <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-800 text-center max-w-[200px]">
+              <div className="bg-subtle/50 p-4 rounded-2xl border border-hairline text-center max-w-[200px]">
                 <p className="text-[10px] uppercase font-black tracking-widest mb-2">Shortcuts</p>
                 <div className="flex flex-col gap-2 text-[10px] font-bold">
                   <span className="flex justify-between">F1 <span>بحث سريع</span></span>
@@ -683,16 +683,16 @@ export const RetailPOS: React.FC = () => {
             </div>
           ) : (
             cart.map(item => (
-              <div key={item.id} className="bg-slate-800/40 p-4 rounded-2xl border border-slate-800/50 flex flex-col gap-3 group animate-in slide-in-from-left-2 duration-300">
+              <div key={item.id} className="bg-hairline/40 p-4 rounded-2xl border border-hairline/50 flex flex-col gap-3 group animate-in slide-in-from-left-2 duration-300">
                 <div className="flex justify-between items-start">
                   <div>
                     <h5 className="font-bold text-sm">{item.name}</h5>
-                    <p className="text-xs text-slate-500 font-bold mt-1">{(item.price * item.quantity).toFixed(2)} ر.س</p>
+                    <p className="text-xs text-muted font-bold mt-1">{(item.price * item.quantity).toFixed(2)} ر.س</p>
                   </div>
-                  <div className="flex items-center bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
-                    <button onClick={() => updateQuantity(item.id, -1)} className="p-2 hover:bg-slate-800 text-slate-400"><Minus size={14} /></button>
+                  <div className="flex items-center bg-surface rounded-xl border border-hairline overflow-hidden">
+                    <button onClick={() => updateQuantity(item.id, -1)} className="p-2 hover:bg-hairline/60 text-faint"><Minus size={14} /></button>
                     <span className="px-3 font-black text-sm">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.id, 1)} className="p-2 hover:bg-slate-800 text-brand-400"><Plus size={14} /></button>
+                    <button onClick={() => updateQuantity(item.id, 1)} className="p-2 hover:bg-hairline/60 text-brand"><Plus size={14} /></button>
                   </div>
                 </div>
               </div>
@@ -701,34 +701,34 @@ export const RetailPOS: React.FC = () => {
         </div>
 
         {/* Footer / Summary */}
-        <div className="p-6 bg-slate-900/80 border-t border-slate-800 space-y-4">
-          <div className="flex bg-slate-800 p-1 rounded-xl gap-1">
+        <div className="p-6 bg-subtle border-t border-hairline space-y-4">
+          <div className="flex bg-subtle p-1 rounded-xl gap-1">
             <button 
               onClick={() => setPaymentMode('single')}
-              className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${paymentMode === 'single' ? 'bg-brand-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${paymentMode === 'single' ? 'bg-brand-600 text-white' : 'text-muted hover:text-muted'}`}
             >
               دفع واحد
             </button>
             <button 
               onClick={() => setPaymentMode('split')}
-              className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${paymentMode === 'split' ? 'bg-amber-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+              className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${paymentMode === 'split' ? 'bg-amber-600 text-white' : 'text-muted hover:text-muted'}`}
             >
               دفع متعدد (Split)
             </button>
           </div>
 
           <div className="space-y-2">
-            <div className="flex justify-between text-sm text-slate-500">
+            <div className="flex justify-between text-sm text-muted">
               <span>المجموع الفرعي</span>
               <span>{subtotal.toFixed(2)} ر.س</span>
             </div>
-            <div className="flex justify-between text-sm text-slate-500">
+            <div className="flex justify-between text-sm text-muted">
               <span>ضريبة القيمة المضافة ({tenantVatRate}%)</span>
               <span>{tax.toFixed(2)} ر.س</span>
             </div>
-            <div className="flex justify-between items-center pt-2 border-t border-slate-800/50">
+            <div className="flex justify-between items-center pt-2 border-t border-hairline/50">
               <span className="font-black text-lg">الإجمالي</span>
-              <span className="font-black text-2xl text-brand-400">{total.toFixed(2)} ر.س</span>
+              <span className="font-black text-2xl text-brand">{total.toFixed(2)} ر.س</span>
             </div>
           </div>
 
@@ -743,18 +743,18 @@ export const RetailPOS: React.FC = () => {
             is a real feature and is not stubbed with a control that lies.
           */}
           <div className="grid grid-cols-2 gap-3 pt-2">
-            <div className="flex items-center justify-center gap-2 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
-              <User size={18} className="text-slate-500" />
+            <div className="flex items-center justify-center gap-2 p-3 bg-subtle/50 rounded-xl border border-hairline/50">
+              <User size={18} className="text-muted" />
               <div className="text-right">
-                <p className="text-[10px] text-slate-500 uppercase font-black">العميل</p>
-                <p className="text-xs font-bold text-slate-400">نقدي / عام</p>
+                <p className="text-[10px] text-muted uppercase font-black">العميل</p>
+                <p className="text-xs font-bold text-faint">نقدي / عام</p>
               </div>
             </div>
-            <div className="flex items-center justify-center gap-2 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
-              <Tag size={18} className="text-slate-500" />
+            <div className="flex items-center justify-center gap-2 p-3 bg-subtle/50 rounded-xl border border-hairline/50">
+              <Tag size={18} className="text-muted" />
               <div className="text-right">
-                <p className="text-[10px] text-slate-500 uppercase font-black">الخصومات</p>
-                <p className="text-xs font-bold text-slate-400">لا يوجد</p>
+                <p className="text-[10px] text-muted uppercase font-black">الخصومات</p>
+                <p className="text-xs font-bold text-faint">لا يوجد</p>
               </div>
             </div>
           </div>
@@ -762,15 +762,15 @@ export const RetailPOS: React.FC = () => {
           {/* The sale itself — the action this screen was missing entirely. */}
           <div className="pt-3 space-y-2">
             {saleError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30">
-                <p className="text-rose-400 text-xs font-bold">{saleError}</p>
+              <div className="p-3 rounded-xl bg-err-soft border border-err/30">
+                <p className="text-err-strong text-xs font-bold">{saleError}</p>
               </div>
             )}
 
             <button
               onClick={completeSale}
               disabled={isSelling || !canProceed}
-              className="w-full py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-black text-lg transition-all flex items-center justify-center gap-2"
+              className="w-full py-4 rounded-2xl bg-brand-600 hover:bg-brand-500 disabled:bg-slate-700 disabled:text-muted disabled:cursor-not-allowed text-white font-black text-lg transition-all flex items-center justify-center gap-2"
             >
               {isSelling
                 ? 'جارٍ التسجيل…'
@@ -780,19 +780,19 @@ export const RetailPOS: React.FC = () => {
             </button>
 
             {!canProceed && cart.length === 0 && (
-              <p className="text-center text-xs text-slate-500">
+              <p className="text-center text-xs text-muted">
                 اختر منتجات من الكتالوج لبدء عملية بيع.
               </p>
             )}
             {unpricedLines.length > 0 && (
-              <p className="text-center text-xs text-rose-400">
+              <p className="text-center text-xs text-err-strong">
                 لا يمكن إتمام البيع: {unpricedLines.length} صنف بدون سعر.
               </p>
             )}
           </div>
 
           {unpricedLines.length > 0 && (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+            <div className="rounded-xl border border-err/30 bg-err-soft p-3 text-xs text-err-strong">
               <p className="font-bold">تعذّر إتمام البيع — أسعار غير معروفة</p>
               <p className="mt-1 text-rose-200/80">
                 {unpricedLines.map((l) => l.name).join('، ')}
@@ -819,7 +819,7 @@ export const RetailPOS: React.FC = () => {
             className={`w-full py-4 rounded-2xl font-black text-xl flex items-center justify-center gap-3 transition-all transform group ${
               canProceed && totalKnown
                 ? 'bg-brand-600 hover:bg-brand-500 text-white shadow-xl shadow-brand-900/40 active:scale-95'
-                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                : 'bg-subtle text-muted cursor-not-allowed'
             }`}
           >
             {unpricedLines.length > 0
@@ -828,12 +828,12 @@ export const RetailPOS: React.FC = () => {
             <ChevronLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
           </button>
           
-          <div className="flex justify-center gap-6 text-slate-600 opacity-40">
-            <div className="flex flex-col items-center gap-1 group cursor-pointer hover:text-brand-400 transition-colors">
+          <div className="flex justify-center gap-6 text-muted opacity-40">
+            <div className="flex flex-col items-center gap-1 group cursor-pointer hover:text-brand transition-colors">
               <Banknote size={22} />
               <span className="text-[8px] font-black uppercase tracking-tighter">Cash</span>
             </div>
-            <div className="flex flex-col items-center gap-1 group cursor-pointer hover:text-blue-400 transition-colors">
+            <div className="flex flex-col items-center gap-1 group cursor-pointer hover:text-info-strong transition-colors">
               <CreditCard size={22} />
               <span className="text-[8px] font-black uppercase tracking-tighter">Mada/Visa</span>
             </div>

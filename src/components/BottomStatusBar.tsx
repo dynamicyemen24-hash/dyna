@@ -83,7 +83,7 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
         <span className="h-3 w-px bg-hairline hidden sm:block" />
 
         <span
-          className={`flex items-center gap-1.5 ${shift.isOpen ? 'text-brand-600 dark:text-brand-300' : 'text-amber-600 dark:text-amber-400'}`}
+          className={`flex items-center gap-1.5 ${shift.isOpen ? 'text-brand dark:text-brand-strong' : 'text-warn-strong dark:text-warn-strong'}`}
           title={shift.isOpen
             ? `وردية مفتوحة — نقدي افتتاحي ${shift.openingCash}`
             : 'لا توجد وردية مفتوحة على هذا الجهاز'}
@@ -111,19 +111,19 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
 
         <div className="flex items-center gap-1.5 font-mono">
           {syncStatus === 'synced' && (
-            <span className="text-brand-600 dark:text-brand-300 flex items-center gap-1 font-semibold">
+            <span className="text-brand dark:text-brand-strong flex items-center gap-1 font-semibold">
               <CloudCheck size={13} />
               متزامن{lastBackupTime ? ` · ${lastBackupTime}` : ''}
             </span>
           )}
           {syncStatus === 'syncing' && (
-            <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 font-semibold">
+            <span className="text-warn-strong dark:text-warn-strong flex items-center gap-1 font-semibold">
               <RefreshCw size={13} className="animate-spin" />
               جارٍ التزامن
             </span>
           )}
           {syncStatus === 'offline' && (
-            <span className="text-amber-700 dark:text-amber-300 flex items-center gap-1 font-semibold" title="العمليات محفوظة محلياً حتى عودة الشبكة">
+            <span className="text-warn-strong dark:text-warn-strong flex items-center gap-1 font-semibold" title="العمليات محفوظة محلياً حتى عودة الشبكة">
               <HardDriveUpload size={13} />
               {pendingCount === undefined
                 ? '—'
@@ -140,7 +140,7 @@ export const BottomStatusBar: React.FC<BottomStatusBarProps> = ({
         )}
 
         {(pendingCount !== undefined && pendingCount > 0) && syncStatus === 'offline' && (
-          <span className="hidden xl:flex items-center gap-1 text-2xs text-amber-700 dark:text-amber-300">
+          <span className="hidden xl:flex items-center gap-1 text-2xs text-warn-strong dark:text-warn-strong">
             <AlertTriangle size={12} />
             راجع قائمة الانتظار قبل إغلاق الوردية
           </span>

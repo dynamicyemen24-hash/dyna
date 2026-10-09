@@ -31,11 +31,11 @@ interface WorkOrder {
 
 
 const statusStyles = {
-  draft: 'bg-slate-800 text-slate-400',
-  in_progress: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  draft: 'bg-subtle text-faint',
+  in_progress: 'bg-info-soft text-info-strong border-blue-500/20',
   quality_check: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  ready: 'bg-brand-500/10 text-brand-400 border-brand-500/20',
-  delivered: 'bg-slate-800 text-slate-500'
+  ready: 'bg-brand-soft text-brand border-brand/20',
+  delivered: 'bg-subtle text-muted'
 };
 
 const statusLabels = {
@@ -47,8 +47,8 @@ const statusLabels = {
 };
 
 const priorityStyles = {
-  low: 'text-slate-500',
-  normal: 'text-blue-400',
+  low: 'text-muted',
+  normal: 'text-info-strong',
   high: 'text-amber-500',
   urgent: 'text-rose-500 font-bold'
 };
@@ -150,7 +150,7 @@ export const WorkOrderManager: React.FC = () => {
             <ClipboardList className="text-blue-500" size={32} />
             إدارة أوامر العمل
           </h1>
-          <p className="text-slate-400 mt-1">متابعة مراحل الإنتاج والتنفيذ والمهام المسندة.</p>
+          <p className="text-faint mt-1">متابعة مراحل الإنتاج والتنفيذ والمهام المسندة.</p>
         </div>
         {/*
           "أمر عمل جديد" had no handler, and no endpoint exists to create a work
@@ -164,44 +164,44 @@ export const WorkOrderManager: React.FC = () => {
 
       {/* Kanban-like Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
+        <div className="bg-surface p-4 rounded-2xl border border-hairline flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-bold mb-1">تحت التنفيذ</p>
+            <p className="text-xs text-muted font-bold mb-1">تحت التنفيذ</p>
             <h4 className="text-2xl font-black">12</h4>
           </div>
           <Clock size={24} className="text-blue-500 opacity-50" />
         </div>
-        <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
+        <div className="bg-surface p-4 rounded-2xl border border-hairline flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-bold mb-1">فحص الجودة</p>
+            <p className="text-xs text-muted font-bold mb-1">فحص الجودة</p>
             <h4 className="text-2xl font-black">5</h4>
           </div>
           <AlertCircle size={24} className="text-purple-500 opacity-50" />
         </div>
-        <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
+        <div className="bg-surface p-4 rounded-2xl border border-hairline flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-bold mb-1">جاهز</p>
+            <p className="text-xs text-muted font-bold mb-1">جاهز</p>
             <h4 className="text-2xl font-black">28</h4>
           </div>
           <CheckCircle size={24} className="text-brand-500 opacity-50" />
         </div>
-        <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
+        <div className="bg-surface p-4 rounded-2xl border border-hairline flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-500 font-bold mb-1">متأخر</p>
+            <p className="text-xs text-muted font-bold mb-1">متأخر</p>
             <h4 className="text-2xl font-black text-rose-500">2</h4>
           </div>
           <AlertCircle size={24} className="text-rose-500 opacity-50" />
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-        <div className="p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between gap-4 bg-slate-900/50">
+      <div className="surface-card rounded-3xl overflow-hidden shadow-2xl">
+        <div className="p-6 border-b border-hairline flex flex-col md:flex-row justify-between gap-4 bg-subtle">
           <div className="relative flex-1">
-            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-muted" size={18} />
             <input 
               type="text" 
               placeholder="بحث برقم الأمر، اسم العميل، أو الفني..." 
-              className="w-full bg-slate-800 border-none rounded-xl py-2.5 pr-12 pl-4 text-sm focus:ring-2 focus:ring-blue-500/50"
+              className="w-full bg-subtle border-none rounded-xl py-2.5 pr-12 pl-4 text-sm focus:ring-2 focus:ring-blue-500/50"
             />
           </div>
           {/*
@@ -214,7 +214,7 @@ export const WorkOrderManager: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-right border-collapse">
             <thead>
-              <tr className="bg-slate-800/30 text-slate-500 text-xs font-black uppercase tracking-widest border-b border-slate-800">
+              <tr className="bg-subtle/30 text-muted text-xs font-black uppercase tracking-widest border-b border-hairline">
                 <th className="p-5">رقم الأمر</th>
                 <th className="p-5">العميل والمهمة</th>
                 <th className="p-5">الحالة</th>
@@ -224,16 +224,16 @@ export const WorkOrderManager: React.FC = () => {
                 <th className="p-5"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800">
+            <tbody className="divide-y divide-hairline">
               {orders.map((o) => (
-                <tr key={o.id} className="hover:bg-slate-800/20 transition-colors group cursor-pointer">
+                <tr key={o.id} className="hover:bg-hairline/60/20 transition-colors group cursor-pointer">
                   <td className="p-5">
-                    <span className="font-mono text-xs bg-slate-800 px-2 py-1 rounded text-blue-400">{o.orderNumber}</span>
+                    <span className="font-mono text-xs bg-subtle px-2 py-1 rounded text-info-strong">{o.orderNumber}</span>
                   </td>
                   <td className="p-5">
                     <div className="flex flex-col">
                       <span className="font-bold">{o.customerName}</span>
-                      <span className="text-xs text-slate-500 mt-1">{o.task}</span>
+                      <span className="text-xs text-muted mt-1">{o.task}</span>
                     </div>
                   </td>
                   <td className="p-5">
@@ -248,16 +248,16 @@ export const WorkOrderManager: React.FC = () => {
                   </td>
                   <td className="p-5">
                     <div className="flex items-center gap-2 text-xs">
-                      <Clock size={12} className="text-slate-500" />
-                      <span className={o.priority === 'urgent' ? 'text-rose-500 font-bold' : 'text-slate-300'}>{o.deadline}</span>
+                      <Clock size={12} className="text-muted" />
+                      <span className={o.priority === 'urgent' ? 'text-rose-500 font-bold' : 'text-muted'}>{o.deadline}</span>
                     </div>
                   </td>
                   <td className="p-5">
                     <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold uppercase">
+                      <div className="w-6 h-6 rounded-full bg-subtle flex items-center justify-center text-[10px] font-bold uppercase">
                         {o.assignedTo.charAt(0)}
                       </div>
-                      <span className="text-xs text-slate-400">{o.assignedTo}</span>
+                      <span className="text-xs text-faint">{o.assignedTo}</span>
                     </div>
                   </td>
                   <td className="p-5">
@@ -266,7 +266,7 @@ export const WorkOrderManager: React.FC = () => {
                           An icon promising a menu that opens nothing is worse
                           than no icon; the chevron is left because it honestly
                           indicates navigation. */}
-                      <ChevronRight size={18} className="text-slate-700 group-hover:text-blue-500 transition-colors" />
+                      <ChevronRight size={18} className="text-ink group-hover:text-blue-500 transition-colors" />
                     </div>
                   </td>
                 </tr>
@@ -275,8 +275,8 @@ export const WorkOrderManager: React.FC = () => {
           </table>
         </div>
 
-        <div className="p-4 bg-slate-900/80 text-center border-t border-slate-800">
-          <p className="text-xs text-slate-500">جاري عرض 3 أوامر عمل نشطة من إجمالي 45</p>
+        <div className="p-4 bg-subtle text-center border-t border-hairline">
+          <p className="text-xs text-muted">جاري عرض 3 أوامر عمل نشطة من إجمالي 45</p>
         </div>
       </div>
     </div>

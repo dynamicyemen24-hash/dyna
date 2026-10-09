@@ -41,17 +41,17 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
     return (
       <div className="flex flex-col items-center justify-center gap-5 py-20 px-8 text-center" role="alert">
-        <span className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 grid place-items-center">
+        <span className="w-14 h-14 rounded-2xl bg-warn-soft text-warn-strong grid place-items-center">
           <AlertTriangle size={26} />
         </span>
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-ink">
             تعذّر عرض {this.props.label || 'هذه الشاشة'}
           </h2>
-<p className="text-[12.5px] text-slate-500 mt-1.5 max-w-md leading-relaxed">
+<p className="text-[12.5px] text-muted mt-1.5 max-w-md leading-relaxed">
               بقية النظام يعمل بشكل طبيعي. تعرض هذه الشاشة Error مؤقتاً؛ يمكنك:
             </p>
-            <ul className="text-[11px] text-slate-400 mt-1 space-y-1 max-w-md">
+            <ul className="text-[11px] text-faint mt-1 space-y-1 max-w-md">
               <li className="flex items-center gap-2">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -92,11 +92,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 إرسال تقرير خطأ (Report Error)
               </li>
             </ul>
-          <p className="text-[11px] text-slate-400 mt-3 font-mono break-words max-w-md" dir="ltr">
+          <p className="text-[11px] text-faint mt-3 font-mono break-words max-w-md" dir="ltr">
             {error.message}
           </p>
           {info && (
-            <p className="text-[10.5px] text-slate-300 mt-1 font-mono break-words max-w-md" dir="ltr">
+            <p className="text-[10.5px] text-muted mt-1 font-mono break-words max-w-md" dir="ltr">
               {info}
             </p>
           )}
@@ -104,7 +104,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
         <div className="flex items-center gap-2">
           <button
             onClick={this.reset}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-700 text-white text-[12.5px] font-semibold transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-surface hover:bg-hairline text-ink text-[12.5px] font-semibold transition-colors"
           >
             <RefreshCw size={14} />
             إعادة المحاولة
@@ -114,7 +114,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               this.reset();
               window.location.href = '/';
             }}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-[12.5px] font-semibold transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-hairline hover:bg-subtle text-ink text-[12.5px] font-semibold transition-colors"
           >
             <Home size={14} />
             لوحة التحكم

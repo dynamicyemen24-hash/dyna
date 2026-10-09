@@ -21,10 +21,10 @@ interface Serial {
 interface ProductOpt { id: string; name: string }
 
 const STATUS: Record<string, { label: string; tone: string }> = {
-  in_stock: { label: 'متوفر', tone: 'bg-brand-500/10 text-brand-300 border-brand-500/30' },
-  sold: { label: 'مُباع', tone: 'bg-sky-500/10 text-sky-300 border-sky-500/30' },
-  returned: { label: 'مُرتجع', tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
-  defective: { label: 'معيب', tone: 'bg-rose-500/10 text-rose-300 border-rose-500/30' },
+  in_stock: { label: 'متوفر', tone: 'bg-brand-soft text-brand-strong border-brand/30' },
+  sold: { label: 'مُباع', tone: 'bg-info-soft text-info-strong border-info/30' },
+  returned: { label: 'مُرتجع', tone: 'bg-warn-soft text-warn-strong border-warn/30' },
+  defective: { label: 'معيب', tone: 'bg-err-soft text-err-strong border-err/30' },
 };
 
 export const SerialsView: React.FC = () => {
@@ -127,19 +127,19 @@ export const SerialsView: React.FC = () => {
         icon={Hash}
         title="الأرقام التسلسلية / IMEI"
         subtitle="تتبع القطع الفردية للأجهزة الإلكترونية مع الضمان وحالة البيع."
-        accent="text-cyan-400"
+        accent="text-info-strong"
         actions={<PrimaryButton onClick={() => setModal(true)}><Plus size={18} /> رقم تسلسلي جديد</PrimaryButton>}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="إجمالي الأرقام" value={String(stats.total)} icon={Hash} />
-        <Stat label="متوفر بالمخزون" value={String(stats.stock)} tone="text-brand-400" />
-        <Stat label="مُباع" value={String(stats.sold)} tone="text-sky-400" icon={Smartphone} />
-        <Stat label="معيب" value={String(stats.defective)} tone="text-rose-400" />
+        <Stat label="متوفر بالمخزون" value={String(stats.stock)} tone="text-brand" />
+        <Stat label="مُباع" value={String(stats.sold)} tone="text-info-strong" icon={Smartphone} />
+        <Stat label="معيب" value={String(stats.defective)} tone="text-err-strong" />
       </div>
 
       <Card className="overflow-hidden">
-        <div className="p-4 border-b border-slate-800 flex flex-wrap gap-3 items-center">
+        <div className="p-4 border-b border-hairline flex flex-wrap gap-3 items-center">
           <Input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="ابحث برقم تسلسلي أو IMEI…" className="flex-1 min-w-[200px]" />
           <div className="flex gap-2 flex-wrap">
@@ -147,7 +147,7 @@ export const SerialsView: React.FC = () => {
               ['returned', 'مُرتجع'], ['defective', 'معيب']].map(([k, l]) => (
               <button key={k} onClick={() => setFilter(k)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                  filter === k ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+                  filter === k ? 'bg-cyan-600 text-white' : 'bg-hairline/40 text-faint hover:bg-hairline'}`}>
                 {l}
               </button>
             ))}
@@ -160,7 +160,7 @@ export const SerialsView: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-right border-collapse">
                 <thead>
-                  <tr className="bg-slate-800/30 text-slate-500 text-xs font-black border-b border-slate-800">
+                  <tr className="bg-subtle/30 text-muted text-xs font-black border-b border-hairline">
                     <th className="p-4">الرقم التسلسلي</th>
                     <th className="p-4">IMEI</th>
                     <th className="p-4">المنتج</th>
@@ -170,15 +170,15 @@ export const SerialsView: React.FC = () => {
                     <th className="p-4"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800">
+                <tbody className="divide-y divide-hairline">
                   {visible.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-800/20">
-                      <td className="p-4 font-mono text-xs text-cyan-300" dir="ltr">{s.serial_number}</td>
-                      <td className="p-4 font-mono text-xs text-slate-400" dir="ltr">{s.imei || '—'}</td>
+                    <tr key={s.id} className="hover:bg-hairline/60/20">
+                      <td className="p-4 font-mono text-xs text-info-strong" dir="ltr">{s.serial_number}</td>
+                      <td className="p-4 font-mono text-xs text-faint" dir="ltr">{s.imei || '—'}</td>
                       <td className="p-4 font-bold">{s.product_name || s.product_id}</td>
                       <td className="p-4 text-sm">
                         {s.warranty_end ? (
-                          <span className="flex items-center gap-1 text-brand-400">
+                          <span className="flex items-center gap-1 text-brand">
                             <ShieldCheck size={13} /> {fmtDate(s.warranty_end)}
                           </span>
                         ) : '—'}
@@ -198,7 +198,7 @@ export const SerialsView: React.FC = () => {
                       </td>
                       <td className="p-4">
                         <button onClick={() => remove(s)}
-                          className="p-2 rounded-lg text-slate-400 hover:text-rose-400" aria-label="حذف">
+                          className="p-2 rounded-lg text-faint hover:text-err-strong" aria-label="حذف">
                           <Trash2 size={16} />
                         </button>
                       </td>

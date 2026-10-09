@@ -262,13 +262,13 @@ const InstallPrompt: React.FC = () => {
           inline-flex items-center gap-2
           rounded-full
           border border-white/10
-          bg-slate-900/95
+          bg-subtle
           px-4 py-2.5
-          text-[12px] font-semibold text-white
+          text-[12px] font-semibold text-ink
           shadow-xl
           backdrop-blur
           transition
-          hover:bg-slate-800
+          hover:bg-hairline/60
           active:scale-[0.98]
           focus-visible:outline-none
           focus-visible:ring-2
@@ -279,7 +279,7 @@ const InstallPrompt: React.FC = () => {
         <Download
           size={15}
           aria-hidden="true"
-          className="text-brand-400"
+          className="text-brand"
         />
 
         تثبيت التطبيق
@@ -303,7 +303,7 @@ const InstallPrompt: React.FC = () => {
             className="
               absolute inset-0
               cursor-default
-              bg-slate-950/70
+              bg-subtle
               backdrop-blur-sm
             "
           />
@@ -318,8 +318,8 @@ const InstallPrompt: React.FC = () => {
               w-full max-w-md
               overflow-hidden
               rounded-2xl
-              border border-slate-200
-              bg-white
+              border border-hairline
+              bg-surface
               p-5 sm:p-6
               shadow-2xl
             "
@@ -334,10 +334,10 @@ const InstallPrompt: React.FC = () => {
                 grid h-9 w-9
                 place-items-center
                 rounded-lg
-                text-slate-400
+                text-faint
                 transition
-                hover:bg-slate-100
-                hover:text-slate-700
+                hover:bg-subtle
+                hover:text-ink
                 focus-visible:outline-none
                 focus-visible:ring-2
                 focus-visible:ring-brand-500
@@ -369,7 +369,7 @@ const InstallPrompt: React.FC = () => {
                   mt-3
                   text-base
                   font-bold
-                  text-slate-900
+                  text-ink
                 "
               >
                 ثبّت دينا على جهازك
@@ -381,7 +381,7 @@ const InstallPrompt: React.FC = () => {
                   mt-1
                   text-xs
                   leading-6
-                  text-slate-500
+                  text-muted
                 "
               >
                 وصول أسرع إلى النظام وتجربة أقرب إلى
@@ -407,12 +407,12 @@ const InstallPrompt: React.FC = () => {
                 flex w-full
                 items-center justify-center gap-2
                 rounded-lg
-                border border-slate-200
+                border border-hairline
                 px-4 py-3
                 text-xs font-semibold
-                text-slate-700
+                text-ink
                 transition
-                hover:bg-slate-50
+                hover:bg-subtle
                 focus-visible:outline-none
                 focus-visible:ring-2
                 focus-visible:ring-brand-500
@@ -422,7 +422,7 @@ const InstallPrompt: React.FC = () => {
                 <Check
                   size={14}
                   aria-hidden="true"
-                  className="text-brand-600"
+                  className="text-brand"
                 />
               ) : (
                 <Copy
@@ -441,7 +441,7 @@ const InstallPrompt: React.FC = () => {
               text-center
               text-[10.5px]
               leading-5
-              text-slate-400
+              text-faint
             ">
               يمكنك تجاهل هذه الرسالة — سيستمر دينا
               في العمل بشكل طبيعي.
@@ -480,16 +480,16 @@ const NativeInstall: React.FC<NativeInstallProps> = ({
         mb-4
         flex items-center gap-3
         rounded-xl
-        border border-slate-200
-        bg-slate-50
+        border border-hairline
+        bg-subtle
         px-3.5 py-3
       ">
         <span className="
           grid h-9 w-9 shrink-0
           place-items-center
           rounded-lg
-          bg-white
-          text-slate-500
+          bg-surface
+          text-muted
           shadow-sm
         ">
           <Icon
@@ -499,7 +499,7 @@ const NativeInstall: React.FC<NativeInstallProps> = ({
         </span>
 
         <div className="min-w-0">
-          <p className="text-[11px] text-slate-500">
+          <p className="text-[11px] text-muted">
             جهاز التثبيت
           </p>
 
@@ -508,7 +508,7 @@ const NativeInstall: React.FC<NativeInstallProps> = ({
             truncate
             text-xs
             font-bold
-            text-slate-800
+            text-ink
           ">
             {label}
           </p>
@@ -524,14 +524,14 @@ const NativeInstall: React.FC<NativeInstallProps> = ({
           flex w-full
           items-center justify-center gap-2
           rounded-xl
-          bg-slate-900
+          bg-surface
           px-4 py-3.5
           text-[13px]
           font-bold
-          text-white
+          text-ink
           shadow-sm
           transition
-          hover:bg-slate-800
+          hover:bg-hairline/60
           focus-visible:outline-none
           focus-visible:ring-2
           focus-visible:ring-brand-500
@@ -593,7 +593,7 @@ const IOSInstallGuide: React.FC = () => (
           flex items-start gap-3
           text-xs
           leading-6
-          text-slate-700
+          text-ink
         "
       >
         <span
@@ -605,7 +605,7 @@ const IOSInstallGuide: React.FC = () => (
             bg-brand-100
             text-[11px]
             font-bold
-            text-brand-700
+            text-brand-strong
           "
         >
           {['١', '٢', '٣'][index]}

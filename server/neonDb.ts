@@ -250,7 +250,7 @@ export async function initDatabaseSchema() {
         id VARCHAR(64) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         owner_company VARCHAR(255) DEFAULT 'شركة المنافذ الذكية للبرمجيات (Smart Ports Software)',
-        brand_name VARCHAR(255) DEFAULT 'DyPOS Enterprise Cloud & Edge',
+        brand_name VARCHAR(255) DEFAULT 'دينا: منصة التجارة الذكية',
         commercial_reg VARCHAR(64),
         tax_number VARCHAR(64),
         country_code VARCHAR(10) DEFAULT 'SA',

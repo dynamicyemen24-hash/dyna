@@ -209,11 +209,11 @@ export const ThirdPartySaleView: React.FC = () => {
       {/* Top Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-xl font-black text-white flex items-center gap-2">
-            <Scale className="w-6 h-6 text-brand-400" />
+          <h2 className="text-xl font-black text-ink flex items-center gap-2">
+            <Scale className="w-6 h-6 text-brand" />
             بيع الطرف الثالث وسوق الخضار والمزادات (Produce & Consignment Market)
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-faint mt-0.5">
             تسجيل عمليات البيع نيابة عن المزارعين، حسم عمولة السمسار/الدلالة، وحساب مستحقات الأطراف تلقائياً
           </p>
         </div>
@@ -229,62 +229,62 @@ export const ThirdPartySaleView: React.FC = () => {
 
       {/* Market Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+        <div className="surface-card rounded-2xl p-5 flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-400">إجمالي حجم مبيعات المزادات</p>
-            <p className="text-2xl font-black text-white font-mono mt-1">
-              {totalGrossVolume.toLocaleString()} <span className="text-xs text-slate-400 font-normal">ر.س</span>
+            <p className="text-xs text-faint">إجمالي حجم مبيعات المزادات</p>
+            <p className="text-2xl font-black text-ink font-mono mt-1">
+              {totalGrossVolume.toLocaleString()} <span className="text-xs text-faint font-normal">ر.س</span>
             </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-brand-400">
+          <div className="w-10 h-10 rounded-xl bg-subtle flex items-center justify-center text-brand">
             <TrendingUp className="w-5 h-5" />
           </div>
         </div>
 
         <div className="bg-brand-950/40 border border-brand-900/50 rounded-2xl p-5 flex items-center justify-between">
           <div>
-            <p className="text-xs text-brand-300 font-bold">إجمالي عمولة السمسارة المستحقة (الدلالة)</p>
-            <p className="text-2xl font-black text-brand-400 font-mono mt-1">
-              {totalCommissionsEarned.toLocaleString()} <span className="text-xs text-slate-400 font-normal">ر.س</span>
+            <p className="text-xs text-brand-strong font-bold">إجمالي عمولة السمسارة المستحقة (الدلالة)</p>
+            <p className="text-2xl font-black text-brand font-mono mt-1">
+              {totalCommissionsEarned.toLocaleString()} <span className="text-xs text-faint font-normal">ر.س</span>
             </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-brand-500/20 flex items-center justify-center text-brand-400">
+          <div className="w-10 h-10 rounded-xl bg-brand-500/20 flex items-center justify-center text-brand">
             <DollarSign className="w-5 h-5" />
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex items-center justify-between">
+        <div className="surface-card rounded-2xl p-5 flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-400">صافي المستحق للمزارعين والمالكين</p>
+            <p className="text-xs text-faint">صافي المستحق للمزارعين والمالكين</p>
             <p className="text-2xl font-black text-teal-400 font-mono mt-1">
-              {totalNetDueSellers.toLocaleString()} <span className="text-xs text-slate-400 font-normal">ر.س</span>
+              {totalNetDueSellers.toLocaleString()} <span className="text-xs text-faint font-normal">ر.س</span>
             </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-teal-400">
+          <div className="w-10 h-10 rounded-xl bg-subtle flex items-center justify-center text-teal-400">
             <ArrowRightLeft className="w-5 h-5" />
           </div>
         </div>
       </div>
 
       {/* Search Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 mb-6 flex items-center justify-between">
+      <div className="surface-card rounded-2xl p-4 mb-6 flex items-center justify-between">
         <div className="relative flex-1 max-w-md">
-          <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-faint" />
           <input
             type="text"
             placeholder="البحث باسم المزارع، المشتري، رقم اللوط أو الصنف..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl pr-10 pl-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
+            className="w-full bg-surface border border-hairline rounded-xl pr-10 pl-4 py-2 text-xs text-ink placeholder-faint focus:outline-none focus:border-brand"
           />
         </div>
       </div>
 
       {/* Sales Table */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+      <div className="surface-card rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
-            <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 uppercase tracking-wider">
+            <thead className="bg-subtle text-faint border-b border-hairline uppercase tracking-wider">
               <tr>
                 <th className="p-4">رقم اللوط والتاريخ</th>
                 <th className="p-4">البائع (المزارع/المالك)</th>
@@ -297,34 +297,34 @@ export const ThirdPartySaleView: React.FC = () => {
                 <th className="p-4 text-center">الحالة والتسوية</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80">
+            <tbody className="divide-y divide-hairline/80">
               {filteredSales.map((s) => (
-                <tr key={s.id} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="p-4 font-mono font-bold text-brand-400">
+                <tr key={s.id} className="hover:bg-hairline/40 transition-colors">
+                  <td className="p-4 font-mono font-bold text-brand">
                     <div>{s.lotNumber}</div>
-                    <div className="text-[10px] text-slate-500 font-normal">{s.timestamp}</div>
+                    <div className="text-[10px] text-muted font-normal">{s.timestamp}</div>
                   </td>
-                  <td className="p-4 font-semibold text-white">{s.sellerName}</td>
-                  <td className="p-4 text-slate-300">{s.buyerName}</td>
+                  <td className="p-4 font-semibold text-ink">{s.sellerName}</td>
+                  <td className="p-4 text-muted">{s.buyerName}</td>
                   <td className="p-4">
-                    <div className="font-bold text-white">{s.cropItem}</div>
-                    <div className="text-[10px] text-brand-400 font-mono">
+                    <div className="font-bold text-ink">{s.cropItem}</div>
+                    <div className="text-[10px] text-brand font-mono">
                       صافي {s.netWeightKg} كجم (قائم {s.grossWeightKg} - طبلية {s.tareWeightKg})
                     </div>
                   </td>
-                  <td className="p-4 font-mono text-slate-300">{s.pricePerKg} ر.س</td>
-                  <td className="p-4 font-mono font-bold text-white">{s.grossTotal.toLocaleString()} ر.س</td>
-                  <td className="p-4 font-mono text-amber-400 font-bold">
+                  <td className="p-4 font-mono text-muted">{s.pricePerKg} ر.س</td>
+                  <td className="p-4 font-mono font-bold text-ink">{s.grossTotal.toLocaleString()} ر.س</td>
+                  <td className="p-4 font-mono text-warn-strong font-bold">
                     {s.commissionAmount.toLocaleString()} ر.س ({s.commissionPercent}%)
                   </td>
                   <td className="p-4 font-mono text-teal-300 font-bold">{s.netToSeller.toLocaleString()} ر.س</td>
                   <td className="p-4 text-center">
                     {s.status === 'settled' ? (
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-brand-soft text-brand border border-brand/20">
                         تمت التسوية
                       </span>
                     ) : (
-                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-warn-soft text-warn-strong border border-amber-500/20">
                         معلق الصرف
                       </span>
                     )}
@@ -338,27 +338,27 @@ export const ThirdPartySaleView: React.FC = () => {
 
       {/* New Consignment Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl p-6 shadow-2xl relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Scale className="w-5 h-5 text-brand-400" />
+        <div className="fixed inset-0 bg-subtle backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="surface-card rounded-3xl w-full max-w-xl p-6 shadow-2xl relative">
+            <div className="flex items-center justify-between pb-4 border-b border-hairline mb-4">
+              <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                <Scale className="w-5 h-5 text-brand" />
                 تسجيل بيعة طرف ثالث / مزاد حرج
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsModalOpen(false)} className="text-faint hover:text-ink">
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleCreateConsignment} className="space-y-4 text-xs">
-              <div className="bg-slate-950 p-3 rounded-2xl border border-brand-500/30 flex items-center justify-between">
+              <div className="bg-surface p-3 rounded-2xl border border-brand/30 flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] text-slate-400">
+                  <p className="text-[10px] text-faint">
                     {scaleReading.fromDevice
                       ? 'القراءة من الميزان المتصل:'
                       : 'لا يوجد ميزان متصل — أدخل الوزن أدناه.'}
                   </p>
-                  <p className="text-lg font-black font-mono text-brand-400">
+                  <p className="text-lg font-black font-mono text-brand">
                     {scaleReading.netWeightKg === null
                       ? '—'
                       : `الصافي: ${scaleReading.netWeightKg} كجم (قائم ${scaleReading.weightKg ?? '—'} كجم)`}
@@ -367,7 +367,7 @@ export const ThirdPartySaleView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => deviceGateway.clearScale()}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-[10px] font-bold"
+                  className="bg-subtle hover:bg-hairline text-ink px-3 py-1.5 rounded-lg text-[10px] font-bold"
                 >
                   مسح القراءة
                 </button>
@@ -376,7 +376,7 @@ export const ThirdPartySaleView: React.FC = () => {
               {formError && (
                 <p
                   role="alert"
-                  className="text-[11px] font-bold text-rose-300 bg-rose-950/60 border border-rose-700/60 rounded-xl px-3 py-2"
+                  className="text-[11px] font-bold text-err-strong bg-rose-950/60 border border-rose-700/60 rounded-xl px-3 py-2"
                 >
                   {formError}
                 </p>
@@ -384,57 +384,57 @@ export const ThirdPartySaleView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">اسم البائع (المزارع/المالك):</label>
+                  <label className="block text-muted font-semibold mb-1">اسم البائع (المزارع/المالك):</label>
                   <input
                     type="text"
                     required
                     placeholder="مثال: مزارع الوادي - أبو عبدالله"
                     value={sellerName}
                     onChange={(e) => setSellerName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface border border-hairline rounded-xl px-3 py-2 text-ink focus:outline-none focus:border-brand"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">اسم المشتري (التاجر/البسطة):</label>
+                  <label className="block text-muted font-semibold mb-1">اسم المشتري (التاجر/البسطة):</label>
                   <input
                     type="text"
                     required
                     placeholder="مثال: مؤسسة النجمة التجارية"
                     value={buyerName}
                     onChange={(e) => setBuyerName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface border border-hairline rounded-xl px-3 py-2 text-ink focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">اسم الصنف / المحصول:</label>
+                  <label className="block text-muted font-semibold mb-1">اسم الصنف / المحصول:</label>
                   <input
                     type="text"
                     required
                     placeholder="مثال: كرتون طماطم فاخر"
                     value={cropItem}
                     onChange={(e) => setCropItem(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface border border-hairline rounded-xl px-3 py-2 text-ink focus:outline-none focus:border-brand"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">اسم الدلال / الوسيط المسؤول:</label>
+                  <label className="block text-muted font-semibold mb-1">اسم الدلال / الوسيط المسؤول:</label>
                   <input
                     type="text"
                     value={brokerName}
                     onChange={(e) => setBrokerName(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface border border-hairline rounded-xl px-3 py-2 text-ink focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
+                  <label className="block text-muted font-semibold mb-1">
                     الوزن الصافي (كجم) — مطلوب ما لم يكن الميزان متصلاً:
                   </label>
                   <input
@@ -443,12 +443,12 @@ export const ThirdPartySaleView: React.FC = () => {
                     min="0"
                     value={manualNetKg}
                     onChange={(e) => setManualNetKg(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface border border-hairline rounded-xl px-3 py-2 text-ink font-mono focus:outline-none focus:border-brand"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">سعر الكيلو / الوحدة (ر.س):</label>
+                  <label className="block text-muted font-semibold mb-1">سعر الكيلو / الوحدة (ر.س):</label>
                   <input
                     type="number"
                     step="0.01"
@@ -456,12 +456,12 @@ export const ThirdPartySaleView: React.FC = () => {
                     required
                     value={unitPrice}
                     onChange={(e) => setUnitPrice(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface border border-hairline rounded-xl px-3 py-2 text-ink font-mono focus:outline-none focus:border-brand"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">نسبة عمولة الدلالة (%):</label>
+                  <label className="block text-muted font-semibold mb-1">نسبة عمولة الدلالة (%):</label>
                   <input
                     type="number"
                     step="0.5"
@@ -470,16 +470,16 @@ export const ThirdPartySaleView: React.FC = () => {
                     required
                     value={commissionRate}
                     onChange={(e) => setCommissionRate(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface border border-hairline rounded-xl px-3 py-2 text-ink font-mono focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+              <div className="pt-4 border-t border-hairline flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-xl font-bold"
+                  className="bg-subtle hover:bg-hairline text-muted px-4 py-2 rounded-xl font-bold"
                 >
                   إلغاء
                 </button>

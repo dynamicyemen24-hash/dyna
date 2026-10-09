@@ -109,7 +109,7 @@ export const CustomersView: React.FC<CustomersViewProps> = ({ customers, onAddCu
                 </div>
                 <div className="text-left rtl:text-right">
                   <span className="text-faint block text-[10px]">رصيد الحساب (دين)</span>
-                  <span className="font-bold text-amber-600">{cus.balance.toLocaleString()} ر.س</span>
+                  <span className="font-bold text-warn-strong">{cus.balance.toLocaleString()} ر.س</span>
                 </div>
               </div>
             </div>

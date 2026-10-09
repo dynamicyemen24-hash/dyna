@@ -277,7 +277,7 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onSignOut, onNavigate })
               ))}
             </select>
             {currency !== base && (
-              <span className="text-2xs text-amber-600 text-numeric">
+              <span className="text-2xs text-warn-strong text-numeric">
                 1 {currency} = {Number(rate).toFixed(4)} {base}
               </span>
             )}
@@ -300,8 +300,8 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onSignOut, onNavigate })
               periodLoading
                 ? 'border-hairline bg-subtle text-muted'
                 : periodClosed
-                ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200'
-                : 'border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200'
+                ? 'border-err/30 bg-err-soft text-err-strong dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200'
+                : 'border-brand/30 bg-brand-soft text-brand-strong dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200'
             }`}
             title={
               periodLoading
@@ -404,11 +404,11 @@ const MessageStrip: React.FC<{ messages: StripMessage[] }> = ({ messages }) => {
   const toneFor = (severity: StripMessage['severity']) => {
     switch (severity) {
       case 'critical':
-        return 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200';
+        return 'border-err/30 bg-err-soft text-err-strong dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200';
       case 'warning':
-        return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200';
+        return 'border-warn/30 bg-warn-soft text-warn-strong dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200';
       case 'success':
-        return 'border-brand-200 bg-brand-50 text-brand-800 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200';
+        return 'border-brand/30 bg-brand-soft text-brand-strong dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200';
       case 'info':
       default:
         return 'border-hairline bg-surface text-ink';
@@ -626,7 +626,7 @@ const IdentityMenu: React.FC<{
               <div key={r.id} className="flex items-center justify-between gap-2">
                 <span className="text-2xs text-ink">{r.name}</span>
                 {r.sodGroup && (
-                  <span className="text-[9px] px-1.5 py-px rounded bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800">
+                  <span className="text-[9px] px-1.5 py-px rounded bg-warn-soft text-warn-strong border border-warn/30 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800">
                     فصل مهام: {r.sodGroup}
                   </span>
                 )}
@@ -663,7 +663,7 @@ const IdentityMenu: React.FC<{
             <button
               onClick={onSignOut}
               disabled={!onSignOut}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-hairline text-2xs text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors dark:text-rose-400 dark:hover:bg-rose-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-hairline text-2xs text-err-strong hover:bg-err-soft disabled:opacity-50 transition-colors dark:text-err-strong dark:hover:bg-rose-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               title="إنهاء الجلسة والعودة لشاشة الدخول"
             >
               <LogOut size={12} />

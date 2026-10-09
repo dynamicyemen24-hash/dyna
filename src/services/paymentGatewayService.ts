@@ -1,6 +1,6 @@
 /**
  * Payment Gateway Integration Service (Moyasar, Stripe, mada, Apple Pay, SARIE Bank Transfer)
- * Provides direct terminal checkout and API transaction processing for DyPOS Enterprise.
+ * Provides direct terminal checkout and API transaction processing for دينا (منصة التجارة الذكية).
  *
  * ── Why this service no longer fabricates approvals ──────────────────────────
  * `processPayment` used to `setTimeout(1200)` and then return, unconditionally:

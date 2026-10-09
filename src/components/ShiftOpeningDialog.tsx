@@ -173,9 +173,9 @@ export const ShiftOpeningDialog: React.FC<ShiftOpeningDialogProps> = ({
         </header>
         <div className="p-5 space-y-4">
           {blocked ? (
-            <div role="alert" className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3">
-              <AlertTriangle size={15} className="text-rose-600 mt-0.5 shrink-0" aria-hidden="true" />
-              <p className="text-2xs text-rose-800 leading-relaxed">{blockedReason}</p>
+            <div role="alert" className="flex items-start gap-2.5 rounded-xl border border-err/30 bg-err-soft p-3">
+              <AlertTriangle size={15} className="text-err-strong mt-0.5 shrink-0" aria-hidden="true" />
+              <p className="text-2xs text-err-strong leading-relaxed">{blockedReason}</p>
             </div>
           ) : (
             <>
@@ -206,7 +206,7 @@ export const ShiftOpeningDialog: React.FC<ShiftOpeningDialogProps> = ({
                 </div>
 
                 {showError ? (
-                  <p id="shift-open-err" role="alert" className="text-2xs text-rose-600 mt-1.5 flex items-center gap-1.5">
+                  <p id="shift-open-err" role="alert" className="text-2xs text-err-strong mt-1.5 flex items-center gap-1.5">
                     <AlertTriangle size={12} aria-hidden="true" />
                     {parsed.error}
                   </p>

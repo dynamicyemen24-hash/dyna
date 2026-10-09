@@ -50,11 +50,11 @@ export const HrView: React.FC<HrViewProps> = ({ employees, onAddEmployee }) => {
     <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-canvas text-ink">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-black text-white flex items-center gap-2">
-            <Users className="w-6 h-6 text-brand-400" />
+          <h2 className="text-xl font-black text-ink flex items-center gap-2">
+            <Users className="w-6 h-6 text-brand" />
             إدارة الموارد البشرية والرواتب (Odoo HR & SAP HCM)
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">إدارة الموظفين، الحضور والانصراف، احتساب الرواتب والعمولات</p>
+          <p className="text-xs text-faint mt-0.5">إدارة الموظفين، الحضور والانصراف، احتساب الرواتب والعمولات</p>
         </div>
 
         <button
@@ -67,32 +67,32 @@ export const HrView: React.FC<HrViewProps> = ({ employees, onAddEmployee }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-          <span className="text-xs text-slate-400 block mb-1">إجمالي عدد الموظفين</span>
-          <p className="text-2xl font-black text-white font-mono">{employees.length} <span className="text-xs text-slate-400">موظف</span></p>
-          <p className="text-[11px] text-brand-400 mt-1 flex items-center gap-1">
+        <div className="surface-card rounded-2xl p-5 shadow-sm">
+          <span className="text-xs text-faint block mb-1">إجمالي عدد الموظفين</span>
+          <p className="text-2xl font-black text-ink font-mono">{employees.length} <span className="text-xs text-faint">موظف</span></p>
+          <p className="text-[11px] text-brand mt-1 flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5" /> مسجلون بالتأمينات الاجتماعية
           </p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-          <span className="text-xs text-slate-400 block mb-1">إجمالي الرواتب الشهرية</span>
-          <p className="text-2xl font-black text-brand-400 font-mono">{totalPayroll.toLocaleString()} <span className="text-xs text-slate-400">ر.س</span></p>
-          <p className="text-[11px] text-slate-400 mt-1">جاهز للصرف الآلي (WPS)</p>
+        <div className="surface-card rounded-2xl p-5 shadow-sm">
+          <span className="text-xs text-faint block mb-1">إجمالي الرواتب الشهرية</span>
+          <p className="text-2xl font-black text-brand font-mono">{totalPayroll.toLocaleString()} <span className="text-xs text-faint">ر.س</span></p>
+          <p className="text-[11px] text-faint mt-1">جاهز للصرف الآلي (WPS)</p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-          <span className="text-xs text-slate-400 block mb-1">حالة الحضور اليوم</span>
-          <p className="text-2xl font-black text-teal-400 font-mono">100% <span className="text-xs text-slate-400">ملتزمون</span></p>
-          <p className="text-[11px] text-slate-400 mt-1">بصمة الحضور مسجلة بنجاح</p>
+        <div className="surface-card rounded-2xl p-5 shadow-sm">
+          <span className="text-xs text-faint block mb-1">حالة الحضور اليوم</span>
+          <p className="text-2xl font-black text-teal-400 font-mono">100% <span className="text-xs text-faint">ملتزمون</span></p>
+          <p className="text-[11px] text-faint mt-1">بصمة الحضور مسجلة بنجاح</p>
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-slate-800">
-          <h3 className="text-sm font-bold text-white">قائمة الموظفين والكادر الوظيفي</h3>
+      <div className="surface-card rounded-2xl overflow-hidden shadow-sm">
+        <div className="p-4 border-b border-hairline">
+          <h3 className="text-sm font-bold text-ink">قائمة الموظفين والكادر الوظيفي</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
-            <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 uppercase tracking-wider">
+            <thead className="bg-subtle text-faint border-b border-hairline uppercase tracking-wider">
               <tr>
                 <th className="p-4">اسم الموظف</th>
                 <th className="p-4">المسمى الوظيفي</th>
@@ -102,20 +102,20 @@ export const HrView: React.FC<HrViewProps> = ({ employees, onAddEmployee }) => {
                 <th className="p-4 text-center">الحالة</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80">
+            <tbody className="divide-y divide-hairline/80">
               {employees.map((emp) => (
-                <tr key={emp.id} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="p-4 font-bold text-white text-sm">{emp.name}</td>
-                  <td className="p-4 text-slate-300">{emp.role}</td>
-                  <td className="p-4 font-mono font-bold text-brand-400">{emp.baseSalary.toLocaleString()} ر.س</td>
-                  <td className="p-4 font-mono text-slate-300">{emp.commissionRate}%</td>
+                <tr key={emp.id} className="hover:bg-hairline/40 transition-colors">
+                  <td className="p-4 font-bold text-ink text-sm">{emp.name}</td>
+                  <td className="p-4 text-muted">{emp.role}</td>
+                  <td className="p-4 font-mono font-bold text-brand">{emp.baseSalary.toLocaleString()} ر.س</td>
+                  <td className="p-4 font-mono text-muted">{emp.commissionRate}%</td>
                   <td className="p-4">
-                    <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-brand-soft text-brand border border-brand/20">
                       حاضر (في الدوام)
                     </span>
                   </td>
                   <td className="p-4 text-center">
-                    <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-brand-500/10 text-brand-400">
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-brand-soft text-brand">
                       على رأس العمل
                     </span>
                   </td>
@@ -127,54 +127,54 @@ export const HrView: React.FC<HrViewProps> = ({ employees, onAddEmployee }) => {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
-              <h3 className="text-base font-bold text-white">إضافة موظف جديد</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 bg-subtle backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="surface-card rounded-2xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-4 border-b border-hairline mb-4">
+              <h3 className="text-base font-bold text-ink">إضافة موظف جديد</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-faint hover:text-ink">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">اسم الموظف الثلاثي:</label>
+                <label className="block text-xs font-semibold text-muted mb-1">اسم الموظف الثلاثي:</label>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white"
+                  className="w-full bg-surface border border-hairline rounded-xl px-4 py-2.5 text-xs text-ink"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">المسمى الوظيفي:</label>
+                <label className="block text-xs font-semibold text-muted mb-1">المسمى الوظيفي:</label>
                 <input
                   type="text"
                   required
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white"
+                  className="w-full bg-surface border border-hairline rounded-xl px-4 py-2.5 text-xs text-ink"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">الراتب الأساسي (ر.س):</label>
+                <label className="block text-xs font-semibold text-muted mb-1">الراتب الأساسي (ر.س):</label>
                 <input
                   type="number"
                   required
                   value={baseSalary}
                   onChange={(e) => setBaseSalary(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono"
+                  className="w-full bg-surface border border-hairline rounded-xl px-4 py-2.5 text-xs text-ink font-mono"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-hairline">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-subtle text-muted"
                 >
                   إلغاء
                 </button>

@@ -118,22 +118,22 @@ export const RestaurantView: React.FC = () => {
       {/* Top Bar Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
-          <h2 className="text-xl font-black text-white flex items-center gap-2">
-            <UtensilsCrossed className="w-6 h-6 text-brand-400" />
+          <h2 className="text-xl font-black text-ink flex items-center gap-2">
+            <UtensilsCrossed className="w-6 h-6 text-brand" />
             وضع إدارة المطاعم والكافيهات (Restaurant & Kitchen Display)
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-faint mt-0.5">
             إدارة طاولات الصالة، شاشة المطبخ KDS المباشرة، تعديلات الوجبات وتتبع الطلبات اللحظي
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-2xl">
+        <div className="flex items-center gap-2 surface-card p-1 rounded-2xl">
           <button
             onClick={() => setActiveTab('floor')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'floor'
                 ? 'bg-brand-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
+                : 'text-faint hover:text-ink'
             }`}
           >
             <UtensilsCrossed className="w-4 h-4" />
@@ -144,7 +144,7 @@ export const RestaurantView: React.FC = () => {
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
               activeTab === 'kds'
                 ? 'bg-amber-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
+                : 'text-faint hover:text-ink'
             }`}
           >
             <ChefHat className="w-4 h-4" />
@@ -165,23 +165,23 @@ export const RestaurantView: React.FC = () => {
                     ? 'bg-rose-950/30 border-rose-800/60'
                     : table.status === 'reserved'
                     ? 'bg-amber-950/30 border-amber-800/60'
-                    : 'bg-slate-900 border-slate-800 hover:border-brand-500/50'
+                    : 'bg-surface border-hairline hover:border-brand/50'
                 }`}
               >
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <h3 className="text-base font-bold text-white">{table.tableNumber}</h3>
-                    <p className="text-[11px] text-slate-400 flex items-center gap-1">
+                    <h3 className="text-base font-bold text-ink">{table.tableNumber}</h3>
+                    <p className="text-[11px] text-faint flex items-center gap-1">
                       <Users className="w-3.5 h-3.5" /> سعة {table.seats} أشخاص
                     </p>
                   </div>
                   <span
                     className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
                       table.status === 'occupied'
-                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                        ? 'bg-rose-500/20 text-err-strong border-err/30'
                         : table.status === 'reserved'
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                        : 'bg-brand-500/20 text-brand-300 border-brand-500/30'
+                        ? 'bg-amber-500/20 text-warn-strong border-warn/30'
+                        : 'bg-brand-500/20 text-brand-strong border-brand/30'
                     }`}
                   >
                     {table.status === 'occupied' ? 'مشغولة' : table.status === 'reserved' ? 'محجوزة' : 'شاغرة'}
@@ -189,12 +189,12 @@ export const RestaurantView: React.FC = () => {
                 </div>
 
                 {table.status === 'occupied' && (
-                  <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800/80 mb-3 space-y-1 font-mono">
+                  <div className="bg-subtle p-3 rounded-xl border border-hairline/80 mb-3 space-y-1 font-mono">
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-400">إجمالي الحساب:</span>
-                      <span className="font-bold text-brand-400">{table.activeOrderTotal} ر.س</span>
+                      <span className="text-faint">إجمالي الحساب:</span>
+                      <span className="font-bold text-brand">{table.activeOrderTotal} ر.س</span>
                     </div>
-                    <div className="flex justify-between text-[11px] text-slate-500">
+                    <div className="flex justify-between text-[11px] text-muted">
                       <span>الأصناف المطلوبة:</span>
                       <span>{table.itemsCount} أصناف</span>
                     </div>
@@ -227,16 +227,16 @@ export const RestaurantView: React.FC = () => {
             {tickets.map((ticket) => (
               <div
                 key={ticket.id}
-                className={`bg-slate-900 border rounded-2xl p-5 shadow-lg relative flex flex-col justify-between ${
+                className={`bg-surface border rounded-2xl p-5 shadow-lg relative flex flex-col justify-between ${
                   ticket.status === 'queued'
                     ? 'border-rose-500/60'
                     : ticket.status === 'preparing'
                     ? 'border-amber-500/60'
-                    : 'border-brand-500/60'
+                    : 'border-brand/60'
                 }`}
               >
                 <div>
-                  <div className="flex justify-between items-center pb-3 border-b border-slate-800 mb-3">
+                  <div className="flex justify-between items-center pb-3 border-b border-hairline mb-3">
                     <div>
                       {/*
                         The stored value is a BIGINT counter, not a label. It is
@@ -244,12 +244,12 @@ export const RestaurantView: React.FC = () => {
                         ticket code, and so it stays visibly numeric — a formatted
                         "KDS-000101" would invite sorting it as text.
                       */}
-                      <span className="text-xs font-mono font-bold text-slate-400">
+                      <span className="text-xs font-mono font-bold text-faint">
                         #{ticket.ticketNo}
                       </span>
-                      <h4 className="text-base font-black text-white">{ticket.tableNumber}</h4>
+                      <h4 className="text-base font-black text-ink">{ticket.tableNumber}</h4>
                     </div>
-                    <div className="flex items-center gap-1 bg-slate-950 px-2.5 py-1 rounded-lg text-xs font-mono text-amber-400 border border-amber-500/20">
+                    <div className="flex items-center gap-1 bg-surface px-2.5 py-1 rounded-lg text-xs font-mono text-warn-strong border border-amber-500/20">
                       <Clock className="w-3.5 h-3.5" />
                       <span>{ticket.elapsedMinutes} دقيقة</span>
                     </div>
@@ -258,17 +258,17 @@ export const RestaurantView: React.FC = () => {
                   {/* Order Items */}
                   <div className="space-y-3 mb-4">
                     {ticket.items.map((item, idx) => (
-                      <div key={idx} className="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
-                        <div className="flex justify-between items-center font-bold text-xs text-white">
+                      <div key={idx} className="bg-subtle p-2.5 rounded-xl border border-hairline">
+                        <div className="flex justify-between items-center font-bold text-xs text-ink">
                           <span>{item.name}</span>
-                          <span className="text-brand-400 font-mono">x{item.quantity}</span>
+                          <span className="text-brand font-mono">x{item.quantity}</span>
                         </div>
                         {item.modifiers && item.modifiers.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1.5">
                             {item.modifiers.map((mod, mIdx) => (
                               <span
                                 key={mIdx}
-                                className="bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-md font-semibold"
+                                className="bg-warn-soft text-warn-strong border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-md font-semibold"
                               >
                                 {mod}
                               </span>
@@ -281,7 +281,7 @@ export const RestaurantView: React.FC = () => {
                 </div>
 
                 {/* Status Actions */}
-                <div className="pt-3 border-t border-slate-800 flex justify-between items-center gap-2">
+                <div className="pt-3 border-t border-hairline flex justify-between items-center gap-2">
                   {ticket.status === 'queued' && (
                     <button
                       onClick={() => handleUpdateTicketStatus(ticket.id, 'preparing')}
@@ -299,7 +299,7 @@ export const RestaurantView: React.FC = () => {
                     </button>
                   )}
                   {ticket.status === 'ready' && (
-                    <span className="w-full text-center bg-brand-500/20 text-brand-300 py-2 rounded-xl text-xs font-bold border border-brand-500/30">
+                    <span className="w-full text-center bg-brand-500/20 text-brand-strong py-2 rounded-xl text-xs font-bold border border-brand/30">
                       ✅ جاهز - تم إرسال تنبيه للمباشر
                     </span>
                   )}

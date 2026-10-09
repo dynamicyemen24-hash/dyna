@@ -40,10 +40,10 @@ interface Recipe {
 interface ProductOpt { id: string; name: string; unit?: string | null }
 
 const STATUS: Record<string, { label: string; tone: string }> = {
-  draft: { label: 'مسودة', tone: 'bg-slate-800 text-slate-400 border-slate-700' },
-  in_progress: { label: 'جاري', tone: 'bg-amber-500/10 text-amber-300 border-amber-500/30' },
-  completed: { label: 'مكتمل', tone: 'bg-brand-500/10 text-brand-300 border-brand-500/30' },
-  cancelled: { label: 'ملغي', tone: 'bg-rose-500/10 text-rose-300 border-rose-500/30' },
+  draft: { label: 'مسودة', tone: 'bg-subtle text-faint border-hairline' },
+  in_progress: { label: 'جاري', tone: 'bg-warn-soft text-warn-strong border-warn/30' },
+  completed: { label: 'مكتمل', tone: 'bg-brand-soft text-brand-strong border-brand/30' },
+  cancelled: { label: 'ملغي', tone: 'bg-err-soft text-err-strong border-err/30' },
 };
 
 export const ProductionView: React.FC = () => {
@@ -160,26 +160,26 @@ export const ProductionView: React.FC = () => {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="إجمالي الأوامر" value={String(stats.total)} icon={Factory} />
-        <Stat label="جارية" value={String(stats.active)} tone="text-amber-400" />
-        <Stat label="مكتملة" value={String(stats.done)} tone="text-brand-400" />
+        <Stat label="جارية" value={String(stats.active)} tone="text-warn-strong" />
+        <Stat label="مكتملة" value={String(stats.done)} tone="text-brand" />
         <Stat label="وحدات مُنتجة" value={String(stats.produced)} tone="text-orange-400" icon={Boxes} />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <Card className="overflow-hidden">
-            <div className="p-4 border-b border-slate-800 font-bold text-sm">أوامر الإنتاج</div>
+            <div className="p-4 border-b border-hairline font-bold text-sm">أوامر الإنتاج</div>
             {loading ? <Loading /> : error ? <ErrorBox message={error} onRetry={load} />
               : orders.length === 0 ? <EmptyState message="لا توجد أوامر إنتاج" />
               : (
-                <div className="divide-y divide-slate-800">
+                <div className="divide-y divide-hairline">
                   {orders.map((o) => {
                     const st = STATUS[o.status] || STATUS.draft;
                     return (
-                      <div key={o.id} className="p-4 flex flex-wrap items-center gap-4 hover:bg-slate-800/20">
+                      <div key={o.id} className="p-4 flex flex-wrap items-center gap-4 hover:bg-hairline/60/20">
                         <div className="flex-1 min-w-[180px]">
                           <p className="font-bold">{o.product_name || o.product_id}</p>
-                          <p className="text-xs text-slate-500 mt-1">
+                          <p className="text-xs text-muted mt-1">
                             الكمية: <span className="text-orange-400 font-bold">{o.quantity}</span>
                             {o.unit ? ` ${o.unit}` : ''}
                             {o.completed_qty ? ` — أُنتج ${o.completed_qty}` : ''}
@@ -189,13 +189,13 @@ export const ProductionView: React.FC = () => {
                         <div className="flex gap-1.5">
                           {o.status !== 'completed' && (
                             <button onClick={() => complete(o)} disabled={busyId === o.id}
-                              className="p-2 rounded-lg text-brand-400 hover:bg-slate-800 disabled:opacity-40"
+                              className="p-2 rounded-lg text-brand hover:bg-hairline/60 disabled:opacity-40"
                               title="إتمام الإنتاج" aria-label="إتمام">
                               <PlayCircle size={17} />
                             </button>
                           )}
                           <button onClick={() => remove(o)}
-                            className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800"
+                            className="p-2 rounded-lg text-faint hover:text-err-strong hover:bg-hairline/60"
                             aria-label="حذف">
                             <Trash2 size={16} />
                           </button>
@@ -213,7 +213,7 @@ export const ProductionView: React.FC = () => {
             <Layers size={16} className="text-orange-400" /> الوصفات (BOM)
           </div>
           {recipes.length === 0 ? (
-            <p className="text-xs text-slate-500 leading-relaxed py-4">
+            <p className="text-xs text-muted leading-relaxed py-4">
               لا توجد وصفات مسجّلة بعد. سجّل مكوّنات في جدول
               <span className="text-orange-400"> product_recipe_items </span>
               ليظهر الاستهلاك التلقائي هنا.
@@ -221,17 +221,17 @@ export const ProductionView: React.FC = () => {
           ) : (
             <div className="space-y-3 max-h-[420px] overflow-y-auto">
               {recipes.map((r) => (
-                <div key={r.id} className="bg-slate-900/80 border border-slate-800 rounded-xl p-3">
+                <div key={r.id} className="bg-subtle border border-hairline rounded-xl p-3">
                   <p className="font-bold text-sm">{r.product_name || r.product_id}</p>
-                  <p className="text-[11px] text-slate-500 mb-2">
+                  <p className="text-[11px] text-muted mb-2">
                     الإصدار {r.version} • إنتاج {r.yield_qty}
                   </p>
                   {r.components.length === 0 ? (
-                    <p className="text-[11px] text-slate-600">بدون مكوّنات</p>
+                    <p className="text-[11px] text-muted">بدون مكوّنات</p>
                   ) : (
                     <ul className="space-y-1">
                       {r.components.map((c, i) => (
-                        <li key={i} className="text-xs text-slate-400 flex justify-between gap-2">
+                        <li key={i} className="text-xs text-faint flex justify-between gap-2">
                           <span className="truncate">{c.componentName || c.componentId}</span>
                           <span className="text-orange-400 shrink-0">
                             {c.qty}{Number(c.wastePercent) ? ` (+${c.wastePercent}%)` : ''}
@@ -273,15 +273,15 @@ export const ProductionView: React.FC = () => {
             </Field>
           </div>
           {selectedRecipe && selectedRecipe.components.length > 0 && (
-            <div className="sm:col-span-2 bg-slate-900/70 border border-slate-800 rounded-xl p-3">
-              <p className="text-xs font-bold text-slate-400 mb-2">المكونات المطلوبة</p>
+            <div className="sm:col-span-2 bg-subtle border border-hairline rounded-xl p-3">
+              <p className="text-xs font-bold text-faint mb-2">المكونات المطلوبة</p>
               <ul className="space-y-1">
                 {selectedRecipe.components.map((c, i) => {
                   const total = Number(c.qty) * Number(form.quantity || 0) *
                     (1 + Number(c.wastePercent || 0) / 100);
                   return (
                     <li key={i} className="text-xs flex justify-between gap-3">
-                      <span className="text-slate-300 truncate">
+                      <span className="text-muted truncate">
                         {c.componentName || c.componentId}
                       </span>
                       <span className="text-orange-400 font-bold shrink-0">

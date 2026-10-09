@@ -99,7 +99,7 @@ export const MeasurementManager: React.FC = () => {
             <Ruler className="text-amber-500" size={32} />
             إدارة المقاسات
           </h1>
-          <p className="text-slate-400 mt-1">تتبع مقاسات العملاء وتاريخ التعديلات.</p>
+          <p className="text-faint mt-1">تتبع مقاسات العملاء وتاريخ التعديلات.</p>
         </div>
         {/*
             "مقاس جديد" had no handler — and no endpoint exists to create a
@@ -114,18 +114,18 @@ export const MeasurementManager: React.FC = () => {
           */}
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-        <div className="p-6 border-b border-slate-800 flex flex-col md:flex-row justify-between gap-4 bg-slate-900/50">
+      <div className="surface-card rounded-3xl overflow-hidden shadow-2xl">
+        <div className="p-6 border-b border-hairline flex flex-col md:flex-row justify-between gap-4 bg-subtle">
           <div className="relative flex-1">
-            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-muted" size={18} />
             <input 
               type="text" 
               placeholder="بحث عن مقاس أو اسم عميل..." 
-              className="w-full bg-slate-800 border-none rounded-xl py-2.5 pr-12 pl-4 text-sm focus:ring-2 focus:ring-amber-500/50"
+              className="w-full bg-hairline/40 border-none rounded-xl py-2.5 pr-12 pl-4 text-sm focus:ring-2 focus:ring-amber-500/50"
             />
           </div>
           <div className="flex gap-2">
-            <select className="bg-slate-800 border-none rounded-xl text-sm px-4 focus:ring-2 focus:ring-amber-500/50">
+            <select className="bg-hairline/40 border-none rounded-xl text-sm px-4 focus:ring-2 focus:ring-amber-500/50">
               <option>جميع الأنواع</option>
               <option>ثوب سعودي</option>
               <option>بدلة رسمية</option>
@@ -133,33 +133,33 @@ export const MeasurementManager: React.FC = () => {
           </div>
         </div>
 
-        <div className="divide-y divide-slate-800">
+        <div className="divide-y divide-hairline">
           {/* An outage, an empty database and a populated database are three
               different facts. The old screen drew the same list in all three. */}
           {isLoading ? (
-            <div className="p-10 text-center text-slate-500 text-sm">جارٍ تحميل المقاسات…</div>
+            <div className="p-10 text-center text-muted text-sm">جارٍ تحميل المقاسات…</div>
           ) : error ? (
             <div className="p-10 text-center">
-              <p className="text-rose-400 font-bold mb-2">تعذّر تحميل المقاسات</p>
-              <p className="text-slate-500 text-sm">
+              <p className="text-err-strong font-bold mb-2">تعذّر تحميل المقاسات</p>
+              <p className="text-muted text-sm">
                 الاتصال بالخادم فشل. لم يُعرض أي بيان هنا تفادياً لعرض بيانات غير حقيقية.
               </p>
             </div>
           ) : measurements.length === 0 ? (
-            <div className="p-10 text-center text-slate-500 text-sm">
+            <div className="p-10 text-center text-muted text-sm">
               لا توجد مقاسات مسجلة بعد. أضف أول مقاس لعميل.
             </div>
           ) : (
             measurements.map((m) => (
-              <div key={m.id} className="p-6 flex items-center justify-between hover:bg-slate-800/30 transition-colors cursor-pointer group">
+              <div key={m.id} className="p-6 flex items-center justify-between hover:bg-hairline/60/30 transition-colors cursor-pointer group">
                 <div className="flex items-center gap-5">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
+                  <div className="w-12 h-12 rounded-2xl bg-warn-soft flex items-center justify-center text-amber-500 group-hover:scale-110 transition-transform">
                     <User size={24} />
                   </div>
                   <div>
                     <h4 className="font-bold text-lg">{m.customerName}</h4>
-                    <p className="text-sm text-slate-500 flex items-center gap-2">
-                      <span className="bg-slate-800 px-2 py-0.5 rounded text-amber-400">{m.type}</span>
+                    <p className="text-sm text-muted flex items-center gap-2">
+                      <span className="bg-subtle px-2 py-0.5 rounded text-warn-strong">{m.type}</span>
                       <span>• تم التحديث في {m.date}</span>
                     </p>
                   </div>
@@ -169,7 +169,7 @@ export const MeasurementManager: React.FC = () => {
                   <div className="hidden md:flex gap-4">
                     {Object.entries(m.data).map(([key, value]) => (
                       <div key={key} className="text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">{key}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted font-bold">{key}</p>
                         <p className="text-sm font-black">{value}</p>
                       </div>
                     ))}
@@ -179,7 +179,7 @@ export const MeasurementManager: React.FC = () => {
                         An icon that promises a menu and opens nothing is worse
                         than no icon, so the chevron — which is honest, since it
                         does indicate navigation — is left on its own. */}
-                    <ChevronRight size={20} className="text-slate-700 group-hover:text-amber-500 transition-colors" />
+                    <ChevronRight size={20} className="text-ink group-hover:text-amber-500 transition-colors" />
                   </div>
                 </div>
               </div>
@@ -191,8 +191,8 @@ export const MeasurementManager: React.FC = () => {
             "عرض 2 من أصل 2" regardless of what was loaded, so a tenant with
             400 measurements was told it had 2. */}
         {!isLoading && !error && measurements.length > 0 && (
-          <div className="p-4 bg-slate-900/80 text-center border-t border-slate-800">
-            <p className="text-xs text-slate-500">
+          <div className="p-4 bg-subtle text-center border-t border-hairline">
+            <p className="text-xs text-muted">
               عرض {measurements.length} من أصل {measurements.length} سجل مقاسات
             </p>
           </div>
@@ -214,11 +214,13 @@ export const MeasurementManager: React.FC = () => {
         <div className="bg-amber-500/5 border border-amber-500/20 p-8 rounded-3xl">
           <div className="flex items-center gap-4 mb-4">
             <div className="p-3 bg-amber-500 rounded-2xl shadow-lg shadow-amber-500/20">
+              {/* White, not ink: this icon sits ON a solid amber badge — ink
+                  resolves light in the dark themes and drops to ~2:1 there. */}
               <Ruler className="text-white" size={24} />
             </div>
             <h3 className="font-black text-xl">دليل أخذ المقاسات</h3>
           </div>
-          <ul className="space-y-3 text-sm text-slate-400">
+          <ul className="space-y-3 text-sm text-faint">
             <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div> تأكد من وقوف العميل بشكل مستقيم.</li>
             <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div> اترك مسافة إصبع واحد بين شريط القياس والجسم.</li>
             <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div> سجل المقاسات بالسنتمتر لضمان الدقة.</li>

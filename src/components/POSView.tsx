@@ -443,17 +443,17 @@ export const POSView: React.FC<POSViewProps> = ({
   return (
     <div className={`flex-1 flex flex-col lg:flex-row h-[calc(100vh-65px)] overflow-hidden transition-colors duration-300 ${nightMode ? 'bg-black text-amber-100' : 'bg-canvas text-ink'}`}>
       {/* Left / Products Catalog Area */}
-      <div className="flex-1 flex flex-col p-4 overflow-hidden border-l border-slate-800">
+      <div className="flex-1 flex flex-col p-4 overflow-hidden border-l border-hairline">
         {/* Search, Barcode & Camera Scanner Bar */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <div className="relative flex-1">
-            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-faint" />
             <input
               type="text"
               placeholder="ابحث عن منتج بالاسم أو الباركود..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full border rounded-xl pr-10 pl-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none transition-colors ${
+              className={`w-full border rounded-xl pr-10 pl-4 py-2.5 text-sm placeholder-faint focus:outline-none transition-colors ${
                 nightMode ? 'bg-zinc-950 border-amber-900/40 text-amber-100' : 'bg-slate-900 border-slate-800 text-white'
               }`}
             />
@@ -462,13 +462,13 @@ export const POSView: React.FC<POSViewProps> = ({
           <div className="flex gap-2">
             <form onSubmit={handleBarcodeSubmit} className="flex gap-2">
               <div className="relative">
-                <Barcode className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400" />
+                <Barcode className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand" />
                 <input
                   type="text"
                   placeholder="الباركود..."
                   value={barcodeInput}
                   onChange={(e) => setBarcodeInput(e.target.value)}
-                  className={`border rounded-xl pr-9 pl-4 py-2.5 text-sm placeholder-slate-500 focus:outline-none w-36 ${
+                  className={`border rounded-xl pr-9 pl-4 py-2.5 text-sm placeholder-faint focus:outline-none w-36 ${
                     nightMode ? 'bg-zinc-950 border-amber-900/40 text-amber-100' : 'bg-slate-900 border-slate-800 text-white'
                   }`}
                 />
@@ -498,7 +498,7 @@ export const POSView: React.FC<POSViewProps> = ({
               type="button"
               onClick={applyScaleToCart}
               disabled={scaleReading.netWeightKg === null}
-              className="bg-slate-900 border border-brand-500/40 text-brand-300 px-3 py-2 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-surface border border-brand/40 text-brand-strong px-3 py-2 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 hover:bg-hairline/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               title={
                 scaleReading.netWeightKg === null
                   ? 'لا يوجد ميزان متصل — أدخل الكمية يدوياً'
@@ -519,7 +519,7 @@ export const POSView: React.FC<POSViewProps> = ({
             <button
               type="button"
               onClick={() => void handleOpenDrawer()}
-              className="bg-slate-900 border border-slate-800 text-slate-300 hover:text-white px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shrink-0"
+              className="surface-card text-muted hover:text-ink px-2.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shrink-0"
               title="فتح درج النقود عبر منفذ ESC/POS"
             >
               <span>📥</span>
@@ -528,7 +528,7 @@ export const POSView: React.FC<POSViewProps> = ({
             {drawerMessage && (
               <span
                 role="status"
-                className="text-[10px] font-bold text-amber-300 max-w-[16rem] truncate"
+                className="text-[10px] font-bold text-warn-strong max-w-[16rem] truncate"
                 title={drawerMessage}
               >
                 {drawerMessage}
@@ -536,15 +536,15 @@ export const POSView: React.FC<POSViewProps> = ({
             )}
 
             {/* Multi-Currency Switcher */}
-            <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1 shrink-0">
-              <span className="text-xs text-slate-400 font-bold">💱</span>
+            <div className="flex items-center gap-1.5 surface-card rounded-xl px-2.5 py-1 shrink-0">
+              <span className="text-xs text-faint font-bold">💱</span>
               <select
                 value={selectedCurrency.code}
                 onChange={(e) => {
                   const found = currencies.find((c) => c.code === e.target.value);
                   if (found) setSelectedCurrency(found);
                 }}
-                className="bg-transparent text-xs text-brand-400 font-bold focus:outline-none cursor-pointer"
+                className="bg-transparent text-xs text-brand font-bold focus:outline-none cursor-pointer"
                 title="تحديد العملة الثانوية للعرض"
               >
                 {currencies.map((c) => (
@@ -578,7 +578,7 @@ export const POSView: React.FC<POSViewProps> = ({
               className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                 selectedCategory === cat.name
                   ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30'
-                  : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white hover:bg-slate-800'
+                  : 'bg-surface text-faint border border-hairline hover:text-ink hover:bg-hairline/60'
               }`}
             >
               {cat.name}
@@ -595,31 +595,31 @@ export const POSView: React.FC<POSViewProps> = ({
                 onAddToCart(product);
                 audioBeep();
               }}
-              className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-3.5 flex flex-col justify-between hover:border-brand-500/50 hover:bg-slate-900 transition-all cursor-pointer group shadow-sm relative overflow-hidden"
+              className="bg-subtle border border-hairline/80 rounded-2xl p-3.5 flex flex-col justify-between hover:border-brand/50 hover:bg-surface transition-all cursor-pointer group shadow-sm relative overflow-hidden"
             >
-              <div className="absolute top-2 left-2 bg-slate-950/80 backdrop-blur-md px-2 py-0.5 rounded-full text-[10px] font-mono text-brand-400 border border-slate-800">
+              <div className="absolute top-2 left-2 bg-subtle backdrop-blur-md px-2 py-0.5 rounded-full text-[10px] font-mono text-brand border border-hairline">
                 مخزون: {product.stock}
               </div>
-              <div className="w-full h-28 rounded-xl bg-slate-950 overflow-hidden mb-3 relative">
+              <div className="w-full h-28 rounded-xl bg-surface overflow-hidden mb-3 relative">
                 {product.image ? (
                   <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-slate-600">
+                  <div className="w-full h-full flex items-center justify-center text-muted">
                     <ShoppingCart className="w-8 h-8" />
                   </div>
                 )}
               </div>
               <div>
-                <h3 className="text-xs font-bold text-white line-clamp-2 mb-1.5 group-hover:text-brand-400 transition-colors">
+                <h3 className="text-xs font-bold text-ink line-clamp-2 mb-1.5 group-hover:text-brand transition-colors">
                   {product.name}
                 </h3>
-                <p className="text-[11px] text-slate-400 mb-2">{product.category}</p>
+                <p className="text-[11px] text-faint mb-2">{product.category}</p>
               </div>
-              <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
-                <span className="text-sm font-black text-brand-400 font-mono">
-                  {product.price.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">ر.س</span>
+              <div className="flex items-center justify-between pt-2 border-t border-hairline/60">
+                <span className="text-sm font-black text-brand font-mono">
+                  {product.price.toLocaleString()} <span className="text-[10px] font-normal text-faint">ر.س</span>
                 </span>
-                <span className="w-7 h-7 rounded-lg bg-brand-600/10 text-brand-400 group-hover:bg-brand-600 group-hover:text-white flex items-center justify-center transition-colors">
+                <span className="w-7 h-7 rounded-lg bg-brand-600/10 text-brand group-hover:bg-brand-600 group-hover:text-ink flex items-center justify-center transition-colors">
                   <Plus className="w-4 h-4" />
                 </span>
               </div>
@@ -629,13 +629,13 @@ export const POSView: React.FC<POSViewProps> = ({
       </div>
 
       {/* Right / Cart & Checkout Panel */}
-      <div className="w-full lg:w-[420px] bg-slate-900 border-t lg:border-t-0 lg:border-r border-slate-800 flex flex-col shrink-0">
+      <div className="w-full lg:w-[420px] bg-surface border-t lg:border-t-0 lg:border-r border-hairline flex flex-col shrink-0">
         {/* Cart Header */}
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="p-4 border-b border-hairline flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5 text-brand-400" />
-            <h2 className="text-sm font-bold text-white">سلة المبيعات الحالية</h2>
-            <span className="bg-brand-500/10 text-brand-400 px-2 py-0.5 rounded-full text-xs font-mono font-bold">
+            <ShoppingCart className="w-5 h-5 text-brand" />
+            <h2 className="text-sm font-bold text-ink">سلة المبيعات الحالية</h2>
+            <span className="bg-brand-soft text-brand px-2 py-0.5 rounded-full text-xs font-mono font-bold">
               {cart.reduce((s, i) => s + i.quantity, 0)}
             </span>
           </div>
@@ -646,7 +646,7 @@ export const POSView: React.FC<POSViewProps> = ({
                   const lastHold = heldOrders[heldOrders.length - 1];
                   setHeldOrders(heldOrders.slice(0, -1));
                 }}
-                className="text-xs bg-amber-500/10 text-amber-400 px-2.5 py-1 rounded-lg border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
+                className="text-xs bg-warn-soft text-warn-strong px-2.5 py-1 rounded-lg border border-amber-500/20 hover:bg-amber-500/20 transition-colors"
               >
                 معلقة ({heldOrders.length})
               </button>
@@ -654,7 +654,7 @@ export const POSView: React.FC<POSViewProps> = ({
             <button
               onClick={onClearCart}
               disabled={cart.length === 0}
-              className="text-xs text-rose-400 hover:text-rose-300 p-1 rounded-lg disabled:opacity-40 transition-colors"
+              className="text-xs text-err-strong hover:text-err-strong p-1 rounded-lg disabled:opacity-40 transition-colors"
               title="إفراغ السلة"
             >
               <Trash2 className="w-4 h-4" />
@@ -663,16 +663,16 @@ export const POSView: React.FC<POSViewProps> = ({
         </div>
 
         {/* Customer Select */}
-        <div className="p-3 border-b border-slate-800/80 bg-slate-950/40 flex items-center justify-between">
+        <div className="p-3 border-b border-hairline/80 bg-subtle flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <User className="w-4 h-4 text-brand-400" />
+            <User className="w-4 h-4 text-brand" />
             <select
               value={selectedCustomer.id}
               onChange={(e) => {
                 const c = customers.find((item) => item.id === e.target.value);
                 if (c) setSelectedCustomer(c);
               }}
-              className="bg-transparent text-xs text-white font-medium focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-ink font-medium focus:outline-none cursor-pointer"
             >
               {customers.map((cus) => (
                 <option key={cus.id} value={cus.id} className="bg-slate-900 text-white">
@@ -681,7 +681,7 @@ export const POSView: React.FC<POSViewProps> = ({
               ))}
             </select>
           </div>
-          <span className="text-[10px] bg-brand-500/10 text-brand-400 px-2 py-0.5 rounded-full font-mono">
+          <span className="text-[10px] bg-brand-soft text-brand px-2 py-0.5 rounded-full font-mono">
             نقاط الولاء: {selectedCustomer.points}
           </span>
         </div>
@@ -689,45 +689,45 @@ export const POSView: React.FC<POSViewProps> = ({
         {/* Cart Items List */}
         <div className="flex-1 overflow-y-auto p-3 space-y-2.5 scrollbar-thin">
           {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-slate-500 text-center p-6">
-              <ShoppingCart className="w-12 h-12 mb-3 stroke-1 text-slate-600" />
+            <div className="h-full flex flex-col items-center justify-center text-muted text-center p-6">
+              <ShoppingCart className="w-12 h-12 mb-3 stroke-1 text-muted" />
               <p className="text-sm font-medium">السلة فارغة حالياً</p>
-              <p className="text-xs text-slate-600 mt-1">اختر المنتجات أو امسح الباركود بالكاميرا أو الجهاز</p>
+              <p className="text-xs text-muted mt-1">اختر المنتجات أو امسح الباركود بالكاميرا أو الجهاز</p>
             </div>
           ) : (
             cart.map((item) => (
-              <div key={item.product.id} className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between">
+              <div key={item.product.id} className="bg-subtle border border-hairline/80 rounded-xl p-3 flex items-center justify-between">
                 <div className="flex-1 min-w-0 pr-2">
-                  <h4 className="text-xs font-bold text-white truncate">{item.product.name}</h4>
+                  <h4 className="text-xs font-bold text-ink truncate">{item.product.name}</h4>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs font-mono font-bold text-brand-400">
+                    <span className="text-xs font-mono font-bold text-brand">
                       {(item.product.price * item.quantity).toLocaleString()} ر.س
                     </span>
-                    <span className="text-[10px] text-slate-500">({item.product.price} للقطعة)</span>
+                    <span className="text-[10px] text-muted">({item.product.price} للقطعة)</span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+                  <div className="flex items-center surface-card rounded-lg overflow-hidden">
                     <button
                       onClick={() => onUpdateQuantity(item.product.id, -1)}
-                      className="p-1 hover:bg-slate-800 text-slate-300 transition-colors"
+                      className="p-1 hover:bg-hairline/60 text-muted transition-colors"
                     >
                       <Minus className="w-3.5 h-3.5" />
                     </button>
-                    <span className="w-8 text-center text-xs font-mono font-bold text-white">
+                    <span className="w-8 text-center text-xs font-mono font-bold text-ink">
                       {item.quantity}
                     </span>
                     <button
                       onClick={() => onUpdateQuantity(item.product.id, 1)}
-                      className="p-1 hover:bg-slate-800 text-slate-300 transition-colors"
+                      className="p-1 hover:bg-hairline/60 text-muted transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
                   </div>
                   <button
                     onClick={() => onRemoveItem(item.product.id)}
-                    className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors"
+                    className="p-1.5 text-err-strong hover:text-err-strong hover:bg-err-soft rounded-lg transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -738,43 +738,43 @@ export const POSView: React.FC<POSViewProps> = ({
         </div>
 
         {/* Cart Totals & Checkout Actions */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/60 space-y-3">
-          <div className="flex items-center justify-between text-xs text-slate-400">
+        <div className="p-4 border-t border-hairline bg-subtle space-y-3">
+          <div className="flex items-center justify-between text-xs text-faint">
             <span>المجموع الفرعي:</span>
-            <span className="font-mono font-bold text-white">{subtotal.toLocaleString()} ر.س</span>
+            <span className="font-mono font-bold text-ink">{subtotal.toLocaleString()} ر.س</span>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center justify-between text-xs text-faint">
             <div className="flex items-center gap-2">
               <span>خصم إضافي:</span>
-              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded px-2 py-0.5 w-20">
+              <div className="flex items-center gap-1 surface-card rounded px-2 py-0.5 w-20">
                 <input
                   type="number"
                   value={globalDiscount}
                   onChange={(e) => setGlobalDiscount(Math.max(0, Number(e.target.value)))}
-                  className="w-full bg-transparent text-xs text-white focus:outline-none font-mono"
+                  className="w-full bg-transparent text-xs text-ink focus:outline-none font-mono"
                   placeholder="0"
                 />
-                <Percent className="w-3 h-3 text-brand-400" />
+                <Percent className="w-3 h-3 text-brand" />
               </div>
             </div>
-            <span className="font-mono text-rose-400">-{discountAmount.toLocaleString()} ر.س</span>
+            <span className="font-mono text-err-strong">-{discountAmount.toLocaleString()} ر.س</span>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="flex items-center justify-between text-xs text-faint">
             <span>ضريبة القيمة المضافة (15%):</span>
-            <span className="font-mono font-bold text-white">{tax.toLocaleString()} ر.س</span>
+            <span className="font-mono font-bold text-ink">{tax.toLocaleString()} ر.س</span>
           </div>
 
-          <div className="pt-2 border-t border-slate-800 flex flex-col gap-1">
+          <div className="pt-2 border-t border-hairline flex flex-col gap-1">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-white">الإجمالي النهائي:</span>
-              <span className="text-lg font-black text-brand-400 font-mono">
+              <span className="text-sm font-bold text-ink">الإجمالي النهائي:</span>
+              <span className="text-lg font-black text-brand font-mono">
                 {total.toLocaleString()} ر.س
               </span>
             </div>
             {selectedCurrency && selectedCurrency.code !== 'SAR' && (
-              <div className="flex items-center justify-between text-xs text-amber-300 font-mono bg-slate-900/90 px-2.5 py-1 rounded-lg border border-amber-500/20">
+              <div className="flex items-center justify-between text-xs text-warn-strong font-mono bg-subtle px-2.5 py-1 rounded-lg border border-amber-500/20">
                 <span>المعادل بـ ({selectedCurrency.name}):</span>
                 <span className="font-bold">
                   {selectedCurrency.symbol}
@@ -788,9 +788,9 @@ export const POSView: React.FC<POSViewProps> = ({
             <button
               onClick={handleHoldOrder}
               disabled={cart.length === 0}
-              className="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+              className="bg-subtle hover:bg-hairline disabled:opacity-40 text-muted py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
             >
-              <PauseCircle className="w-4 h-4 text-amber-400" />
+              <PauseCircle className="w-4 h-4 text-warn-strong" />
               تعليق الفاتورة
             </button>
             <button
@@ -807,35 +807,35 @@ export const POSView: React.FC<POSViewProps> = ({
 
       {/* Camera Barcode Scanner Modal */}
       {isCameraModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl relative">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Camera className="w-5 h-5 text-brand-400" />
+        <div className="fixed inset-0 bg-subtle backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="surface-card rounded-3xl w-full max-w-md p-6 shadow-2xl relative">
+            <div className="flex items-center justify-between pb-4 border-b border-hairline mb-4">
+              <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                <Camera className="w-5 h-5 text-brand" />
                 ماسح الباركود بالكاميرا (Camera Barcode Scanner)
               </h3>
-              <button onClick={stopCamera} className="text-slate-400 hover:text-white">
+              <button onClick={stopCamera} className="text-faint hover:text-ink">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4 text-center">
-              <div className="relative w-full h-64 rounded-2xl bg-slate-950 overflow-hidden border border-brand-500/30 flex items-center justify-center">
+              <div className="relative w-full h-64 rounded-2xl bg-surface overflow-hidden border border-brand/30 flex items-center justify-center">
                 <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
                 <div className="absolute inset-0 border-2 border-dashed border-brand-400/60 m-8 rounded-xl pointer-events-none flex items-center justify-center">
-                  <span className="bg-slate-950/80 text-brand-300 text-xs px-3 py-1 rounded-full border border-brand-500/30">
+                  <span className="bg-subtle text-brand-strong text-xs px-3 py-1 rounded-full border border-brand/30">
                     ضع الباركود داخل الإطار للمسح الفوري
                   </span>
                 </div>
               </div>
 
               {cameraError && (
-                <p className="text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl">
+                <p className="text-xs text-err-strong bg-err-soft border border-rose-500/20 p-2.5 rounded-xl">
                   {cameraError}
                 </p>
               )}
 
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-faint">
                 أو انقر على أي منتج أدناه لمحاكاة قراءة الباركود السريعة عبر الكاميرا:
               </p>
 
@@ -844,17 +844,17 @@ export const POSView: React.FC<POSViewProps> = ({
                   <button
                     key={p.id}
                     onClick={() => handleSimulateCameraScan(p)}
-                    className="w-full bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-brand-500 p-2.5 rounded-xl flex items-center justify-between text-xs transition-colors"
+                    className="w-full bg-surface hover:bg-hairline/60 border border-hairline hover:border-brand p-2.5 rounded-xl flex items-center justify-between text-xs transition-colors"
                   >
-                    <span className="font-bold text-white">{p.name}</span>
-                    <span className="font-mono text-brand-400">{p.barcode}</span>
+                    <span className="font-bold text-ink">{p.name}</span>
+                    <span className="font-mono text-brand">{p.barcode}</span>
                   </button>
                 ))}
               </div>
 
               <button
                 onClick={stopCamera}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl text-xs font-semibold transition-colors"
+                className="w-full bg-subtle hover:bg-hairline text-muted py-2.5 rounded-xl text-xs font-semibold transition-colors"
               >
                 إغلاق الكاميرا
               </button>
@@ -865,14 +865,14 @@ export const POSView: React.FC<POSViewProps> = ({
 
       {/* Payment Modal */}
       {isPaymentModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-6">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-brand-400" />
+        <div className="fixed inset-0 bg-subtle backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="surface-card rounded-2xl w-full max-w-lg p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-hairline mb-6">
+              <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-brand" />
                 إتمام الدفع وتحصيل الفاتورة
               </h3>
-              <button onClick={() => setIsPaymentModalOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsPaymentModalOpen(false)} className="text-faint hover:text-ink">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -887,9 +887,9 @@ export const POSView: React.FC<POSViewProps> = ({
               {!paymentGatewayService.isConfigured() && (
                 <div
                   role="status"
-                  className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5"
+                  className="flex items-start gap-2.5 rounded-xl border border-warn/30 bg-warn-soft p-3.5"
                 >
-                  <ShieldAlert size={16} className="mt-0.5 shrink-0 text-amber-400" />
+                  <ShieldAlert size={16} className="mt-0.5 shrink-0 text-warn-strong" />
                   <p className="text-[11.5px] leading-relaxed text-amber-200/90">
                     بوابة الدفع بالبطاقة غير مُهيَّأة على هذا الخادم — استخدم النقد أو التحويل
                     البنكي فقط.
@@ -902,11 +902,11 @@ export const POSView: React.FC<POSViewProps> = ({
               {paymentError && (
                 <div
                   role="alert"
-                  className="flex items-start gap-2.5 p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30"
+                  className="flex items-start gap-2.5 p-3.5 rounded-xl bg-err-soft border border-err/30"
                 >
-                  <ShieldAlert size={16} className="text-rose-400 shrink-0 mt-0.5" />
+                  <ShieldAlert size={16} className="text-err-strong shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-xs font-bold text-rose-300">لم تكتمل عملية البيع</p>
+                    <p className="text-xs font-bold text-err-strong">لم تكتمل عملية البيع</p>
                     <p className="text-[11.5px] text-rose-200/80 mt-0.5 leading-relaxed">
                       {paymentError}
                     </p>
@@ -914,15 +914,15 @@ export const POSView: React.FC<POSViewProps> = ({
                 </div>
               )}
 
-              <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800 text-center">
-                <p className="text-xs text-slate-400 mb-1">المبلغ المطلوب سداده</p>
-                <p className="text-3xl font-black text-brand-400 font-mono">{total.toLocaleString()} ر.س</p>
+              <div className="bg-subtle p-4 rounded-xl border border-hairline text-center">
+                <p className="text-xs text-faint mb-1">المبلغ المطلوب سداده</p>
+                <p className="text-3xl font-black text-brand font-mono">{total.toLocaleString()} ر.س</p>
               </div>
 
               {/* Payment Provider Gateway Selector */}
-              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-                  <ShieldCheck className="w-4 h-4 text-brand-400" />
+              <div className="bg-surface p-3 rounded-xl border border-hairline flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted">
+                  <ShieldCheck className="w-4 h-4 text-brand" />
                   <span>بوابة الدفع الإلكتروني المباشرة:</span>
                 </div>
                 <select
@@ -931,7 +931,7 @@ export const POSView: React.FC<POSViewProps> = ({
                     const prov = e.target.value as PaymentGatewayProvider;
                     paymentGatewayService.setActiveProvider(prov);
                   }}
-                  className="bg-slate-900 border border-slate-800 text-brand-400 font-bold rounded-lg px-2.5 py-1 text-xs focus:outline-none cursor-pointer"
+                  className="surface-card text-brand font-bold rounded-lg px-2.5 py-1 text-xs focus:outline-none cursor-pointer"
                 >
                   <option value="moyasar">Moyasar (مُيسر - مدى/بطاقة/Apple Pay)</option>
                   <option value="stripe">Stripe Terminal (سترايب العالمية)</option>
@@ -941,7 +941,7 @@ export const POSView: React.FC<POSViewProps> = ({
 
               {/* Payment Methods Grid */}
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-2">طريقة الدفع المطلوب استخدامها:</label>
+                <label className="block text-xs font-semibold text-muted mb-2">طريقة الدفع المطلوب استخدامها:</label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { id: 'mada', label: 'شبكة مدى', icon: CreditCard },
@@ -958,8 +958,8 @@ export const POSView: React.FC<POSViewProps> = ({
                         onClick={() => setPaymentMethod(m.id as any)}
                         className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
                           paymentMethod === m.id
-                            ? 'bg-brand-600/10 border-brand-500 text-brand-400 font-bold shadow-md'
-                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white'
+                            ? 'bg-brand-600/10 border-brand text-brand font-bold shadow-md'
+                            : 'bg-surface border-hairline text-faint hover:bg-hairline/60 hover:text-ink'
                         }`}
                       >
                         <Icon className="w-5 h-5" />
@@ -976,8 +976,8 @@ export const POSView: React.FC<POSViewProps> = ({
                   const qr = paymentGatewayService.generateSarieIbanQr(total, settlementAccount.iban);
                   if (!qr) return null;
                   return (
-                  <div className="bg-slate-950 p-4 rounded-xl border border-brand-500/30 text-center space-y-2.5 animate-in fade-in duration-150">
-                   <p className="text-xs font-bold text-white">امسح كود QR عبر تطبيق بنكك للتحويل السريع (SARIE Instant Transfer):</p>
+                  <div className="bg-surface p-4 rounded-xl border border-brand/30 text-center space-y-2.5 animate-in fade-in duration-150">
+                   <p className="text-xs font-bold text-ink">امسح كود QR عبر تطبيق بنكك للتحويل السريع (SARIE Instant Transfer):</p>
                    <div className="bg-white p-2.5 rounded-2xl inline-block shadow-lg mx-auto">
                      <img
                        src={qr}
@@ -985,12 +985,12 @@ export const POSView: React.FC<POSViewProps> = ({
                        className="w-36 h-36 mx-auto object-contain"
                      />
                    </div>
-                   <div className="text-[11px] font-mono text-slate-300 bg-slate-900 p-2 rounded-lg border border-slate-800 space-y-1">
-                     <p className="text-brand-400 font-bold break-all">{settlementAccount.iban}</p>
+                   <div className="text-[11px] font-mono text-muted bg-surface p-2 rounded-lg border border-hairline space-y-1">
+                     <p className="text-brand font-bold break-all">{settlementAccount.iban}</p>
                      {/* Bank and holder names come from the merchant's own record.
                          Showing the bank we happen to be looking at is what makes the
                          payer able to confirm the destination is the right one. */}
-                     <p className="text-slate-400">
+                     <p className="text-faint">
                        {[settlementAccount.bankName, settlementAccount.holderName]
                          .filter(Boolean).join(' — ') || identity.ownerCompany}
                      </p>
@@ -1000,7 +1000,7 @@ export const POSView: React.FC<POSViewProps> = ({
                      and nothing here confirms it arrived, so the sale must be recorded
                      as awaiting reconciliation rather than paid.
                    */}
-                   <p className="text-[10px] text-amber-400 font-semibold">
+                   <p className="text-[10px] text-warn-strong font-semibold">
                      لم يتم تأكيد الدفع — سيُسوّى المبلغ عند تأكيد التحويل
                    </p>
                   </div>
@@ -1010,27 +1010,27 @@ export const POSView: React.FC<POSViewProps> = ({
 
               {paymentMethod === 'cash' && (
                 <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-slate-300">المبلغ المستلم نقداً:</label>
+                  <label className="block text-xs font-semibold text-muted">المبلغ المستلم نقداً:</label>
                   <input
                     type="number"
                     value={cashGiven}
                     onChange={(e) => setCashGiven(e.target.value)}
                     placeholder="أدخل المبلغ..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface border border-hairline rounded-xl px-4 py-2.5 text-sm text-ink font-mono focus:outline-none focus:border-brand"
                   />
                   {Number(cashGiven) >= total && (
-                    <div className="bg-brand-950/40 border border-brand-500/20 p-3 rounded-xl flex items-center justify-between text-xs">
-                      <span className="text-brand-300">المتبقي للعميل (الصرف):</span>
-                      <span className="font-mono font-bold text-brand-400 text-sm">{changeDue.toLocaleString()} ر.س</span>
+                    <div className="bg-brand-950/40 border border-brand/20 p-3 rounded-xl flex items-center justify-between text-xs">
+                      <span className="text-brand-strong">المتبقي للعميل (الصرف):</span>
+                      <span className="font-mono font-bold text-brand text-sm">{changeDue.toLocaleString()} ر.س</span>
                     </div>
                   )}
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-hairline">
                 <button
                   onClick={() => setIsPaymentModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-subtle hover:bg-hairline text-muted transition-colors"
                 >
                   إلغاء
                 </button>
@@ -1059,7 +1059,7 @@ export const POSView: React.FC<POSViewProps> = ({
 
       {/* Thermal Receipt Preview Modal */}
       {isReceiptModalOpen && lastCompletedTx && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-subtle backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div id="thermal-receipt-printable" className="bg-white text-slate-900 rounded-2xl w-full max-w-sm p-6 shadow-2xl font-mono text-xs relative animate-in zoom-in-95 duration-200">
             {/*
              * The fiscal header comes from `dypos.tenants` and `dypos.branches`,
@@ -1078,8 +1078,8 @@ export const POSView: React.FC<POSViewProps> = ({
              */}
             <div className="text-center pb-4 border-b border-dashed border-slate-300">
               <h2 className="text-base font-black">{identity.ownerCompany}</h2>
-              <p className="text-[10px] text-slate-600 mt-0.5">{branchLine(identity)}</p>
-              <p className="text-[10px] text-slate-600">
+              <p className="text-[10px] text-muted mt-0.5">{branchLine(identity)}</p>
+              <p className="text-[10px] text-muted">
                 {identity.taxNumber
                   ? `الرقم الضريبي: ${identity.taxNumber}`
                   : `الرقم الضريبي: ${UNRESOLVED_LABEL}`}
@@ -1111,7 +1111,7 @@ export const POSView: React.FC<POSViewProps> = ({
             </div>
 
             <div className="py-3 space-y-2 border-b border-dashed border-slate-300">
-              <div className="flex justify-between font-bold text-[10px] text-slate-500 pb-1 border-b border-slate-200">
+              <div className="flex justify-between font-bold text-[10px] text-muted pb-1 border-b border-hairline">
                 <span>الصنف</span>
                 <span>الكمية × السعر</span>
               </div>
@@ -1129,7 +1129,7 @@ export const POSView: React.FC<POSViewProps> = ({
                 <span>{lastCompletedTx.subtotal.toLocaleString()} ر.س</span>
               </div>
               {lastCompletedTx.discount > 0 && (
-                <div className="flex justify-between text-rose-600">
+                <div className="flex justify-between text-err-strong">
                   <span>الخصم:</span>
                   <span>-{lastCompletedTx.discount.toLocaleString()} ر.س</span>
                 </div>
@@ -1145,11 +1145,11 @@ export const POSView: React.FC<POSViewProps> = ({
             </div>
 
             <div className="text-center pt-4 space-y-2">
-              <p className="text-[10px] text-slate-500">شكراً لتعاملكم مع {identity.ownerCompany}</p>
+              <p className="text-[10px] text-muted">شكراً لتعاملكم مع {identity.ownerCompany}</p>
               <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => window.print()}
-                  className="flex-1 bg-slate-900 hover:bg-slate-800 text-white py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                  className="flex-1 bg-surface hover:bg-hairline/60 text-ink py-2 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   طباعة حرارية
@@ -1163,7 +1163,7 @@ export const POSView: React.FC<POSViewProps> = ({
                 </button>
                 <button
                   onClick={() => setIsReceiptModalOpen(false)}
-                  className="bg-slate-200 hover:bg-slate-300 text-slate-800 px-3 py-2 rounded-xl text-xs font-bold transition-colors"
+                  className="bg-slate-200 hover:bg-slate-300 text-ink px-3 py-2 rounded-xl text-xs font-bold transition-colors"
                 >
                   إغلاق
                 </button>

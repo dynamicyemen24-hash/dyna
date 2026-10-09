@@ -233,7 +233,7 @@ export const ToolsProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     <ToolsContext.Provider value={api}>
       {children}
       <Suspense fallback={(
-        <div role="status" className="fixed inset-0 z-[100] grid place-items-center bg-black/40 text-white">
+        <div role="status" className="fixed inset-0 z-[100] grid place-items-center bg-black/40 text-ink">
           جارٍ تحميل الأداة…
         </div>
       )}>

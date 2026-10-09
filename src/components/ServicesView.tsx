@@ -156,24 +156,24 @@ export const ServicesView: React.FC = () => {
         icon={Scissors}
         title="كتالوج الخدمات"
         subtitle="إدارة الخدمات وأسعارها ومدد تنفيذها — تُستخدم في المواعيد وأوامر العمل."
-        accent="text-sky-400"
+        accent="text-info-strong"
         actions={<PrimaryButton onClick={openNew}><Plus size={18} /> خدمة جديدة</PrimaryButton>}
       />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Stat label="إجمالي الخدمات" value={String(totals.count)} icon={Scissors} />
-        <Stat label="خدمات نشطة" value={String(totals.active)} tone="text-brand-400" />
-        <Stat label="متوسط المدة" value={`${totals.avgDuration} دقيقة`} tone="text-amber-400" icon={Clock} />
-        <Stat label="متوسط السعر" value={sar(totals.avgPrice)} tone="text-sky-400" icon={Wallet} />
+        <Stat label="خدمات نشطة" value={String(totals.active)} tone="text-brand" />
+        <Stat label="متوسط المدة" value={`${totals.avgDuration} دقيقة`} tone="text-warn-strong" icon={Clock} />
+        <Stat label="متوسط السعر" value={sar(totals.avgPrice)} tone="text-info-strong" icon={Wallet} />
       </div>
 
       <Card className="overflow-hidden">
-        <div className="p-4 border-b border-slate-800 flex flex-wrap gap-3 items-center">
+        <div className="p-4 border-b border-hairline flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={17} />
+            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted" size={17} />
             <Input value={search} onChange={(e) => setSearch(e.target.value)}
               placeholder="ابحث باسم الخدمة أو التصنيف…" className="pr-11" />
           </div>
-          <label className="flex items-center gap-2 text-xs font-bold text-slate-400 cursor-pointer">
+          <label className="flex items-center gap-2 text-xs font-bold text-faint cursor-pointer">
             <input type="checkbox" checked={onlyActive}
               onChange={(e) => setOnlyActive(e.target.checked)}
               className="accent-brand-500 w-4 h-4" />
@@ -192,39 +192,39 @@ export const ServicesView: React.FC = () => {
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 p-4">
             {filtered.map((s) => (
               <div key={s.id}
-                className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 hover:border-sky-500/40 transition-colors">
+                className="bg-subtle border border-hairline rounded-2xl p-4 hover:border-sky-500/40 transition-colors">
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="min-w-0">
                     <h3 className="font-bold text-base truncate">{s.name}</h3>
-                    {s.name_en && <p className="text-[11px] text-slate-500 truncate" dir="ltr">{s.name_en}</p>}
+                    {s.name_en && <p className="text-[11px] text-muted truncate" dir="ltr">{s.name_en}</p>}
                   </div>
                   <Pill tone={s.is_active
-                    ? 'bg-brand-500/10 text-brand-400 border-brand-500/30'
-                    : 'bg-slate-800 text-slate-500 border-slate-700'}>
+                    ? 'bg-brand-soft text-brand border-brand/30'
+                    : 'bg-subtle text-muted border-hairline'}>
                     {s.is_active ? 'نشطة' : 'موقوفة'}
                   </Pill>
                 </div>
 
                 {s.category && (
-                  <Pill tone="bg-sky-500/10 text-sky-300 border-sky-500/20 mb-2">{s.category}</Pill>
+                  <Pill tone="bg-info-soft text-info-strong border-sky-500/20 mb-2">{s.category}</Pill>
                 )}
                 {s.description && (
-                  <p className="text-xs text-slate-400 leading-relaxed mb-3 line-clamp-2">{s.description}</p>
+                  <p className="text-xs text-faint leading-relaxed mb-3 line-clamp-2">{s.description}</p>
                 )}
 
-                <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                <div className="flex items-center justify-between pt-3 border-t border-hairline">
                   <div>
-                    <p className="text-lg font-black text-sky-400">{sar(s.base_price)}</p>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-lg font-black text-info-strong">{sar(s.base_price)}</p>
+                    <p className="text-[11px] text-muted">
                       {s.duration_minutes} دقيقة · ضريبة {s.tax_rate}%
                     </p>
                   </div>
                   <div className="flex gap-1.5">
                     <button onClick={() => openEdit(s)}
-                      className="p-2 rounded-lg text-slate-400 hover:text-sky-400 hover:bg-slate-800 transition-colors"
+                      className="p-2 rounded-lg text-faint hover:text-info-strong hover:bg-hairline/60 transition-colors"
                       aria-label="تعديل"><Pencil size={16} /></button>
                     <button onClick={() => remove(s)}
-                      className="p-2 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
+                      className="p-2 rounded-lg text-faint hover:text-err-strong hover:bg-hairline/60 transition-colors"
                       aria-label="حذف"><Trash2 size={16} /></button>
                   </div>
                 </div>
@@ -264,7 +264,7 @@ export const ServicesView: React.FC = () => {
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
             </Field>
           </div>
-          <label className="sm:col-span-2 flex items-center gap-2 text-sm font-bold text-slate-300 cursor-pointer">
+          <label className="sm:col-span-2 flex items-center gap-2 text-sm font-bold text-muted cursor-pointer">
             <input type="checkbox" checked={draft.isActive}
               onChange={(e) => setDraft({ ...draft, isActive: e.target.checked })}
               className="accent-brand-500 w-4 h-4" />

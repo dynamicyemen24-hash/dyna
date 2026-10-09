@@ -59,11 +59,11 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ journalEntries, 
     <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-canvas text-ink">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-black text-white flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-brand-400" />
+          <h2 className="text-xl font-black text-ink flex items-center gap-2">
+            <BookOpen className="w-6 h-6 text-brand" />
             الحسابات العامة والأستاذ العام (معايير SAP & Odoo)
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">قيود اليومية المزدوجة، دليل الحسابات المالي، وقوائم المركز المالي</p>
+          <p className="text-xs text-faint mt-0.5">قيود اليومية المزدوجة، دليل الحسابات المالي، وقوائم المركز المالي</p>
         </div>
 
         <button
@@ -76,32 +76,32 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ journalEntries, 
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-          <span className="text-xs text-slate-400 block mb-1">إجمالي الحركات المحاسبية</span>
-          <p className="text-2xl font-black text-white font-mono">{totalDebits.toLocaleString()} <span className="text-xs text-slate-400">ر.س</span></p>
-          <p className="text-[11px] text-brand-400 mt-1 flex items-center gap-1">
+        <div className="surface-card rounded-2xl p-5 shadow-sm">
+          <span className="text-xs text-faint block mb-1">إجمالي الحركات المحاسبية</span>
+          <p className="text-2xl font-black text-ink font-mono">{totalDebits.toLocaleString()} <span className="text-xs text-faint">ر.س</span></p>
+          <p className="text-[11px] text-brand mt-1 flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5" /> متطابق وفق النظام المزدوج
           </p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-          <span className="text-xs text-slate-400 block mb-1">صافي أرباح الفترة (P&L)</span>
-          <p className="text-2xl font-black text-brand-400 font-mono">184,500 <span className="text-xs text-slate-400">ر.س</span></p>
-          <p className="text-[11px] text-slate-400 mt-1">هامش ربح إجمالي 34.2%</p>
+        <div className="surface-card rounded-2xl p-5 shadow-sm">
+          <span className="text-xs text-faint block mb-1">صافي أرباح الفترة (P&L)</span>
+          <p className="text-2xl font-black text-brand font-mono">184,500 <span className="text-xs text-faint">ر.س</span></p>
+          <p className="text-[11px] text-faint mt-1">هامش ربح إجمالي 34.2%</p>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-          <span className="text-xs text-slate-400 block mb-1">الذمم الدائنة للموردين</span>
-          <p className="text-2xl font-black text-amber-400 font-mono">65,900 <span className="text-xs text-slate-400">ر.س</span></p>
-          <p className="text-[11px] text-slate-400 mt-1">مستحقة خلال 30 يوم</p>
+        <div className="surface-card rounded-2xl p-5 shadow-sm">
+          <span className="text-xs text-faint block mb-1">الذمم الدائنة للموردين</span>
+          <p className="text-2xl font-black text-warn-strong font-mono">65,900 <span className="text-xs text-faint">ر.س</span></p>
+          <p className="text-[11px] text-faint mt-1">مستحقة خلال 30 يوم</p>
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-slate-800">
-          <h3 className="text-sm font-bold text-white">سجل القيود المحاسبية (General Ledger)</h3>
+      <div className="surface-card rounded-2xl overflow-hidden shadow-sm">
+        <div className="p-4 border-b border-hairline">
+          <h3 className="text-sm font-bold text-ink">سجل القيود المحاسبية (General Ledger)</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
-            <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 uppercase tracking-wider">
+            <thead className="bg-subtle text-faint border-b border-hairline uppercase tracking-wider">
               <tr>
                 <th className="p-4">رقم القيد</th>
                 <th className="p-4">التاريخ</th>
@@ -112,17 +112,17 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ journalEntries, 
                 <th className="p-4 text-center">الحالة</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80">
+            <tbody className="divide-y divide-hairline/80">
               {journalEntries.map((je) => (
-                <tr key={je.id} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="p-4 font-mono font-bold text-white">{je.entryNumber}</td>
-                  <td className="p-4 text-slate-300">{je.date}</td>
-                  <td className="p-4 text-slate-200 font-medium">{je.description}</td>
-                  <td className="p-4 text-brand-400">{je.accountDebit}</td>
-                  <td className="p-4 text-rose-400">{je.accountCredit}</td>
-                  <td className="p-4 font-mono font-bold text-white">{je.amount.toLocaleString()} ر.س</td>
+                <tr key={je.id} className="hover:bg-hairline/40 transition-colors">
+                  <td className="p-4 font-mono font-bold text-ink">{je.entryNumber}</td>
+                  <td className="p-4 text-muted">{je.date}</td>
+                  <td className="p-4 text-ink font-medium">{je.description}</td>
+                  <td className="p-4 text-brand">{je.accountDebit}</td>
+                  <td className="p-4 text-err-strong">{je.accountCredit}</td>
+                  <td className="p-4 font-mono font-bold text-ink">{je.amount.toLocaleString()} ر.س</td>
                   <td className="p-4 text-center">
-                    <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-brand-soft text-brand border border-brand/20">
                       معتمد ومرحل
                     </span>
                   </td>
@@ -134,35 +134,35 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ journalEntries, 
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
-              <h3 className="text-base font-bold text-white">إضافة قيد يومية مزدوج جديد</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-white">
+        <div className="fixed inset-0 bg-subtle backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="surface-card rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-4 border-b border-hairline mb-4">
+              <h3 className="text-base font-bold text-ink">إضافة قيد يومية مزدوج جديد</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-faint hover:text-ink">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">وصف وقصة القيد:</label>
+                <label className="block text-xs font-semibold text-muted mb-1">وصف وقصة القيد:</label>
                 <input
                   type="text"
                   required
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="مثال: إثبات إيرادات مبيعات نقدية..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500"
+                  className="w-full bg-surface border border-hairline rounded-xl px-4 py-2.5 text-xs text-ink focus:outline-none focus:border-brand"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">الحساب المدين:</label>
+                  <label className="block text-xs font-semibold text-muted mb-1">الحساب المدين:</label>
                   <select
                     value={accountDebit}
                     onChange={(e) => setAccountDebit(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white"
+                    className="w-full bg-surface border border-hairline rounded-xl px-4 py-2 text-xs text-ink"
                   >
                     <option value="الصندوق الرئيسي (1101)">الصندوق الرئيسي (1101)</option>
                     <option value="البنك الأهلي السعودي (1102)">البنك الأهلي السعودي (1102)</option>
@@ -171,11 +171,11 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ journalEntries, 
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">الحساب الدائن:</label>
+                  <label className="block text-xs font-semibold text-muted mb-1">الحساب الدائن:</label>
                   <select
                     value={accountCredit}
                     onChange={(e) => setAccountCredit(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-white"
+                    className="w-full bg-surface border border-hairline rounded-xl px-4 py-2 text-xs text-ink"
                   >
                     <option value="إيرادات المبيعات (4101)">إيرادات المبيعات (4101)</option>
                     <option value="حساب الدائنين والموردين (2101)">حساب الدائنين والموردين (2101)</option>
@@ -185,29 +185,29 @@ export const AccountingView: React.FC<AccountingViewProps> = ({ journalEntries, 
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">المبلغ (ر.س):</label>
+                <label className="block text-xs font-semibold text-muted mb-1">المبلغ (ر.س):</label>
                 <input
                   type="number"
                   required
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.00"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
+                  className="w-full bg-surface border border-hairline rounded-xl px-4 py-2.5 text-xs text-ink font-mono focus:outline-none focus:border-brand"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-hairline">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-subtle text-muted"
                 >
                   إلغاء
                 </button>
                 {submitError && (
                   <p
                     role="alert"
-                    className="flex-1 text-right text-[11px] leading-relaxed font-semibold text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2"
+                    className="flex-1 text-right text-[11px] leading-relaxed font-semibold text-err-strong bg-err-soft border border-err/30 rounded-lg px-3 py-2"
                   >
                     {submitError}
                   </p>

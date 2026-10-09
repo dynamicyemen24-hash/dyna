@@ -762,7 +762,7 @@ const BranchSelectionGate: React.FC<{
       </header>
 
       {source === 'client' && (
-        <div role="status" className="border border-amber-300 bg-amber-50 text-amber-900 rounded-lg p-3 text-sm">
+        <div role="status" className="border border-warn/30 bg-warn-soft text-warn-strong rounded-lg p-3 text-sm">
           تعمل من نسخة محلية للقراءة فقط
           <span className="block text-xs mt-1">
             آخر مزامنة مع الخادم: {snapshotFetchedAt
@@ -774,7 +774,7 @@ const BranchSelectionGate: React.FC<{
       )}
 
       {source === 'local' && referenceError && (
-        <div role="alert" className="border border-rose-300 bg-rose-50 text-rose-800 rounded-lg p-3 text-sm">
+        <div role="alert" className="border border-err/30 bg-err-soft text-err-strong rounded-lg p-3 text-sm">
           لا توجد نسخة موثقة للفروع على هذا الجهاز. اتصل بالشبكة لإكمال تحديث بيانات المؤسسة.
         </div>
       )}
@@ -804,7 +804,7 @@ const BranchSelectionGate: React.FC<{
           />
         </div>
       ) : branches.length === 0 && (
-          <div className="rounded-xl border border-brand-200 bg-brand-50 p-4 text-brand-900">
+          <div className="rounded-xl border border-brand/30 bg-brand-soft p-4 text-brand-900">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-bold">لا يوجد فرع مسجل بعد</p>
@@ -816,12 +816,12 @@ const BranchSelectionGate: React.FC<{
             </div>
             {adding && (
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                <input value={name} onChange={(event) => setName(event.target.value)} placeholder="اسم الفرع" className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm" autoFocus />
-                <input value={city} onChange={(event) => setCity(event.target.value)} placeholder="المدينة (اختياري)" className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm" />
-                <button type="button" onClick={() => void createBranch()} disabled={busy} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-50 sm:col-span-2">
+                <input value={name} onChange={(event) => setName(event.target.value)} placeholder="اسم الفرع" className="rounded-lg border border-brand/30 bg-surface px-3 py-2 text-sm" autoFocus />
+                <input value={city} onChange={(event) => setCity(event.target.value)} placeholder="المدينة (اختياري)" className="rounded-lg border border-brand/30 bg-surface px-3 py-2 text-sm" />
+                <button type="button" onClick={() => void createBranch()} disabled={busy} className="rounded-lg bg-surface px-3 py-2 text-xs font-bold text-ink disabled:opacity-50 sm:col-span-2">
                   {busy ? 'جارٍ إنشاء الفرع…' : 'حفظ الفرع والمتابعة'}
                 </button>
-                {formError && <p className="text-xs text-rose-700 sm:col-span-2" role="alert">{formError}</p>}
+                {formError && <p className="text-xs text-err-strong sm:col-span-2" role="alert">{formError}</p>}
               </div>
             )}
           </div>
@@ -829,14 +829,14 @@ const BranchSelectionGate: React.FC<{
       </div>
 
       {dataStatus === 'error' && dataError && (
-        <p className="text-xs text-amber-700">مصدر دليل الفروع مستقل عن بقية بيانات التشغيل؛ {dataError}</p>
+        <p className="text-xs text-warn-strong">مصدر دليل الفروع مستقل عن بقية بيانات التشغيل؛ {dataError}</p>
       )}
 
       <footer className="flex items-center justify-between gap-3 border-t border-hairline pt-4">
         <button type="button" onClick={() => void onRefresh()} className="px-3 py-2 rounded-lg border border-hairline text-sm hover:bg-subtle">
           تحديث البيانات
         </button>
-        <button type="button" onClick={onSignOut} className="px-3 py-2 rounded-lg text-sm text-rose-700 hover:bg-rose-50">
+        <button type="button" onClick={onSignOut} className="px-3 py-2 rounded-lg text-sm text-err-strong hover:bg-err-soft">
           تسجيل الخروج
         </button>
       </footer>
@@ -959,8 +959,8 @@ function App() {
     return (
       <div className="min-h-screen bg-[#f6f7f9] grid place-items-center">
         <div className="text-center space-y-1">
-          <p className="text-[12.5px] text-slate-500">جارٍ التحقق من الجلسة…</p>
-          {release && <p className="text-[10.5px] text-slate-400">الإصدار {release}</p>}
+          <p className="text-[12.5px] text-muted">جارٍ التحقق من الجلسة…</p>
+          {release && <p className="text-[10.5px] text-faint">الإصدار {release}</p>}
         </div>
       </div>
     );
@@ -1019,7 +1019,7 @@ const Booting: React.FC = () => (
   <div className="min-h-screen bg-[#f6f7f9] grid place-items-center">
     <div className="text-center space-y-1">
       <div className="mx-auto mb-4 h-6 w-6 rounded-full border-2 border-brand-600 border-t-transparent animate-spin" />
-      <p className="text-[12.5px] text-slate-500">جارٍ تجهيز بيئة العمل…</p>
+      <p className="text-[12.5px] text-muted">جارٍ تجهيز بيئة العمل…</p>
     </div>
   </div>
 );

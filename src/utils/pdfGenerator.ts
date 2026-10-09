@@ -136,7 +136,7 @@ export const generateInvoicePDF = (
   // Footer
   doc.setFontSize(9);
   doc.setTextColor(148, 163, 184);
-  doc.text('Smart Ports Software · DyPOS Enterprise Cloud & Edge | Powered by Neon PostgreSQL', 105, 280, { align: 'center' });
+  doc.text('Smart Ports Software · دينا: منصة التجارة الذكية | Powered by Neon PostgreSQL', 105, 280, { align: 'center' });
 
   // Save the PDF
   doc.save(`Invoice_${transaction.invoiceNumber}.pdf`);

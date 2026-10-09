@@ -80,11 +80,11 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({ products, tran
   return (
     <div className="flex-1 flex flex-col p-6 overflow-hidden bg-canvas text-ink">
       <div className="mb-4">
-        <h2 className="text-xl font-black text-white flex items-center gap-2">
-          <Bot className="w-6 h-6 text-brand-400" />
+        <h2 className="text-xl font-black text-ink flex items-center gap-2">
+          <Bot className="w-6 h-6 text-brand" />
           مساعد الذكاء الاصطناعي Gemini (مستشار الأعمال والتحليلات)
         </h2>
-        <p className="text-xs text-slate-400 mt-0.5">تحليل ذكي متقدم لبيانات المخزون والمبيعات لدعم اتخاذ القرار المؤسسي</p>
+        <p className="text-xs text-faint mt-0.5">تحليل ذكي متقدم لبيانات المخزون والمبيعات لدعم اتخاذ القرار المؤسسي</p>
       </div>
 
       {/* Quick Suggestions */}
@@ -93,16 +93,16 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({ products, tran
           <button
             key={idx}
             onClick={() => handleSend(qp)}
-            className="bg-slate-900 border border-slate-800 hover:border-brand-500/50 text-slate-300 hover:text-white px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm"
+            className="surface-card hover:border-brand/50 text-muted hover:text-ink px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm"
           >
-            <Sparkles className="w-3.5 h-3.5 text-brand-400" />
+            <Sparkles className="w-3.5 h-3.5 text-brand" />
             {qp}
           </button>
         ))}
       </div>
 
       {/* Chat Box */}
-      <div className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl p-4 overflow-y-auto space-y-4 shadow-sm mb-4">
+      <div className="flex-1 surface-card rounded-2xl p-4 overflow-y-auto space-y-4 shadow-sm mb-4">
         {messages.map((msg, index) => (
           <div
             key={index}
@@ -121,7 +121,7 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({ products, tran
               className={`max-w-[80%] rounded-2xl p-4 text-xs leading-relaxed ${
                 msg.role === 'user'
                   ? 'bg-brand-600 text-white rounded-tl-none font-medium'
-                  : 'bg-slate-950 border border-slate-800 text-slate-200 rounded-tr-none'
+                  : 'bg-surface border border-hairline text-ink rounded-tr-none'
               }`}
             >
               <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -130,10 +130,10 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({ products, tran
         ))}
         {isLoading && (
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-brand-600/20 text-brand-400 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-brand-600/20 text-brand flex items-center justify-center">
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs text-slate-400">
+            <div className="bg-surface border border-hairline rounded-2xl p-4 text-xs text-faint">
               جاري تحليل بيانات النظام وصياغة التوصية الاستراتيجية بواسطة Gemini...
             </div>
           </div>
@@ -141,14 +141,14 @@ export const AiAssistantView: React.FC<AiAssistantViewProps> = ({ products, tran
       </div>
 
       {/* Input Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-2 flex items-center gap-2">
+      <div className="surface-card rounded-2xl p-2 flex items-center gap-2">
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder="اسأل مساعد Gemini أي استفسار حول المخزون أو المبيعات أو استراتيجيات التسعير..."
-          className="flex-1 bg-transparent px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none"
+          className="flex-1 bg-transparent px-4 py-2.5 text-xs text-ink placeholder-faint focus:outline-none"
         />
         <button
           onClick={() => handleSend()}

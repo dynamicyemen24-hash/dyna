@@ -90,13 +90,13 @@ export const ScaleHALWidget: React.FC<ScaleHALWidgetProps> = ({ onAutoPopulateWe
   return (
     <div className="font-['Cairo',sans-serif]">
       {/* Live Compact Scale Reader Bar */}
-      <div className="flex items-center gap-2 bg-slate-900 border border-brand-500/40 px-3 py-1.5 rounded-2xl shadow-sm">
+      <div className="flex items-center gap-2 bg-surface border border-brand/40 px-3 py-1.5 rounded-2xl shadow-sm">
         <button
           onClick={() => setIsOpen(true)}
-          className="flex items-center gap-1.5 text-xs font-mono font-bold text-brand-400 hover:text-brand-300 transition-colors"
+          className="flex items-center gap-1.5 text-xs font-mono font-bold text-brand hover:text-brand-strong transition-colors"
           title="انقر لفتح إعدادات الميزان الإلكتروني والبروتوكولات"
         >
-          <Scale className="w-4 h-4 text-brand-400" />
+          <Scale className="w-4 h-4 text-brand" />
           {/*
             A number appears ONLY when a connected device reported a stable
             weight. Otherwise the state is named — displaying "0.000 kg" for an
@@ -107,7 +107,7 @@ export const ScaleHALWidget: React.FC<ScaleHALWidgetProps> = ({ onAutoPopulateWe
           </span>
         </button>
 
-        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-950 text-slate-300 border border-slate-800">
+        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-surface text-muted border border-hairline">
           {status === 'connected_web_serial'
             ? 'USB RS232'
             : status === 'connected_bluetooth'
@@ -131,32 +131,32 @@ export const ScaleHALWidget: React.FC<ScaleHALWidgetProps> = ({ onAutoPopulateWe
       {/* Scale Settings & Connection Modal */}
       {isOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-4">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Cpu className="w-5 h-5 text-brand-400" />
+          <div className="surface-card rounded-3xl w-full max-w-md p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-hairline mb-4">
+              <h3 className="text-base font-bold text-ink flex items-center gap-2">
+                <Cpu className="w-5 h-5 text-brand" />
                 طبقة ربط الموازين الإلكترونية (Scale HAL)
               </h3>
-              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setIsOpen(false)} className="text-faint hover:text-ink">
                 ✕
               </button>
             </div>
 
             <div className="space-y-4 text-xs">
               {/* Live Weight Display Card */}
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-center space-y-1">
-                <p className="text-[10px] text-slate-400">
+              <div className="bg-surface p-4 rounded-2xl border border-hairline text-center space-y-1">
+                <p className="text-[10px] text-faint">
                 {hasLiveReading ? 'القراءة المباشرة من الميزان:' : 'لا يوجد ميزان متصل — لم تُعرض أي قراءة.'}
               </p>
-              <p className="text-3xl font-black font-mono text-brand-400">
+              <p className="text-3xl font-black font-mono text-brand">
                 {hasLiveReading ? reading.netWeightKg.toFixed(3) : '—'}{' '}
-                <span className="text-sm font-normal text-slate-400">{hasLiveReading ? reading.unit : ''}</span>
+                <span className="text-sm font-normal text-faint">{hasLiveReading ? reading.unit : ''}</span>
               </p>
-              <p className="text-[9px] text-slate-500 font-mono">
+              <p className="text-[9px] text-muted font-mono">
                 الوزن القائم: {hasLiveReading ? reading.weightKg.toFixed(3) : '—'} | الطبلية:{' '}
                 {hasLiveReading ? reading.tareKg.toFixed(3) : '—'}
               </p>
-                <p className="text-[10px] text-slate-500 font-mono">
+                <p className="text-[10px] text-muted font-mono">
                   القائم: {reading.weightKg.toFixed(3)} | الخصم/Tare: {reading.tareKg.toFixed(3)}
                 </p>
                 <div className="text-[9px] font-mono text-slate-600 truncate mt-1">
@@ -166,7 +166,7 @@ export const ScaleHALWidget: React.FC<ScaleHALWidgetProps> = ({ onAutoPopulateWe
 
               {/* Protocol Selection */}
               <div>
-                <label className="block text-slate-300 font-bold mb-1.5">بروتوكول الميزان (Protocol Type):</label>
+                <label className="block text-muted font-bold mb-1.5">بروتوكول الميزان (Protocol Type):</label>
                 <select
                   value={protocol}
                   onChange={(e) => {
@@ -174,7 +174,7 @@ export const ScaleHALWidget: React.FC<ScaleHALWidgetProps> = ({ onAutoPopulateWe
                     setProtocol(p);
                     scaleHAL.setProtocol(p);
                   }}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500 cursor-pointer"
+                  className="w-full bg-surface border border-hairline rounded-xl px-3 py-2 text-xs text-ink focus:outline-none focus:border-brand cursor-pointer"
                 >
                   <option value="NCI">NCI / Avery Weigh-Tronix (قياسي عالي السرعة)</option>
                   <option value="METTLER_TOLEDO">Mettler Toledo SICS Protocol</option>
@@ -204,9 +204,9 @@ export const ScaleHALWidget: React.FC<ScaleHALWidgetProps> = ({ onAutoPopulateWe
                   type="button"
                   onClick={() => void handleConnectUSB()}
                   disabled={isBusy}
-                  className="bg-slate-950 hover:bg-slate-800 text-brand-400 border border-brand-500/30 p-3 rounded-xl font-bold flex flex-col items-center gap-1 transition-all disabled:opacity-50"
+                  className="bg-surface hover:bg-hairline/60 text-brand border border-brand/30 p-3 rounded-xl font-bold flex flex-col items-center gap-1 transition-all disabled:opacity-50"
                 >
-                  <Usb className="w-5 h-5 text-brand-400" />
+                  <Usb className="w-5 h-5 text-brand" />
                   <span>ربط USB / RS-232</span>
                 </button>
 
@@ -214,7 +214,7 @@ export const ScaleHALWidget: React.FC<ScaleHALWidgetProps> = ({ onAutoPopulateWe
                   type="button"
                   onClick={() => void handleConnectBluetooth()}
                   disabled={isBusy}
-                  className="bg-slate-950 hover:bg-slate-800 text-blue-400 border border-blue-500/30 p-3 rounded-xl font-bold flex flex-col items-center gap-1 transition-all disabled:opacity-50"
+                  className="bg-surface hover:bg-hairline/60 text-blue-400 border border-blue-500/30 p-3 rounded-xl font-bold flex flex-col items-center gap-1 transition-all disabled:opacity-50"
                 >
                   <Bluetooth className="w-5 h-5 text-blue-400" />
                   <span>ربط Bluetooth BLE</span>
@@ -227,7 +227,7 @@ export const ScaleHALWidget: React.FC<ScaleHALWidgetProps> = ({ onAutoPopulateWe
                 reading when `status === 'simulated'`, so a "tare" could appear to
                 succeed on hardware that did not exist.
               */}
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-800">
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-hairline">
                 <button
                   type="button"
                   onClick={() => {
@@ -236,7 +236,7 @@ export const ScaleHALWidget: React.FC<ScaleHALWidgetProps> = ({ onAutoPopulateWe
                     });
                   }}
                   disabled={status !== 'connected_web_serial'}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-xl font-bold text-center disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="bg-subtle hover:bg-hairline text-ink py-2 rounded-xl font-bold text-center disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   تصفير الطبلية (Tare)
                 </button>
@@ -248,7 +248,7 @@ export const ScaleHALWidget: React.FC<ScaleHALWidgetProps> = ({ onAutoPopulateWe
                     });
                   }}
                   disabled={status !== 'connected_web_serial'}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-xl font-bold text-center disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="bg-subtle hover:bg-hairline text-ink py-2 rounded-xl font-bold text-center disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   إعادة الضبط (Zero)
                 </button>

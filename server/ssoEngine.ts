@@ -49,7 +49,7 @@ export function registerSsoRoutes(app: any) {
       res.json({
         ok: true,
         challenge,
-        rp: { name: 'DyPOS Enterprise Cloud', id: req.hostname || '' },
+        rp: { name: 'دينا: منصة التجارة الذكية', id: req.hostname || '' },
         user: { id: Buffer.from(username || 'user').toString('base64url'), name: username, displayName: username },
         pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
         timeout: 60000,

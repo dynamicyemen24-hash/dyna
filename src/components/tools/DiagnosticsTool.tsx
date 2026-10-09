@@ -33,15 +33,15 @@ const STATUS_META: Record<CheckStatus, {
 }> = {
   pass: {
     label: 'سليم', icon: ShieldCheck, glyph: '✓',
-    chip: 'bg-brand-50 text-brand-700 border-brand-200', bar: 'bg-brand-500',
+    chip: 'bg-brand-soft text-brand-strong border-brand/30', bar: 'bg-brand-500',
   },
   warn: {
     label: 'تحذير', icon: AlertTriangle, glyph: '!',
-    chip: 'bg-amber-50 text-amber-800 border-amber-200', bar: 'bg-amber-500',
+    chip: 'bg-warn-soft text-warn-strong border-warn/30', bar: 'bg-amber-500',
   },
   fail: {
     label: 'تعطل', icon: XCircle, glyph: '✗',
-    chip: 'bg-rose-50 text-rose-700 border-rose-200', bar: 'bg-rose-500',
+    chip: 'bg-err-soft text-err-strong border-err/30', bar: 'bg-rose-500',
   },
   unknown: {
     label: 'غير محسوم', icon: HelpCircle, glyph: '?',
@@ -127,7 +127,7 @@ export const DiagnosticsTool: React.FC = () => {
                 aria-pressed={onlyProblems}
                 className={`px-3 py-2 rounded-lg border text-xs font-bold transition-colors ${
                   onlyProblems
-                    ? 'bg-amber-50 text-amber-800 border-amber-300'
+                    ? 'bg-warn-soft text-warn-strong border-warn/30'
                     : 'bg-surface text-muted border-hairline hover:text-ink'
                 }`}
               >
@@ -139,7 +139,7 @@ export const DiagnosticsTool: React.FC = () => {
                 disabled={!report}
                 className="px-3 py-2 rounded-lg border border-hairline bg-surface text-ink text-xs font-bold hover:bg-subtle disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
               >
-                {copied ? <Check size={14} className="text-brand-600" /> : <Copy size={14} />}
+                {copied ? <Check size={14} className="text-brand" /> : <Copy size={14} />}
                 {copied ? 'تم النسخ' : 'نسخ التقرير'}
               </button>
               <button
@@ -201,8 +201,8 @@ export const DiagnosticsTool: React.FC = () => {
         </div>
         {/* Blockers first — the only question the first call actually asks. */}
         {report && report.blockers.length > 0 && (
-          <section aria-labelledby="blockers-h" className="surface-card border-rose-200 p-4">
-            <h4 id="blockers-h" className="text-sm font-bold text-rose-700 flex items-center gap-2 mb-2">
+          <section aria-labelledby="blockers-h" className="surface-card border-err/30 p-4">
+            <h4 id="blockers-h" className="text-sm font-bold text-err-strong flex items-center gap-2 mb-2">
               <XCircle size={16} aria-hidden="true" />
               ما يمنع العمل ({report.blockers.length})
             </h4>
@@ -220,9 +220,9 @@ export const DiagnosticsTool: React.FC = () => {
 
         {/* Predictive Self-Healing Anomaly Alerts */}
         {anomalies.length > 0 && (
-          <section aria-labelledby="healing-h" className="surface-card border-amber-300 p-4 bg-amber-50/40">
-            <h4 id="healing-h" className="text-sm font-bold text-amber-900 flex items-center gap-2 mb-2">
-              <Zap size={16} className="text-amber-600" aria-hidden="true" />
+          <section aria-labelledby="healing-h" className="surface-card border-warn/30 p-4 bg-warn-soft/40">
+            <h4 id="healing-h" className="text-sm font-bold text-warn-strong flex items-center gap-2 mb-2">
+              <Zap size={16} className="text-warn-strong" aria-hidden="true" />
               التنبؤ بالأعطال والإصلاح الذاتي ({anomalies.length})
             </h4>
             <p className="text-xs text-muted mb-3">
@@ -230,10 +230,10 @@ export const DiagnosticsTool: React.FC = () => {
             </p>
             <ul className="space-y-2.5">
               {anomalies.map((anom) => (
-                <li key={anom.id} className="bg-surface p-3 rounded-lg border border-amber-200 flex flex-wrap items-center justify-between gap-3">
+                <li key={anom.id} className="bg-surface p-3 rounded-lg border border-warn/30 flex flex-wrap items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-2xs font-bold uppercase">
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-warn-strong text-2xs font-bold uppercase">
                         {anom.component} · {anom.severity}
                       </span>
                       <span className="text-xs font-bold text-ink">{anom.anomaly_type}</span>
@@ -278,11 +278,11 @@ export const DiagnosticsTool: React.FC = () => {
                   </span>
                   <span className="flex items-center gap-2 shrink-0">
                     {bad > 0 ? (
-                      <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-2xs font-bold">
+                      <span className="px-2 py-0.5 rounded-full bg-warn-soft text-warn-strong border border-warn/30 text-2xs font-bold">
                         {bad} يحتاج انتباهاً
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200 text-2xs font-bold">
+                      <span className="px-2 py-0.5 rounded-full bg-brand-soft text-brand-strong border border-brand/30 text-2xs font-bold">
                         سليم
                       </span>
                     )}

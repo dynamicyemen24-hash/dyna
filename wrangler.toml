@@ -1,5 +1,5 @@
 ﻿# =====================================================================
-# Cloudflare â€” DyPOS Enterprise Cloud & Edge
+# Cloudflare — دينا: منصة التجارة الذكية
 #
 # One Worker named "dyposcloud" serves BOTH halves of the product:
 #   - the Vite SPA            -> static assets binding (./dist)

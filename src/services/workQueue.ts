@@ -64,10 +64,10 @@ export function priorityOf(score: number): Priority {
 }
 
 export const PRIORITY_META: Record<Priority, { label: string; dot: string; chip: string }> = {
-  critical: { label: 'حرج', dot: 'bg-rose-500', chip: 'bg-rose-50 text-rose-700 border-rose-200' },
-  high: { label: 'عالٍ', dot: 'bg-amber-500', chip: 'bg-amber-50 text-amber-700 border-amber-200' },
-  normal: { label: 'عادي', dot: 'bg-sky-500', chip: 'bg-sky-50 text-sky-700 border-sky-200' },
-  low: { label: 'منخفض', dot: 'bg-slate-300', chip: 'bg-slate-50 text-slate-500 border-slate-200' },
+  critical: { label: 'حرج', dot: 'bg-rose-500', chip: 'bg-err-soft text-err-strong border-err/30' },
+  high: { label: 'عالٍ', dot: 'bg-amber-500', chip: 'bg-warn-soft text-warn-strong border-warn/30' },
+  normal: { label: 'عادي', dot: 'bg-sky-500', chip: 'bg-info-soft text-info-strong border-sky-200' },
+  low: { label: 'منخفض', dot: 'bg-slate-300', chip: 'bg-subtle text-muted border-hairline' },
 };
 
 /**

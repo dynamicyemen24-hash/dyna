@@ -159,14 +159,14 @@ export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync 
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[9px] text-muted font-sans">الإنترنت</span>
                 {state.isOnline ? (
-                  <Wifi className="w-3 h-3 text-brand-600 dark:text-brand-400" />
+                  <Wifi className="w-3 h-3 text-brand dark:text-brand" />
                 ) : (
-                  <WifiOff className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                  <WifiOff className="w-3 h-3 text-err-strong dark:text-err-strong" />
                 )}
               </div>
               <span
                 className={`font-bold text-[10px] ${
-                  state.isOnline ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600 dark:text-rose-400'
+                  state.isOnline ? 'text-brand dark:text-brand' : 'text-err-strong dark:text-err-strong'
                 }`}
               >
                 {state.isOnline ? 'متصل 🟢' : 'Offline 🔴'}
@@ -176,9 +176,9 @@ export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync 
             <div className="bg-subtle p-2 rounded-xl border border-hairline">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[9px] text-muted font-sans">Neon DB</span>
-                <Database className="w-3 h-3 text-cyan-700 dark:text-cyan-300" />
+                <Database className="w-3 h-3 text-info-strong dark:text-info-strong" />
               </div>
-              <span className="font-bold text-[10px] text-cyan-700 dark:text-cyan-300">
+              <span className="font-bold text-[10px] text-info-strong dark:text-info-strong">
                 {state.isOnline ? 'Live 🟢' : 'Cached 💾'}
               </span>
             </div>
@@ -186,9 +186,9 @@ export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync 
             <div className="bg-subtle p-2 rounded-xl border border-hairline">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[9px] text-muted font-sans">المجدولة</span>
-                <Layers className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                <Layers className="w-3 h-3 text-warn-strong dark:text-warn-strong" />
               </div>
-              <span className="font-bold text-[10px] text-amber-700 dark:text-amber-300">
+              <span className="font-bold text-[10px] text-warn-strong dark:text-warn-strong">
                 {state.pendingCount} حركة
               </span>
             </div>
@@ -217,7 +217,7 @@ export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync 
                 }`}
               >
                 <span
-                  className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${
+                  className={`w-4 h-4 bg-surface rounded-full absolute top-1 transition-transform ${
                     state.autoSyncOnReconnect ? 'right-1' : 'right-6'
                   }`}
                 />
@@ -227,7 +227,7 @@ export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync 
             {state.autoSyncOnReconnect && (
               <div className="pt-2 border-t border-hairline flex items-center justify-between text-xs">
                 <span className="text-muted text-[11px] flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" /> توقيت الترحيل التلقائي:
+                  <Clock className="w-3.5 h-3.5 text-warn-strong dark:text-warn-strong" /> توقيت الترحيل التلقائي:
                 </span>
                 <select
                   value={state.scheduleIntervalMinutes}
@@ -291,7 +291,7 @@ export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync 
               onClick={() => offlineSyncService.toggleSimulatedOffline()}
               className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
                 state.isSimulatedOffline
-                  ? 'bg-rose-50 border-rose-300 text-rose-700 dark:bg-rose-950 dark:border-rose-800 dark:text-rose-200'
+                  ? 'bg-err-soft border-err/30 text-err-strong dark:bg-rose-950 dark:border-rose-800 dark:text-rose-200'
                   : 'bg-subtle hover:bg-surface border-hairline text-muted hover:text-ink'
               }`}
               title="محاكاة وضع عدم الاتصال لاختبار أداء المنظومة دون فصل النت الحقيقي"
@@ -312,23 +312,23 @@ export const OfflineSyncToast: React.FC<OfflineSyncToastProps> = ({ onForceSync 
         aria-label={isExpanded ? 'إغلاق بطاقة المزامنة' : 'فتح بطاقة المزامنة'}
         className={`px-3.5 py-2 rounded-2xl border shadow-xl backdrop-blur-xl flex items-center gap-2.5 text-xs font-bold transition-all cursor-pointer hover:scale-[1.02] active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
           !state.isOnline
-            ? 'bg-surface border-rose-500/60 text-rose-700 dark:text-rose-200 ring-2 ring-rose-500/20 animate-pulse'
+            ? 'bg-surface border-rose-500/60 text-err-strong dark:text-rose-200 ring-2 ring-rose-500/20 animate-pulse'
             : isBusy
-            ? 'bg-surface border-amber-500/60 text-amber-700 dark:text-amber-200'
+            ? 'bg-surface border-amber-500/60 text-warn-strong dark:text-amber-200'
             : state.pendingCount > 0
-            ? 'bg-surface border-blue-500/60 text-blue-700 dark:text-blue-200'
+            ? 'bg-surface border-blue-500/60 text-info-strong dark:text-blue-200'
             : 'bg-surface border-hairline text-muted hover:text-ink'
         }`}
       >
         <div className="relative flex items-center justify-center">
           {!state.isOnline ? (
-            <WifiOff className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+            <WifiOff className="w-3.5 h-3.5 text-err-strong dark:text-err-strong" />
           ) : isBusy ? (
-            <RefreshCw className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-spin" />
+            <RefreshCw className="w-3.5 h-3.5 text-warn-strong dark:text-warn-strong animate-spin" />
           ) : state.pendingCount > 0 ? (
-            <HardDriveUpload className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <HardDriveUpload className="w-3.5 h-3.5 text-info-strong dark:text-info-strong" />
           ) : (
-            <CheckCircle2 className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-brand dark:text-brand" />
           )}
 
           {!state.isOnline && (

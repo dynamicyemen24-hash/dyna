@@ -9,12 +9,12 @@ import {
 } from '../services/workQueue';
 
 const KIND_META: Record<string, { label: string; icon: any; tone: string }> = {
-  appointment: { label: 'موعد', icon: Calendar, tone: 'bg-sky-50 text-sky-600' },
+  appointment: { label: 'موعد', icon: Calendar, tone: 'bg-info-soft text-info-strong' },
   production: { label: 'إنتاج', icon: Factory, tone: 'bg-violet-50 text-violet-600' },
-  batch: { label: 'دفعة', icon: Package, tone: 'bg-amber-50 text-amber-600' },
-  delivery: { label: 'توصيل', icon: Truck, tone: 'bg-brand-50 text-brand-600' },
-  service: { label: 'خدمة', icon: Sparkles, tone: 'bg-rose-50 text-rose-600' },
-  purchase: { label: 'شراء', icon: ListOrdered, tone: 'bg-slate-100 text-slate-600' },
+  batch: { label: 'دفعة', icon: Package, tone: 'bg-warn-soft text-warn-strong' },
+  delivery: { label: 'توصيل', icon: Truck, tone: 'bg-brand-soft text-brand' },
+  service: { label: 'خدمة', icon: Sparkles, tone: 'bg-err-soft text-err-strong' },
+  purchase: { label: 'شراء', icon: ListOrdered, tone: 'bg-subtle text-muted' },
 };
 
 interface SmartQueueProps {
@@ -60,10 +60,10 @@ export const SmartQueue: React.FC<SmartQueueProps> = ({ sector, branchId }) => {
 
   return (
     <section className="surface-card overflow-hidden">
-      <header className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <header className="flex items-center justify-between px-5 py-4 border-b border-hairline">
         <div className="flex items-center gap-2">
-          <Sparkles size={15} className="text-brand-600" />
-          <h3 className="text-[13px] font-semibold text-slate-800">طابور العمل الذكي</h3>
+          <Sparkles size={15} className="text-brand" />
+          <h3 className="text-[13px] font-semibold text-ink">طابور العمل الذكي</h3>
         </div>
         <div className="flex items-center gap-1.5">
           {(Object.keys(PRIORITY_META) as Priority[]).map((p) =>
@@ -81,17 +81,17 @@ export const SmartQueue: React.FC<SmartQueueProps> = ({ sector, branchId }) => {
       </header>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-10 text-[12px] text-slate-400">
+        <div className="flex items-center justify-center gap-2 py-10 text-[12px] text-faint">
           <Loader2 size={14} className="animate-spin" /> جارٍ ترتيب الأعمال…
         </div>
       ) : error ? (
-        <p className="px-5 py-6 text-[12px] text-rose-600">{error}</p>
+        <p className="px-5 py-6 text-[12px] text-err-strong">{error}</p>
       ) : items.length === 0 ? (
-        <p className="px-5 py-10 text-center text-[12px] text-slate-400">
+        <p className="px-5 py-10 text-center text-[12px] text-faint">
           لا توجد أعمال مفتوحة — كل شيء منجز.
         </p>
       ) : (
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-hairline">
           {phases.map((phase, pi) => (
             <div key={pi}>
               <p className="px-5 pt-4 pb-1.5 text-eyebrow">
@@ -111,19 +111,19 @@ export const SmartQueue: React.FC<SmartQueueProps> = ({ sector, branchId }) => {
 };
 
 const QueueRow: React.FC<{ item: ScoredWork }> = ({ item }) => {
-  const meta = KIND_META[item.kind] ?? { label: item.kind, icon: ListOrdered, tone: 'bg-slate-100 text-slate-600' };
+  const meta = KIND_META[item.kind] ?? { label: item.kind, icon: ListOrdered, tone: 'bg-subtle text-muted' };
   const Icon = meta.icon;
   const p = PRIORITY_META[item.priority];
 
   return (
-    <li className="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-50 transition-colors duration-150">
+    <li className="flex items-center gap-3 px-5 py-2.5 hover:bg-subtle transition-colors duration-150">
       <span className={`w-7 h-7 shrink-0 rounded-md grid place-items-center ${meta.tone}`}>
         <Icon size={13} />
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className="text-[12.5px] font-medium text-slate-800 truncate">{item.title}</p>
-        <p className="text-[10.5px] text-slate-400 truncate">{item.reason}</p>
+        <p className="text-[12.5px] font-medium text-ink truncate">{item.title}</p>
+        <p className="text-[10.5px] text-faint truncate">{item.reason}</p>
       </div>
 
       <span className={`hidden sm:inline-flex shrink-0 px-1.5 py-0.5 rounded border text-[10px] font-semibold ${meta.tone} border-current/20`}>
@@ -135,7 +135,7 @@ const QueueRow: React.FC<{ item: ScoredWork }> = ({ item }) => {
         {p.label}
       </span>
 
-      <ArrowLeft size={12} className="shrink-0 text-slate-300" />
+      <ArrowLeft size={12} className="shrink-0 text-muted" />
     </li>
   );
 };

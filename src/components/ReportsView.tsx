@@ -143,11 +143,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ transactions }) => {
     <div className="flex-1 flex flex-col p-6 overflow-y-auto bg-canvas text-ink font-['Cairo',sans-serif]">
       <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-black text-white flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-brand-400" />
+          <h2 className="text-xl font-black text-ink flex items-center gap-2">
+            <BarChart3 className="w-6 h-6 text-brand" />
             التقارير التحليلية والرسوم البيانية (BI Dashboard)
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">متابعة الأداء المالي اللحظي، اتجاهات المبيعات، والأصناف الأكثر طلباً</p>
+          <p className="text-xs text-faint mt-0.5">متابعة الأداء المالي اللحظي، اتجاهات المبيعات، والأصناف الأكثر طلباً</p>
         </div>
 
         <button
@@ -161,63 +161,63 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ transactions }) => {
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div className="surface-card rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-slate-400">إجمالي الإيرادات</span>
-            <div className="w-9 h-9 rounded-xl bg-brand-500/10 text-brand-400 flex items-center justify-center">
+            <span className="text-xs text-faint">إجمالي الإيرادات</span>
+            <div className="w-9 h-9 rounded-xl bg-brand-soft text-brand flex items-center justify-center">
               <DollarSign className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white font-mono">{totalRevenue.toLocaleString()} <span className="text-xs font-normal text-slate-400">ر.س</span></p>
-          <p className="text-[11px] text-brand-400 mt-1 flex items-center gap-1">
+          <p className="text-2xl font-black text-ink font-mono">{totalRevenue.toLocaleString()} <span className="text-xs font-normal text-faint">ر.س</span></p>
+          <p className="text-[11px] text-brand mt-1 flex items-center gap-1">
             <TrendingUp className="w-3 h-3" /> نمو ملحوظ (+14.2%)
           </p>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div className="surface-card rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-slate-400">عدد الفواتير المسجلة</span>
+            <span className="text-xs text-faint">عدد الفواتير المسجلة</span>
             <div className="w-9 h-9 rounded-xl bg-teal-500/10 text-teal-400 flex items-center justify-center">
               <ShoppingBag className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white font-mono">{totalCount} <span className="text-xs font-normal text-slate-400">فاتورة</span></p>
-          <p className="text-[11px] text-slate-400 mt-1">مسجلة بالفرع الحالي</p>
+          <p className="text-2xl font-black text-ink font-mono">{totalCount} <span className="text-xs font-normal text-faint">فاتورة</span></p>
+          <p className="text-[11px] text-faint mt-1">مسجلة بالفرع الحالي</p>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div className="surface-card rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-slate-400">الضريبة المحصلة (15%)</span>
-            <div className="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
+            <span className="text-xs text-faint">الضريبة المحصلة (15%)</span>
+            <div className="w-9 h-9 rounded-xl bg-info-soft text-info-strong flex items-center justify-center">
               <FileText className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white font-mono">{totalTax.toLocaleString()} <span className="text-xs font-normal text-slate-400">ر.س</span></p>
-          <p className="text-[11px] text-cyan-400 mt-1">جاهزة للإقرار الضريبي</p>
+          <p className="text-2xl font-black text-ink font-mono">{totalTax.toLocaleString()} <span className="text-xs font-normal text-faint">ر.س</span></p>
+          <p className="text-[11px] text-info-strong mt-1">جاهزة للإقرار الضريبي</p>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+        <div className="surface-card rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs text-slate-400">إجمالي الخصومات المقدمة</span>
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+            <span className="text-xs text-faint">إجمالي الخصومات المقدمة</span>
+            <div className="w-9 h-9 rounded-xl bg-warn-soft text-warn-strong flex items-center justify-center">
               <TrendingUp className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-2xl font-black text-white font-mono">{totalDiscount.toLocaleString()} <span className="text-xs font-normal text-slate-400">ر.س</span></p>
-          <p className="text-[11px] text-slate-400 mt-1">عروض الولاء والتخفيضات</p>
+          <p className="text-2xl font-black text-ink font-mono">{totalDiscount.toLocaleString()} <span className="text-xs font-normal text-faint">ر.س</span></p>
+          <p className="text-[11px] text-faint mt-1">عروض الولاء والتخفيضات</p>
         </div>
       </div>
 
       {/* Recharts Analytics Dashboard */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Sales Trend Area Chart (2 Cols) */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <LineIcon className="w-4 h-4 text-brand-400" />
+        <div className="lg:col-span-2 surface-card rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-hairline/80">
+            <h3 className="text-sm font-bold text-ink flex items-center gap-2">
+              <LineIcon className="w-4 h-4 text-brand" />
               مؤشر حركة المبيعات الأسبوعية (Sales Trend)
             </h3>
-            <span className="text-[11px] text-slate-400 bg-slate-950 px-2.5 py-1 rounded-full border border-slate-800">
+            <span className="text-[11px] text-faint bg-surface px-2.5 py-1 rounded-full border border-hairline">
               تحديث لحظي
             </span>
           </div>
@@ -246,10 +246,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ transactions }) => {
         </div>
 
         {/* Payment Methods Breakdown Pie Chart */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <PieIcon className="w-4 h-4 text-cyan-400" />
+        <div className="surface-card rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-hairline/80">
+            <h3 className="text-sm font-bold text-ink flex items-center gap-2">
+              <PieIcon className="w-4 h-4 text-info-strong" />
               توزيع طرق الدفع
             </h3>
           </div>
@@ -282,9 +282,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ transactions }) => {
       </div>
 
       {/* Top Products Bar Chart */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm mb-6">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+      <div className="surface-card rounded-2xl p-5 shadow-sm mb-6">
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-hairline/80">
+          <h3 className="text-sm font-bold text-ink flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-teal-400" />
             الأصناف الأكثر مبيعاً وتحقيقاً للإيرادات (Top Products)
           </h3>
@@ -308,15 +308,15 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ transactions }) => {
       </div>
 
       {/* Transactions Table Filter */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="surface-card rounded-2xl p-4 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative flex-1 w-full md:w-auto">
-          <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-faint" />
           <input
             type="text"
             placeholder="بحث برقم الفاتورة أو اسم العميل..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl pr-10 pl-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
+            className="w-full bg-surface border border-hairline rounded-xl pr-10 pl-4 py-2.5 text-sm text-ink placeholder-faint focus:outline-none focus:border-brand"
           />
         </div>
 
@@ -324,7 +324,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ transactions }) => {
           <select
             value={filterMethod}
             onChange={(e) => setFilterMethod(e.target.value)}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-brand-500 cursor-pointer"
+            className="bg-surface border border-hairline rounded-xl px-4 py-2.5 text-xs text-ink focus:outline-none focus:border-brand cursor-pointer"
           >
             <option value="all">جميع طرق الدفع</option>
             <option value="mada">شبكة مدى</option>
@@ -337,10 +337,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ transactions }) => {
       </div>
 
       {/* Transactions List */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+      <div className="surface-card rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-xs">
-            <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 uppercase tracking-wider">
+            <thead className="bg-subtle text-faint border-b border-hairline uppercase tracking-wider">
               <tr>
                 <th className="p-4">رقم الفاتورة</th>
                 <th className="p-4">التاريخ والوقت</th>
@@ -351,34 +351,34 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ transactions }) => {
                 <th className="p-4 text-center">الإجراءات</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/80">
+            <tbody className="divide-y divide-hairline/80">
               {filteredTx.map((tx) => (
-                <tr key={tx.id} className="hover:bg-slate-800/40 transition-colors">
-                  <td className="p-4 font-mono font-bold text-white">{tx.invoiceNumber}</td>
-                  <td className="p-4 text-slate-300 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                <tr key={tx.id} className="hover:bg-hairline/40 transition-colors">
+                  <td className="p-4 font-mono font-bold text-ink">{tx.invoiceNumber}</td>
+                  <td className="p-4 text-muted flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-faint" />
                     {tx.timestamp}
                   </td>
-                  <td className="p-4 text-slate-300">{tx.customerName || 'عميل عام'}</td>
-                  <td className="p-4 text-slate-300">{tx.cashierName}</td>
+                  <td className="p-4 text-muted">{tx.customerName || 'عميل عام'}</td>
+                  <td className="p-4 text-muted">{tx.cashierName}</td>
                   <td className="p-4">
-                    <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                    <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-brand-soft text-brand border border-brand/20">
                       {tx.paymentMethod === 'mada' ? 'شبكة مدى' : tx.paymentMethod === 'apple_pay' ? 'Apple Pay' : tx.paymentMethod === 'cash' ? 'نقدي' : 'بطاقة'}
                     </span>
                   </td>
-                  <td className="p-4 font-mono font-bold text-brand-400 text-sm">{tx.total.toLocaleString()} ر.س</td>
+                  <td className="p-4 font-mono font-bold text-brand text-sm">{tx.total.toLocaleString()} ر.س</td>
                   <td className="p-4 text-center">
                     <div className="flex items-center justify-center gap-1.5">
                       <button
                         onClick={() => window.print()}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                        className="p-1.5 rounded-lg bg-subtle hover:bg-hairline text-muted transition-colors"
                         title="طباعة حرارية"
                       >
                         <Printer className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => generateInvoicePDF(tx, identity)}
-                        className="p-1.5 rounded-lg bg-brand-600/20 hover:bg-brand-600/40 text-brand-400 border border-brand-500/30 transition-colors"
+                        className="p-1.5 rounded-lg bg-brand-600/20 hover:bg-brand-600/40 text-brand border border-brand/30 transition-colors"
                         title="تحميل فاتورة PDF"
                       >
                         <Download className="w-4 h-4" />

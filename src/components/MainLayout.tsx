@@ -151,9 +151,9 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     ? `${selectedBranch.name}${selectedBranch.city ? ` · ${selectedBranch.city}` : ''}`
     : 'بلا فرع محدد';
   const verificationChip = verificationFailed
-    ? { text: 'الاشتراك لم يُتحقق', tone: 'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-200 dark:bg-amber-950 dark:border-amber-800' }
+    ? { text: 'الاشتراك لم يُتحقق', tone: 'text-warn-strong bg-warn-soft border-warn/30 dark:text-amber-200 dark:bg-amber-950 dark:border-amber-800' }
     : authority === 'server'
-      ? { text: `اشتراك ${plan || 'معتمد'}`, tone: 'text-brand-700 bg-brand-50 border-brand-200 dark:text-brand-200 dark:bg-brand-950 dark:border-brand-800' }
+      ? { text: `اشتراك ${plan || 'معتمد'}`, tone: 'text-brand-strong bg-brand-soft border-brand/30 dark:text-brand-200 dark:bg-brand-950 dark:border-brand-800' }
       : { text: 'فحص محلي', tone: 'text-muted bg-subtle border-hairline' };
 
   const [showExplanation, setShowExplanation] = React.useState(false);
@@ -299,7 +299,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             </div>
 
             {verificationFailed && (
-              <p className="text-2xs text-amber-700 dark:text-amber-200 leading-relaxed flex items-start gap-1">
+              <p className="text-2xs text-warn-strong dark:text-amber-200 leading-relaxed flex items-start gap-1">
                 <AlertTriangle size={11} className="mt-px shrink-0" />
                 لم يُتحقق من اشتراك المؤسسة هذه الجلسة؛ العرض مقتصر على افتراضات القطاع.
               </p>
@@ -405,7 +405,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
                       const n = blocked.filter((b) => b.reason === reason).length;
                       if (!n) return null;
                       const tone = reason === 'permission'
-                        ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800'
+                        ? 'bg-warn-soft text-warn-strong border-warn/30 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800'
                         : 'bg-subtle text-muted border-hairline';
                       return (
                         <span key={reason} className={`px-1.5 py-0.5 rounded border text-2xs font-semibold ${tone}`}>
@@ -462,7 +462,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           <button
             onClick={onSignOut}
             disabled={!onSignOut}
-            className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-hairline text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50 transition-colors dark:text-rose-400 dark:hover:bg-rose-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            className="mt-2.5 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md border border-hairline text-xs text-err-strong hover:bg-err-soft disabled:opacity-50 transition-colors dark:text-err-strong dark:hover:bg-rose-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             title="إنهاء الجلسة والعودة لشاشة الدخول"
           >
             <LogOut size={13} />

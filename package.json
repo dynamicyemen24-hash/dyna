@@ -1,8 +1,8 @@
 {
-  "name": "dypos-cloud",
+  "name": "dina-smart-commerce",
   "private": true,
   "version": "1.37.1",
-  "description": "DyPOS — offline-first enterprise ERP and POS (cloud + edge), multi-tenant, Arabic-first.",
+  "description": "دينا — منصة التجارة الذكية: نظام تجاري ذكي متكامل (مبيعات، مخزون، عملاء، حسابات، تقارير) يعمل دون اتصال ويُزامن عند عودة الشبكة. تطوير شركة المنافذ الذكية للبرمجيات (Smart Ports Software).",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -20,7 +20,7 @@
     "test:offline": "tsx scripts/test-offline.ts",
     "test:saas-e2e": "tsx scripts/test-saas-e2e.ts",
     "test:saas-two-subscribers": "tsx scripts/test-saas-two-subscribers.ts",
-    "ci": "npm run lint && npm run test:no-fake-data && npm run test:hardware && npm run test:credentials && npm run test:typography && npm run test:encoding && npm run test:migration-preflight && npm run test:offline && npm run test:theme && npm run test:primitives && npm run build",
+    "ci": "npm run lint && npm run test:no-fake-data && npm run test:hardware && npm run test:credentials && npm run test:typography && npm run test:encoding && npm run test:migration-preflight && npm run test:offline && npm run test:theme && npm run test:design-tokens && npm run test:primitives && npm run build",
     "ci:db": "npm run migrate:status && npm run test:gate && npm run test:rate-limit && npm run test:tenant && npm run test:mfa && npm run test:mfa-parity && npm run test:unlock && npm run test:price && npm run test:kpi && npm run test:yemen && npm run test:offline && npm run test:saas-e2e",
     "migrate": "tsx scripts/migrate.ts",
     "test:migration-preflight": "tsx scripts/test-migration-preflight.ts",
@@ -43,6 +43,8 @@
     "test:mtlogin": "tsx scripts/test-multi-tenant-login.ts",
     "test:price": "tsx scripts/test-price-authority.ts",
     "test:theme": "tsx scripts/test-theme-activation.ts",
+    "test:design-tokens": "tsx scripts/test-design-tokens.ts",
+    "migrate:theme-tokens": "tsx scripts/migrate-theme-tokens.ts",
     "test:gate": "tsx scripts/test-session-gate.ts",
     "test:rate-limit": "tsx scripts/test-rate-limit.ts",
     "test:docnum": "tsx scripts/test-document-number.ts",

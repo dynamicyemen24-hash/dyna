@@ -85,17 +85,17 @@ export const ThemeLabTool: React.FC = () => {
                   <span className="block text-2xs text-muted mt-1 leading-relaxed">{cfg.description}</span>
                   <span className="flex items-center gap-1.5 mt-2">
                     {!ins.resolved && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-2xs font-bold">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-err-soft text-err-strong border border-err/30 text-2xs font-bold">
                         <AlertTriangle size={10} aria-hidden="true" /> غير معرّفة
                       </span>
                     )}
                     {ins.resolved && ins.failures === 0 && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 border border-brand-200 text-2xs font-bold">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-brand-soft text-brand-strong border border-brand/30 text-2xs font-bold">
                         <Check size={10} aria-hidden="true" /> مطابق
                       </span>
                     )}
                     {ins.resolved && ins.failures > 0 && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-2xs font-bold">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-warn-soft text-warn-strong border border-warn/30 text-2xs font-bold">
                         <AlertTriangle size={10} aria-hidden="true" /> {ins.failures} تباين ضعيف
                       </span>
                     )}
@@ -150,7 +150,7 @@ const TokenTable: React.FC<{ ins: ThemeInspection }> = ({ ins }) => (
       })}
     </div>
     {!ins.resolved && (
-      <p className="text-2xs text-rose-700 mt-3 flex items-start gap-1.5 leading-relaxed">
+      <p className="text-2xs text-err-strong mt-3 flex items-start gap-1.5 leading-relaxed">
         <AlertTriangle size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
         بعض المتغيرات غير معرّفة — تُعرض السمة كأنها الافتراضية.
       </p>
@@ -204,8 +204,8 @@ const ContrastTable: React.FC<{ ins: ThemeInspection }> = ({ ins }) => (
                 <td className="py-2.5">
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-2xs font-bold ${
                     ok
-                      ? 'bg-brand-50 text-brand-700 border-brand-200'
-                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                      ? 'bg-brand-soft text-brand-strong border-brand/30'
+                      : 'bg-err-soft text-err-strong border-err/30'
                   }`}>
                     {ok ? <Check size={11} aria-hidden="true" /> : <AlertTriangle size={11} aria-hidden="true" />}
                     {ok ? (p.aaa ? 'AAA' : 'AA') : 'دون الحد'}

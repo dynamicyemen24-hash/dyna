@@ -1,5 +1,5 @@
-# DyPOS System Architecture
-## Enterprise Cloud & Edge Logic
+# دينا: معمارية نظام منصة التجارة الذكية
+## منطق السحابة والحافة (Cloud & Edge)
 
 ### 1. Multi-Tenant Isolation
 DyPOS uses a **Shared Database, Shared Schema** approach with **Row Level Security (RLS)**.

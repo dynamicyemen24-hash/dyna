@@ -24,17 +24,17 @@ const Field: React.FC<{
   ok?: boolean;
 }> = ({ label, value, onChange, type = 'text', disabled, autoComplete, error, ok }) => (
   <label className="block">
-    <span className="text-[11px] font-medium text-slate-600">{label}</span>
+    <span className="text-[11px] font-medium text-muted">{label}</span>
     <input
       value={value}
       onChange={(e) => onChange?.(e.target.value)}
       type={type}
       disabled={disabled}
       autoComplete={autoComplete}
-      className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-[12.5px] text-slate-800 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-900/5 disabled:bg-slate-50 disabled:text-slate-500"
+      className="mt-1 w-full px-3 py-2 rounded-lg border border-hairline bg-surface text-[12.5px] text-ink outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-900/5 disabled:bg-subtle disabled:text-muted"
     />
-    {error && <span className="text-[10.5px] text-rose-600">{error}</span>}
-    {ok && !error && <span className="text-[10.5px] text-brand-600">مطابقة</span>}
+    {error && <span className="text-[10.5px] text-err-strong">{error}</span>}
+    {ok && !error && <span className="text-[10.5px] text-brand">مطابقة</span>}
   </label>
 );
 
@@ -100,11 +100,11 @@ export const ChangePasswordView: React.FC<ChangePasswordViewProps> = ({
     <div className="min-h-screen bg-[#f6f7f9] grid place-items-center px-6 py-10" dir="rtl">
       <div className="w-full max-w-md">
         <header className="text-center mb-6">
-          <div className="w-11 h-11 mx-auto mb-3 rounded-xl bg-amber-500/10 grid place-items-center">
-            <ShieldCheck size={22} className="text-amber-600" />
+          <div className="w-11 h-11 mx-auto mb-3 rounded-xl bg-warn-soft grid place-items-center">
+            <ShieldCheck size={22} className="text-warn-strong" />
           </div>
-          <h1 className="text-[17px] font-semibold text-slate-900">يجب تغيير كلمة المرور</h1>
-          <p className="text-[12.5px] text-slate-500 mt-1.5 leading-relaxed">
+          <h1 className="text-[17px] font-semibold text-ink">يجب تغيير كلمة المرور</h1>
+          <p className="text-[12.5px] text-muted mt-1.5 leading-relaxed">
             كلمة المرور المؤقتة المرسلة مع النسخة صارت معروفة وستُستخدم إن سُرّبت.
             اختر كلمة خاصة بك قبل فتح النظام.
           </p>
@@ -124,20 +124,20 @@ export const ChangePasswordView: React.FC<ChangePasswordViewProps> = ({
                   policy && i < policy.score ? scoreColor : 'bg-slate-200'
                 }`} />
             ))}
-            {policy && <span className="text-[10.5px] text-slate-400 mr-1">{policy.score}/4</span>}
+            {policy && <span className="text-[10.5px] text-faint mr-1">{policy.score}/4</span>}
           </div>
 
           {policy && policy.problems.length > 0 && (
             <ul className="space-y-1">
               {policy.problems.map((p) => (
-                <li key={p} className="text-[11px] text-rose-600 flex items-center gap-1.5">
+                <li key={p} className="text-[11px] text-err-strong flex items-center gap-1.5">
                   <X size={10} /> {p}
                 </li>
               ))}
             </ul>
           )}
           {policy?.ok && (
-            <p className="text-[11px] text-brand-600 flex items-center gap-1.5">
+            <p className="text-[11px] text-brand flex items-center gap-1.5">
               <Check size={11} /> كلمة المرور تحقق الشروط
             </p>
           )}
@@ -148,13 +148,13 @@ export const ChangePasswordView: React.FC<ChangePasswordViewProps> = ({
             ok={matches && confirm.length > 0} />
 
           {error && (
-            <p className="text-[11.5px] text-rose-600 bg-rose-50 border border-rose-200 rounded-md px-3 py-2 flex items-start gap-1.5">
+            <p className="text-[11.5px] text-err-strong bg-err-soft border border-err/30 rounded-md px-3 py-2 flex items-start gap-1.5">
               <AlertTriangle size={12} className="mt-0.5 shrink-0" /> {error}
             </p>
           )}
 
           <button type="submit" disabled={!canSubmit}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-slate-900 text-white text-[12.5px] font-semibold hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-surface text-ink text-[12.5px] font-semibold hover:bg-hairline/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
             {busy ? <Loader2 size={14} className="animate-spin" />
               : done ? <Check size={14} />
               : <KeyRound size={14} />}
@@ -162,12 +162,12 @@ export const ChangePasswordView: React.FC<ChangePasswordViewProps> = ({
           </button>
 
           <button type="button" onClick={onSignOut}
-            className="w-full text-[11.5px] text-slate-400 hover:text-slate-700 py-1">
+            className="w-full text-[11.5px] text-faint hover:text-ink py-1">
             تسجيل الخروج والعودة لشاشة الدخول
           </button>
         </form>
 
-        <p className="text-[10.5px] text-slate-400 text-center mt-4 flex items-center justify-center gap-1.5">
+        <p className="text-[10.5px] text-faint text-center mt-4 flex items-center justify-center gap-1.5">
           <Fingerprint size={11} />
           التخزين: PBKDF2-SHA512 بـ 210,000 دورة وملح فريد لكل مستخدم
         </p>

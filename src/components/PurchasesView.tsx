@@ -101,7 +101,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ suppliers, purchas
 
             <div className="pt-3 border-t border-hairline flex items-center justify-between text-xs">
               <span className="text-faint">المستحق للمورد:</span>
-              <span className="text-numeric font-bold text-amber-600">{sup.balanceDue.toLocaleString()} ر.س</span>
+              <span className="text-numeric font-bold text-warn-strong">{sup.balanceDue.toLocaleString()} ر.س</span>
             </div>
           </div>
         ))}
@@ -199,7 +199,7 @@ export const PurchasesView: React.FC<PurchasesViewProps> = ({ suppliers, purchas
             {submitError && (
               <p
                 role="alert"
-                className="flex-1 text-right text-[11px] leading-relaxed font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"
+                className="flex-1 text-right text-[11px] leading-relaxed font-semibold text-err-strong bg-err-soft border border-err/30 rounded-lg px-3 py-2"
               >
                 {submitError}
               </p>

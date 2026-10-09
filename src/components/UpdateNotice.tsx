@@ -88,7 +88,7 @@ export const UpdateNotice: React.FC = () => {
           type="button"
           onClick={applyUpdate}
           disabled={applying}
-          className="rounded-xl bg-[var(--t-brand)] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-brand)]"
+          className="rounded-xl bg-[var(--t-brand)] px-3 py-1.5 text-xs font-bold text-ink disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--t-brand)]"
         >
           {applying ? 'جارٍ التحديث…' : 'تطبيق الآن'}
         </button>

@@ -151,8 +151,8 @@ export const CommissionsView: React.FC = () => {
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <Stat label="عدد العمولات" value={String(items.length)} icon={Percent} />
-        <Stat label="مستحقة (غير مصروفة)" value={sar(totals.accrued)} tone="text-amber-400" icon={Wallet} />
-        <Stat label="مصروفة" value={sar(totals.paid)} tone="text-brand-400" icon={CheckCheck} />
+        <Stat label="مستحقة (غير مصروفة)" value={sar(totals.accrued)} tone="text-warn-strong" icon={Wallet} />
+        <Stat label="مصروفة" value={sar(totals.paid)} tone="text-brand" icon={CheckCheck} />
       </div>
 
       <Card className="overflow-hidden">
@@ -162,7 +162,7 @@ export const CommissionsView: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-right border-collapse">
                 <thead>
-                  <tr className="bg-slate-800/30 text-slate-500 text-xs font-black border-b border-slate-800">
+                  <tr className="bg-subtle/30 text-muted text-xs font-black border-b border-hairline">
                     <th className="p-4">الموظف</th>
                     <th className="p-4">مبيعات الفترة</th>
                     <th className="p-4">نسبة العمولة</th>
@@ -171,9 +171,9 @@ export const CommissionsView: React.FC = () => {
                     <th className="p-4"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800">
+                <tbody className="divide-y divide-hairline">
                   {items.map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-800/20">
+                    <tr key={c.id} className="hover:bg-hairline/60/20">
                       <td className="p-4 font-bold">
                         {c.employee_name || c.employee_id}
                       </td>
@@ -182,15 +182,15 @@ export const CommissionsView: React.FC = () => {
                       <td className="p-4 font-black text-fuchsia-300">{sar(c.amount)}</td>
                       <td className="p-4">
                         <Pill tone={c.status === 'paid'
-                          ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
-                          : 'bg-amber-500/10 text-amber-300 border-amber-500/30'}>
+                          ? 'bg-brand-soft text-brand-strong border-brand/30'
+                          : 'bg-warn-soft text-warn-strong border-warn/30'}>
                           {c.status === 'paid' ? 'مصروفة' : 'مستحقة'}
                         </Pill>
                       </td>
                       <td className="p-4">
                         {c.status !== 'paid' && (
                           <button onClick={() => settle(c)}
-                            className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-fuchsia-600 hover:bg-fuchsia-500 text-white">
+                            className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-fuchsia-600 hover:bg-fuchsia-500 text-ink">
                             صرف
                           </button>
                         )}
@@ -228,7 +228,7 @@ export const CommissionsView: React.FC = () => {
             <span className="text-sm font-bold text-fuchsia-200">قيمة العمولة المحسوبة</span>
             <span className="text-2xl font-black text-fuchsia-300">{sar(preview)}</span>
           </div>
-          <p className="sm:col-span-2 text-xs text-slate-500">
+          <p className="sm:col-span-2 text-xs text-muted">
             الفترة: {MONTHS[Number(month) - 1]} {year} — تُحفظ العمولة مرة واحدة لكل موظف في الفترة نفسها.
           </p>
         </div>

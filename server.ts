@@ -197,7 +197,7 @@ export async function createApp(): Promise<Express> {
         database: 'Neon Serverless PostgreSQL (dyposdb)',
         schema: 'dypos',
         ownerCompany: 'شركة المنافذ الذكية للبرمجيات (Smart Ports Software)',
-        productBrand: 'DyPOS Enterprise Cloud & Edge',
+        productBrand: 'دينا: منصة التجارة الذكية',
         currentTime: dbRes.rows[0].current_time,
         latencyMs,
         tablesCount: tablesRes.rows.length,
@@ -211,7 +211,7 @@ export async function createApp(): Promise<Express> {
         database: 'Neon Serverless PostgreSQL (dyposdb) — unreachable',
         schema: 'dypos',
         ownerCompany: 'شركة المنافذ الذكية للبرمجيات (Smart Ports Software)',
-        productBrand: 'DyPOS Enterprise Cloud & Edge',
+        productBrand: 'دينا: منصة التجارة الذكية',
         error: err.message,
         hint: 'Using offline-first client storage (IndexedDB) and Firestore fallback.',
         latencyMs: Date.now() - startTime,
@@ -1069,7 +1069,7 @@ app.get('/api/tenant/context', async (req, res) => {
         });
       }
 
-      const systemInstruction = `أنت المساعد الذكي لنظام DyPOS من تطوير شركة المنافذ الذكية للبرمجيات (Smart Ports Software).
+      const systemInstruction = `أنت المساعد الذكي لمنصة «دينا: منصة التجارة الذكية» من تطوير شركة المنافذ الذكية للبرمجيات (Smart Ports Software).
 مهمتك تحليل البيانات المالية والمخزون والمبيعات، وتقديم توصيات استراتيجية دقيقة وموثوقة للمسؤولين وأمناء الصندوق باللغة العربية والإنجليزية. لا تذكر أي تفاصيل تقنية عن البنية التحتية أو قواعد البيانات في ردودك.
 السياق الحالي للنظام: ${JSON.stringify(context || {})}`;
 

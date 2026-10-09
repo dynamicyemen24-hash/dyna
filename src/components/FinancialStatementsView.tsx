@@ -125,7 +125,7 @@ const Delta: React.FC<{ value: number | null; label: string; invert?: boolean }>
 }) => {
   if (value === null || !Number.isFinite(value)) {
     return (
-      <span className="text-[11px] text-slate-500 flex items-center gap-1">
+      <span className="text-[11px] text-muted flex items-center gap-1">
         <HelpCircle className="w-3 h-3" /> لا توجد فترة سابقة للمقارنة
       </span>
     );
@@ -135,7 +135,7 @@ const Delta: React.FC<{ value: number | null; label: string; invert?: boolean }>
   const good = invert ? value <= 0 : value >= 0;
   const Icon = value >= 0 ? TrendingUp : TrendingDown;
   return (
-    <span className={`text-[11px] flex items-center gap-1 ${good ? 'text-brand-400' : 'text-rose-400'}`}>
+    <span className={`text-[11px] flex items-center gap-1 ${good ? 'text-brand' : 'text-err-strong'}`}>
       <Icon className="w-3 h-3" />
       {value >= 0 ? '+' : ''}{value}% {label}
     </span>
@@ -151,21 +151,21 @@ const Stat: React.FC<{
   isCurrency?: boolean;
 }> = ({ label, value, hint, icon: Icon, tone = 'positive', isCurrency = true }) => {
   const tones: Record<string, string> = {
-    positive: 'bg-brand-500/10 text-brand-400',
-    sky: 'bg-sky-500/10 text-sky-400',
-    amber: 'bg-amber-500/10 text-amber-400',
+    positive: 'bg-brand-soft text-brand',
+    sky: 'bg-info-soft text-info-strong',
+    amber: 'bg-warn-soft text-warn-strong',
     violet: 'bg-violet-500/10 text-violet-400',
-    rose: 'bg-rose-500/10 text-rose-400',
+    rose: 'bg-err-soft text-err-strong',
   };
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+    <div className="surface-card rounded-2xl p-5 shadow-sm">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-slate-400">{label}</span>
+        <span className="text-xs text-faint">{label}</span>
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${tones[tone]}`}>
           <Icon className="w-5 h-5" />
         </div>
       </div>
-      <p className="text-2xl font-black text-white font-mono">
+      <p className="text-2xl font-black text-ink font-mono">
         {value === null ? '—' : isCurrency ? money(value) : value.toLocaleString('ar-SA')}
       </p>
       {hint && <div className="mt-1">{hint}</div>}
@@ -300,13 +300,13 @@ export const FinancialStatementsView: React.FC = () => {
 
   if (error) {
     return (
-      <div className="flex-1 flex items-center justify-center p-6 bg-slate-950">
-        <div role="alert" className="max-w-md text-center bg-slate-900 border border-rose-500/30 rounded-2xl p-8">
-          <AlertTriangle className="w-8 h-8 text-rose-400 mx-auto mb-3" />
-          <h3 className="text-sm font-bold text-white mb-1">تعذّر تحميل القوائم المالية</h3>
-          <p className="text-xs text-slate-400">{error}</p>
+      <div className="flex-1 flex items-center justify-center p-6 bg-surface">
+        <div role="alert" className="max-w-md text-center bg-surface border border-err/30 rounded-2xl p-8">
+          <AlertTriangle className="w-8 h-8 text-err-strong mx-auto mb-3" />
+          <h3 className="text-sm font-bold text-ink mb-1">تعذّر تحميل القوائم المالية</h3>
+          <p className="text-xs text-faint">{error}</p>
           <button onClick={() => void load()}
-            className="mt-4 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold">
+            className="mt-4 px-4 py-2 rounded-xl bg-subtle hover:bg-hairline text-ink text-xs font-semibold">
             إعادة المحاولة
           </button>
         </div>
@@ -319,11 +319,11 @@ export const FinancialStatementsView: React.FC = () => {
       {/* ---------- Header and period controls ---------- */}
       <div className="mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-black text-white flex items-center gap-2">
-            <Scale className="w-6 h-6 text-brand-400" />
+          <h2 className="text-xl font-black text-ink flex items-center gap-2">
+            <Scale className="w-6 h-6 text-brand" />
             القوائم المالية التفصيلية
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-faint mt-0.5">
             قائمة الدخل والتدفقات النقدية — محسوبة في قاعدة البيانات من الفواتير والتكاليف المسجّلة
           </p>
         </div>
@@ -332,23 +332,23 @@ export const FinancialStatementsView: React.FC = () => {
           <label className="sr-only" htmlFor="fin-from">من تاريخ</label>
           <input id="fin-from" type="date" value={range.from}
             onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
-            className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-brand-500 outline-none" />
-          <span className="text-slate-600 text-xs">إلى</span>
+            className="surface-card rounded-xl px-3 py-2 text-xs text-ink focus:border-brand outline-none" />
+          <span className="text-muted text-xs">إلى</span>
           <label className="sr-only" htmlFor="fin-to">إلى تاريخ</label>
           <input id="fin-to" type="date" value={range.to}
             onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
-            className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-brand-500 outline-none" />
+            className="surface-card rounded-xl px-3 py-2 text-xs text-ink focus:border-brand outline-none" />
 
           <select value={months} onChange={(e) => setMonths(Number(e.target.value))}
             aria-label="عدد الأشهر في الاتجاه"
-            className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:border-brand-500 outline-none">
+            className="surface-card rounded-xl px-3 py-2 text-xs text-ink focus:border-brand outline-none">
             <option value={6}>آخر 6 أشهر</option>
             <option value={12}>آخر 12 شهرًا</option>
             <option value={24}>آخر 24 شهرًا</option>
           </select>
 
           <button onClick={() => void load()} disabled={loading}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50">
+            className="px-3 py-2 rounded-xl bg-subtle hover:bg-hairline text-ink text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             تحديث
           </button>
@@ -368,11 +368,11 @@ export const FinancialStatementsView: React.FC = () => {
           net profit figure without seeing this caveat is the exact failure
           this module exists to prevent. */}
       {caveats.length > 0 && (
-        <div className="mb-5 rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+        <div className="mb-5 rounded-2xl border border-warn/30 bg-amber-500/5 p-4">
           <div className="flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-warn-strong mt-0.5 shrink-0" />
             <div className="space-y-1">
-              <p className="text-xs font-bold text-amber-300">
+              <p className="text-xs font-bold text-warn-strong">
                 القائمة غير مكتملة — اقرأ هذه الملاحظات قبل الاستشهاد بالأرقام
               </p>
               <ul className="space-y-0.5">
@@ -388,7 +388,7 @@ export const FinancialStatementsView: React.FC = () => {
       {loading && !summary && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-[118px] bg-slate-900 border border-slate-800 rounded-2xl animate-pulse" />
+            <div key={i} className="h-[118px] surface-card rounded-2xl animate-pulse" />
           ))}
         </div>
       )}
@@ -400,18 +400,18 @@ export const FinancialStatementsView: React.FC = () => {
             <Stat label="صافي الإيرادات" value={summary.revenue} icon={TrendingUp} tone="positive"
               hint={<Delta value={summary.change.revenue} label="عن الفترة السابقة" />} />
             <Stat label="مجمل الربح" value={summary.grossProfit} icon={Wallet} tone="sky"
-              hint={<span className="text-[11px] text-slate-400">
+              hint={<span className="text-[11px] text-faint">
                 الهامش {summary.grossMarginPct === null ? '—' : `${summary.grossMarginPct}%`}
               </span>} />
             <Stat label="المصروفات التشغيلية" value={summary.operatingExpenses} icon={ArrowLeftRight} tone="amber"
               hint={summary.completeness.expensesRecorded
                 ? <Delta value={summary.change.expenses} label="عن الفترة السابقة" invert />
-                : <span className="text-[11px] text-amber-400 flex items-center gap-1">
+                : <span className="text-[11px] text-warn-strong flex items-center gap-1">
                     <HelpCircle className="w-3 h-3" /> لا توجد مصروفات مسجّلة
                   </span>} />
             <Stat label="صافي الربح / (الخسارة)" value={summary.netProfit} icon={Scale}
               tone={summary.netProfit >= 0 ? 'positive' : 'rose'}
-              hint={<span className={`text-[11px] ${summary.netProfit >= 0 ? 'text-brand-400' : 'text-rose-400'}`}>
+              hint={<span className={`text-[11px] ${summary.netProfit >= 0 ? 'text-brand' : 'text-err-strong'}`}>
                 الهامش {summary.netMarginPct === null ? '—' : `${summary.netMarginPct}%`}
                 {summary.completeness.cogsComplete
                   ? <CheckCircle2 className="w-3 h-3 inline mr-1" />
@@ -426,7 +426,7 @@ export const FinancialStatementsView: React.FC = () => {
             <Stat label="الرصيد التراكمي الختامي" value={summary.cash.closing} icon={PiggyBank} tone="violet" />
             <Stat label="عدد الفواتير" value={summary.invoices} icon={Wallet} tone="sky"
               isCurrency={false}
-              hint={<span className="text-[11px] text-slate-400">
+              hint={<span className="text-[11px] text-faint">
                 {summary.unitsSold.toLocaleString('ar-SA')} قطعة مباعة
               </span>} />
           </div>
@@ -435,13 +435,13 @@ export const FinancialStatementsView: React.FC = () => {
               Only months that actually traded are plotted. A twelve-point line
               through eleven empty months would flatter the trend by hiding the
               gaps — the empty months are stated in the caption instead. */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-6">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-brand-400" />
+          <div className="surface-card rounded-2xl p-5 mb-6">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-hairline/80">
+              <h3 className="text-sm font-bold text-ink flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-brand" />
                 الاتجاه الشهري — الإيراد مقابل الربح
               </h3>
-              <span className="text-[11px] text-slate-400 bg-slate-950 px-2.5 py-1 rounded-full border border-slate-800">
+              <span className="text-[11px] text-faint bg-surface px-2.5 py-1 rounded-full border border-hairline">
                 {activeMonths} من {trend.length} شهرًا فيه حركة
               </span>
             </div>
@@ -449,9 +449,9 @@ export const FinancialStatementsView: React.FC = () => {
             {activeSeries.length === 0 ? (
               <div className="h-64 grid place-items-center text-center px-6">
                 <div>
-                  <HelpCircle className="w-7 h-7 text-slate-600 mx-auto mb-2" />
-                  <p className="text-xs text-slate-400">لا توجد مبيعات مسجّلة في الأشهر المطلوبة</p>
-                  <p className="text-[11px] text-slate-500 mt-1">
+                  <HelpCircle className="w-7 h-7 text-muted mx-auto mb-2" />
+                  <p className="text-xs text-faint">لا توجد مبيعات مسجّلة في الأشهر المطلوبة</p>
+                  <p className="text-[11px] text-muted mt-1">
                     لا نعرض أصفارًا مكان غياب البيانات — نفترض أن هذه أشهر خاملة
                   </p>
                 </div>
@@ -487,19 +487,19 @@ export const FinancialStatementsView: React.FC = () => {
           </div>
 
           {/* ---------- The waterfall bridge ---------- */}
-          <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-6">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <div className="lg:col-span-2 surface-card rounded-2xl p-5 mb-6">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-hairline/80">
+              <h3 className="text-sm font-bold text-ink flex items-center gap-2">
                 <Scale className="w-4 h-4 text-violet-400" />
                 من الإيراد إلى صافي الربح
               </h3>
-              <span className="text-[11px] text-slate-400 bg-slate-950 px-2.5 py-1 rounded-full border border-slate-800">
+              <span className="text-[11px] text-faint bg-surface px-2.5 py-1 rounded-full border border-hairline">
                 جسر قائمة الدخل
               </span>
             </div>
 
             {waterfall.length === 0 ? (
-              <div className="h-64 grid place-items-center text-xs text-slate-500">
+              <div className="h-64 grid place-items-center text-xs text-muted">
                 لا توجد بنود لاحتساب الجسر في هذه الفترة
               </div>
             ) : (
@@ -536,13 +536,13 @@ export const FinancialStatementsView: React.FC = () => {
           </div>
 
           {/* ---------- Expense mix ---------- */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 mb-6">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <ArrowLeftRight className="w-4 h-4 text-amber-400" />
+          <div className="surface-card rounded-2xl p-5 mb-6">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-hairline/80">
+              <h3 className="text-sm font-bold text-ink flex items-center gap-2">
+                <ArrowLeftRight className="w-4 h-4 text-warn-strong" />
                 توزيع المصروفات التشغيلية
               </h3>
-              <span className="text-[11px] text-slate-400 bg-slate-950 px-2.5 py-1 rounded-full border border-slate-800">
+              <span className="text-[11px] text-faint bg-surface px-2.5 py-1 rounded-full border border-hairline">
                 {mixRecorded ? money(mix.reduce((s, m) => s + m.amount, 0)) : 'لا توجد مصروفات'}
               </span>
             </div>
@@ -550,9 +550,9 @@ export const FinancialStatementsView: React.FC = () => {
             {!mixRecorded || mix.length === 0 ? (
               <div className="h-64 grid place-items-center text-center px-6">
                 <div>
-                  <HelpCircle className="w-7 h-7 text-slate-600 mx-auto mb-2" />
-                  <p className="text-xs text-slate-400">لم تُسجَّل أي مصروفات تشغيلية في هذه الفترة</p>
-                  <p className="text-[11px] text-slate-500 mt-1">
+                  <HelpCircle className="w-7 h-7 text-muted mx-auto mb-2" />
+                  <p className="text-xs text-faint">لم تُسجَّل أي مصروفات تشغيلية في هذه الفترة</p>
+                  <p className="text-[11px] text-muted mt-1">
                     لهذا السبب يعرض صافي الربح رقمًا غير مكتمل — مسجّل المصروفات هو من يعالجه
                   </p>
                 </div>
@@ -577,39 +577,39 @@ export const FinancialStatementsView: React.FC = () => {
           </div>
 
           {/* ---------- The P&L itself ---------- */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden mb-6">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
-              <h3 className="text-sm font-bold text-white">قائمة الدخل — الفترة المحددة</h3>
-              <span className="text-[11px] text-slate-400">
+          <div className="surface-card rounded-2xl overflow-hidden mb-6">
+            <div className="p-4 border-b border-hairline flex items-center justify-between flex-wrap gap-2">
+              <h3 className="text-sm font-bold text-ink">قائمة الدخل — الفترة المحددة</h3>
+              <span className="text-[11px] text-faint">
                 {range.from} — {range.to} · الريال السعودي
               </span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-right text-xs">
-                <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800">
+                <thead className="bg-subtle text-faint border-b border-hairline">
                   <tr>
                     <th className="p-3.5">البند</th>
                     <th className="p-3.5 text-left">المبلغ (ر.س)</th>
                     <th className="p-3.5 text-left w-32">من الإيراد</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/70">
+                <tbody className="divide-y divide-hairline/70">
                   {pnl?.lines.map((l) => (
                     <tr key={l.code}
-                      className={`hover:bg-slate-800/40 transition-colors ${l.emphasis ? 'bg-slate-800/25' : ''}`}>
-                      <td className={`p-3.5 ${l.indent ? 'pr-9 text-slate-300' : 'font-bold text-white'}`}>
+                      className={`hover:bg-hairline/40 transition-colors ${l.emphasis ? 'bg-subtle/25' : ''}`}>
+                      <td className={`p-3.5 ${l.indent ? 'pr-9 text-muted' : 'font-bold text-ink'}`}>
                         {l.label}
                         {l.emphasis && l.code === 'net_profit' && summary?.completeness.expensesRecorded === false && (
-                          <HelpCircle className="w-3 h-3 text-amber-400 inline mr-1.5" />
+                          <HelpCircle className="w-3 h-3 text-warn-strong inline mr-1.5" />
                         )}
                       </td>
                       <td className={`p-3.5 text-left font-mono font-bold ${
                         l.code === 'net_profit'
-                          ? (l.amount >= 0 ? 'text-brand-400' : 'text-rose-400')
-                          : l.amount < 0 ? 'text-slate-400' : 'text-white'}`}>
+                          ? (l.amount >= 0 ? 'text-brand' : 'text-err-strong')
+                          : l.amount < 0 ? 'text-faint' : 'text-ink'}`}>
                         {l.amount.toLocaleString('ar-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
-                      <td className="p-3.5 text-left text-slate-400 font-mono">
+                      <td className="p-3.5 text-left text-faint font-mono">
                         {l.pctOfRevenue.toFixed(1)}%
                       </td>
                     </tr>
@@ -621,13 +621,13 @@ export const FinancialStatementsView: React.FC = () => {
 
           {/* ---------- Cash flow ---------- */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Landmark className="w-4 h-4 text-sky-400" />
+            <div className="surface-card rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-hairline/80">
+                <h3 className="text-sm font-bold text-ink flex items-center gap-2">
+                  <Landmark className="w-4 h-4 text-info-strong" />
                   التدفقات النقدية
                 </h3>
-                <span className="text-[11px] text-slate-400 bg-slate-950 px-2.5 py-1 rounded-full border border-slate-800">
+                <span className="text-[11px] text-faint bg-surface px-2.5 py-1 rounded-full border border-hairline">
                   دخول مقابل خروج
                 </span>
               </div>
@@ -653,8 +653,8 @@ export const FinancialStatementsView: React.FC = () => {
               ) : (
                 <div className="h-64 grid place-items-center text-center px-6">
                   <div>
-                    <HelpCircle className="w-7 h-7 text-slate-600 mx-auto mb-2" />
-                    <p className="text-xs text-slate-400">لا توجد حركة نقدية مسجّلة في هذه الفترة</p>
+                    <HelpCircle className="w-7 h-7 text-muted mx-auto mb-2" />
+                    <p className="text-xs text-faint">لا توجد حركة نقدية مسجّلة في هذه الفترة</p>
                   </div>
                 </div>
               )}
@@ -662,7 +662,7 @@ export const FinancialStatementsView: React.FC = () => {
               {flow && (
                 <>
                   <table className="w-full text-right text-[11.5px] mt-4">
-                    <tbody className="divide-y divide-slate-800/70">
+                    <tbody className="divide-y divide-hairline/70">
                       {([
                         ['الرصيد النقدي عند بداية الفترة', flow.openingCash],
                         ['إجمالي النقد الداخل', flow.totalInflow],
@@ -672,9 +672,9 @@ export const FinancialStatementsView: React.FC = () => {
                       ] as Array<[string, number]>).map(([label, value], i) => {
                         const isTotal = i === 4;
                         return (
-                          <tr key={label} className={isTotal ? 'bg-slate-800/40 font-bold' : ''}>
-                            <td className="py-2 pl-2 text-slate-300">{label}</td>
-                            <td className={`py-2 text-left font-mono ${value < 0 ? 'text-rose-400' : 'text-white'}`}>
+                          <tr key={label} className={isTotal ? 'bg-hairline/40 font-bold' : ''}>
+                            <td className="py-2 pl-2 text-muted">{label}</td>
+                            <td className={`py-2 text-left font-mono ${value < 0 ? 'text-err-strong' : 'text-ink'}`}>
                               {value.toLocaleString('ar-SA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                           </tr>
@@ -687,28 +687,28 @@ export const FinancialStatementsView: React.FC = () => {
                       because nothing has been recorded, which is a different
                       fact from "the business spent nothing". */}
                   {(!flow.investingRecorded || !flow.financingRecorded) && (
-                    <p className="mt-3 text-[10.5px] text-amber-300/80 leading-relaxed">
+                    <p className="mt-3 text-[10.5px] text-warn-strong/80 leading-relaxed">
                       <HelpCircle className="w-3 h-3 inline mr-1" />
                       {!flow.investingRecorded && 'لا توجد حركات استثمارية مسجّلة. '}
                       {!flow.financingRecorded && 'لا توجد حركات تمويلية مسجّلة. '}
                       قسم التدفق النقدي غير مكتمل ما دام ذلك.
                     </p>
                   )}
-                  <p className="mt-2 text-[10.5px] text-slate-500">{flow.basis}</p>
+                  <p className="mt-2 text-[10.5px] text-muted">{flow.basis}</p>
                 </>
               )}
             </div>
 
             {/* ---------- Margin trend — the number that decides whether the business works */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800/80">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <div className="surface-card rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-hairline/80">
+                <h3 className="text-sm font-bold text-ink flex items-center gap-2">
                   <Wallet className="w-4 h-4 text-violet-400" />
                   مسار الهوامش
                 </h3>
               </div>
               {activeSeries.length === 0 ? (
-                <div className="h-64 grid place-items-center text-xs text-slate-500">
+                <div className="h-64 grid place-items-center text-xs text-muted">
                   لا توجد شهور بها مبيعات لعرض الهوامش
                 </div>
               ) : (

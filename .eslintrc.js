@@ -1,4 +1,4 @@
-/** ESLint configuration for DyPOS v1.37.1 */
+/** ESLint configuration for دينا (منصة التجارة الذكية) v1.37.1 */
 const reactPlugin = require("eslint-plugin-react");
 const tsParser = require("@typescript-eslint/parser");
 
