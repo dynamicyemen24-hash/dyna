@@ -244,6 +244,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: dist-verified
+          # v4 unpacks a named artifact into a folder of that name by default, so
+          # the bundle's CONTENTS landed in the workspace root and the guard below
+          # (`test -f dist/index.html`) found nothing — the exact failure that
+          # silently skipped every real publish. Pinning the destination restores
+          # the `dist/` layout the build produced and the guard checks.
+          path: dist
 
       # Apply numbered database migrations before the application is exposed.
       #
