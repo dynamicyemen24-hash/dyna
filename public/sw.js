@@ -91,7 +91,7 @@ self.addEventListener('fetch', (event) => {
 
   // Only check for updates on root navigation (not /assets/ or /api/)
   if (url.pathname === '/') {
-    checkForUpdate().then((update) => {
+    checkForUpdate().then(async (update) => {
       if (update) {
         pendingUpdate = update;
         // Post message to all clients so the shell can prompt the operator
