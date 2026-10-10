@@ -28,7 +28,8 @@
  */
 import React, { useState } from 'react';
 import { apiPost, TOKEN_KEY, tenantId } from '../services/dyposApi';
-import { PrimaryButton, Field, Input } from './ui/Primitives';
+import { PrimaryButton, Field, Input, StandardProgress } from './ui/Primitives';
+import { Check, Loader2 } from 'lucide-react';
 import { industryProfiles } from '../config/industryProfiles';
 import type { BaseLoginUser, AuthedSession } from './LoginView';
 
@@ -53,6 +54,14 @@ const COUNTRIES: OnboardingCountry[] = [
   { code: 'EG', nameAr: 'مصر', currency: 'EGP', vat: 14 },
 ];
 
+/** The visible phases of the final submit, in order. */
+const PHASES = [
+  'إنشاء الحساب',
+  'فتح الجلسة',
+  'تهيئة ملف المنشأة',
+  'فتح الشاشة الرئيسية',
+];
+
 interface Props {
   /** The shell's `onAuthenticated` — opens the main screen with the session. */
   onLogin?: (user: BaseLoginUser) => void;
@@ -70,7 +79,7 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
   const [sector, setSector] = useState('retail');
   const [country, setCountry] = useState('SA');
   const [saving, setSaving] = useState(false);
-  const [phase, setPhase] = useState('');
+  const [phaseIndex, setPhaseIndex] = useState(-1);
   const [error, setError] = useState('');
 
   const activeCountry = COUNTRIES.find((c) => c.code === country) ?? COUNTRIES[0];
@@ -103,7 +112,7 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
     const username = form.username.trim().toLowerCase();
     try {
       // 1 — create the owner inside the pinned tenant.
-      setPhase('جارٍ إنشاء الحساب…');
+      setPhaseIndex(0);
       await apiPost('/api/auth/register', {
         name: form.name.trim(),
         email: form.email.trim(),
@@ -112,7 +121,7 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
       });
 
       // 2 — real sign-in; registration issues no token by itself.
-      setPhase('جارٍ فتح الجلسة…');
+      setPhaseIndex(1);
       const res = await apiPost<{ session: AuthedSession }>('/api/auth/login', {
         username,
         password: form.password,
@@ -125,7 +134,7 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
       // A failure here must not trap a freshly created owner outside the
       // app: the account and session are already real, and the sector can
       // be applied again from الإعدادات by an authenticated administrator.
-      setPhase('جارٍ تهيئة ملف المنشأة…');
+      setPhaseIndex(2);
       try {
         await apiPost('/api/db/tenant/profile', {
           profileId: sector,
@@ -138,7 +147,7 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
       }
 
       // 4 — straight into the main screen.
-      setPhase('جارٍ فتح الشاشة الرئيسية…');
+      setPhaseIndex(3);
       onLogin?.({
         name: s.user.name,
         role: s.user.role,
@@ -152,7 +161,7 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
       // silently.
       setError(err instanceof Error ? err.message : 'تعذّر إتمام التسجيل');
       setSaving(false);
-      setPhase('');
+      setPhaseIndex(-1);
     }
   };
 
@@ -256,8 +265,29 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
             التالي — تهيئة المنشأة
           </PrimaryButton>
         </form>
+      ) : saving ? (
+        <div className="space-y-4" role="status" aria-live="polite">
+          <StandardProgress
+            label={`الخطوة ${phaseIndex + 1} من ${PHASES.length} — ${PHASES[phaseIndex]}`}
+            detail="لا تُغلق النافذة: يتم إنشاء الحساب ثم فتح الجلسة ثم تهيئة المنشأة"
+            value={((phaseIndex + 1) / PHASES.length) * 100}
+          />
+          <ul className="rounded-xl border border-hairline divide-y divide-hairline/60">
+            {PHASES.map((p, i) => (
+              <li key={p} className="flex items-center gap-2 px-3 py-2 text-xs">
+                {i < phaseIndex ? (
+                  <Check className="w-4 h-4 text-ok" aria-hidden="true" />
+                ) : i === phaseIndex ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-brand" aria-hidden="true" />
+                ) : (
+                  <span className="w-4 h-4 text-center text-faint" aria-hidden="true">·</span>
+                )}
+                <span className={i <= phaseIndex ? 'text-ink font-semibold' : 'text-muted'}>{p}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : (
-
         <form className="space-y-5" onSubmit={finish} noValidate>
           <Field label="دولة النشاط">
             <select
@@ -309,7 +339,7 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
 
           <div className="flex items-center gap-3">
             <PrimaryButton type="submit" disabled={saving} className="flex-1">
-              {saving ? phase || 'جارٍ الحفظ…' : 'إنهاء التسجيل وفتح الشاشة'}
+              {saving ? 'جارٍ التنفيذ…' : 'إنهاء التسجيل وفتح الشاشة'}
             </PrimaryButton>
             <button
               type="button"

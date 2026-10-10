@@ -862,6 +862,7 @@ return (
                   authError={authError}
                   setAuthError={setAuthError}
                   authBusy={authBusy}
+                  successPending={authedUser !== null}
                   onSubmit={handleLoginSubmit}
                   onTwoFactorSuccess={() => setAuthStep('2fa')}
                   onAccountUnlock={() => setAuthStep('unlock_account')}
@@ -1173,6 +1174,13 @@ interface CredentialsFormProps {
   authError: string;
   setAuthError: (v: string) => void;
   authBusy: boolean;
+  /**
+   * Set once the credential has VERIFIED but the shell has not yet taken over
+   * (the `onLogin` hand-off happens a tick later). Without it the button kept
+   * saying "جارٍ التحقق" through the moment of success, so the operator could
+   * not tell verification from a slow network.
+   */
+  successPending?: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onTwoFactorSuccess: () => void;
   onAccountUnlock: () => void;
@@ -1211,6 +1219,7 @@ const CredentialsForm = React.forwardRef<HTMLInputElement, CredentialsFormProps>
       authError,
       setAuthError,
       authBusy,
+      successPending,
       onSubmit,
       onTwoFactorSuccess,
       onAccountUnlock,
@@ -1325,7 +1334,9 @@ const CredentialsForm = React.forwardRef<HTMLInputElement, CredentialsFormProps>
               {authBusy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
               <span>
                 {authBusy
-                  ? 'جارٍ التحقق من كلمة المرور…'
+                  ? (successPending
+                    ? 'تم التحقق — جارٍ فتح مساحة العمل…'
+                    : 'جارٍ التحقق من كلمة المرور…')
                   : cooldownUntil !== null && Date.now() < cooldownUntil
                     ? `تهدئة — حاول بعد ${Math.ceil((cooldownUntil - Date.now()) / 1_000)} ث`
                     : consecutiveFails > 0 && consecutiveFails < 6
