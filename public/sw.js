@@ -1,20 +1,21 @@
 /**
  * ══ CACHE NAME IS A VERSION ════════════════════════════════════════════════
- * Bumped to v7 because `strategy` added proactive update checking + interactive
- * update prompt: a single missing font no longer fails install, but an incomplete
- * hashed bundle set still must not activate. The worker now checks for updates
- * on every visit and prompts the operator before activating a new worker.
+ * Bumped to v8 because a syntax fault in the previous worker (an `await` inside
+ * a non-async `.then`) crashed the whole page; the worker was fixed AND the
+ * cache was bumped so every till that already installed v7 drops it. The worker
+ * checks for updates on every visit and prompts the operator before activating.
  *
  * It has to be bumped whenever the strategy changes, because `activate` deletes
  * every cache whose name is not this one. Without that, a till that has been
  * open since the previous release keeps serving the shell from the OLD
- * strategy's cache indefinitely.
+ * strategy's cache indefinitely — which is exactly how a broken build kept
+ * being served after the fix shipped.
  *
  * NEW: `pendingUpdate` message data can be sent from the shell via
  * `self.clients.matchAll({ type: 'client' }).then(clients => ...)` to prompt
  * the operator before `skipWaiting()`.
  */
-const CACHE_NAME = 'dypos-offline-v7.0';
+const CACHE_NAME = 'dypos-offline-v8.0';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
