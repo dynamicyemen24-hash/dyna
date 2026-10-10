@@ -417,16 +417,6 @@ export const LoginView: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- UX: password strength ----
-  const passwordStrength = useMemo(() => {
-    if (!password) return 0;
-    let score = 0;
-    if (password.length >= 8) score += 1;
-    if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score += 1;
-    if (/[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password)) score += 1;
-    return Math.min(score, 3);
-  }, [password]);
-
   // ---- Context handlers ----
   /**
    * Biometric unlock — REQUIRES an existing session.
@@ -738,8 +728,12 @@ return (
       className="min-h-screen flex flex-col bg-[var(--t-canvas)] text-[var(--t-ink)] font-['Cairo',sans-serif] transition-colors duration-300 pb-safe"
       dir={lang === 'ar' ? 'rtl' : 'ltr'}
     >
+      {/* Announcement bar */}
+      <div className="h-[30px] flex items-center justify-center text-xs font-bold tracking-wide bg-brand/10 text-brand px-4 select-none">
+        منصة دينا السحابية — جاهزة للنتاج · Smart Ports Software
+      </div>
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl border-b transition-colors duration-300 border-hairline bg-surface/95">
+      <header className="sticky top-[30px] z-50 backdrop-blur-xl border-b transition-colors duration-300 border-hairline bg-surface/95">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center p-1.5 shadow-lg transition-colors duration-300 bg-subtle border border-hairline">
@@ -811,7 +805,7 @@ return (
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center px-4 pt-2 pb-6 z-10 w-full">
+      <main className="flex-1 flex items-center justify-center px-4 pt-[calc(30px+56px)] pb-6 z-10 w-full">
         <div className="w-full max-w-6xl rounded-3xl shadow-2xl backdrop-blur-2xl grid grid-cols-1 lg:grid-cols-12 overflow-hidden border transition-colors duration-300 bg-surface/90 border-hairline">
           {/* Right / form side — spans the visual right in LTR and is handled with logical layout for RTL */}
           <div className="lg:col-span-7 p-5 sm:p-8 flex flex-col justify-between relative">
@@ -869,7 +863,6 @@ return (
                   onShowRegister={() => setAuthStep('register')}
                   consecutiveFails={consecutiveFails}
                   cooldownUntil={cooldownUntil}
-                  passwordStrength={passwordStrength}
                   themeMode={themeMode}
                 />
               ) : authStep === 'register' ? (
@@ -1188,7 +1181,6 @@ interface CredentialsFormProps {
   consecutiveFails: number;
   cooldownUntil: number | null;
   /* REMOVED: onSsoLogin/ssoLoading — federated SSO is not provisioned. */
-  passwordStrength: number;
   themeMode: ThemeMode;
 }
 
@@ -1226,7 +1218,6 @@ const CredentialsForm = React.forwardRef<HTMLInputElement, CredentialsFormProps>
       onShowRegister,
       consecutiveFails,
       cooldownUntil,
-      passwordStrength,
       themeMode,
     },
     ref
@@ -1267,7 +1258,6 @@ const CredentialsForm = React.forwardRef<HTMLInputElement, CredentialsFormProps>
             setPassword={setPassword}
             showPassword={showPassword}
             setShowPassword={setShowPassword}
-            passwordStrength={passwordStrength}
             themeMode={themeMode}
           />
         )}
@@ -1667,12 +1657,11 @@ interface StandardCredentialsProps {
   setPassword: (v: string) => void;
   showPassword: boolean;
   setShowPassword: (v: boolean) => void;
-  passwordStrength: number;
   themeMode: ThemeMode;
 }
 
 const StandardCredentials = React.forwardRef<HTMLInputElement, StandardCredentialsProps>(
-  ({ username, setUsername, tenant, setTenant, tenantPinned, password, setPassword, showPassword, setShowPassword, passwordStrength, themeMode }, ref) => (
+  ({ username, setUsername, tenant, setTenant, tenantPinned, password, setPassword, showPassword, setShowPassword, themeMode }, ref) => (
     <>
       {/*
         The organisation field.
@@ -1769,23 +1758,6 @@ const StandardCredentials = React.forwardRef<HTMLInputElement, StandardCredentia
           </button>
         </div>
 
-        {/* Password strength meter */}
-        <div className="mt-2 flex items-center gap-1">
-          {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className={`w-1.5 rounded-full transition-colors bg-slate-700/50 ${
-                i < passwordStrength ? 'bg-brand-500' : 'bg-slate-700/30'
-              }`}
-            />
-          ))}
-        </div>
-        <p className="text-[9px] mt-1 capitalize text-faint">
-          {passwordStrength === 0 && 'ضع كلمة مرور'}
-          {passwordStrength === 1 && 'ضعيفة'}
-          {passwordStrength === 2 && 'متوسطة'}
-          {passwordStrength === 3 && 'قوية'}
-        </p>
       </div>
     </>
   )
@@ -1976,14 +1948,3 @@ const LiveNetworkMetrics: React.FC<{ themeMode: ThemeMode }> = () => (
   </div>
 );
 
-/**
- * Heuristic password strength (0–3).
- */
-const useMemoScore = (pw: string): number => {
-  if (!pw) return 0;
-  let score = 0;
-  if (pw.length >= 8) score += 1;
-  if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score += 1;
-  if (/[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw)) score += 1;
-  return Math.min(score, 3);
-};

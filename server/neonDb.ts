@@ -150,8 +150,25 @@ pool.on('error', () => {
   // recycled socket would bury real failures in transport noise.
 });
 
-pool.on('connect', (client) => {
-  client.query('SET search_path TO dypos, public;').catch(() => {});
+/*
+ * `search_path` is pinned on every connection before the pool lends it out.
+ *
+ * The Neon URL is POOLED (`-pooler` → pgbouncer), which REJECTS GUC parameters
+ * in the startup packet, so `options: '-c search_path=...'` cannot be used
+ * here — pgbouncer tears such a connection down and the server will not boot.
+ * A plain `SET` after the handshake is the correct way on a pooled endpoint.
+ *
+ * The `done` callback is what makes this safe. Passing it as the second
+ * argument to a `pool.on('connect')` listener tells pg-pool NOT to hand this
+ * client to the next `pool.query()` until `done` is called — so the SET
+ * completes before any business query can run on the socket. That removes both
+ * of the faults the old fire-and-forget `client.query('SET ...')` had: pg's
+ * "Calling client.query() when the client is already executing a query"
+ * DeprecationWarning (there is no overlapping query now), and the race where
+ * the first real query could arrive before the schema was set.
+ */
+pool.on('connect', (client: pg.PoolClient, done?: (err?: Error | undefined) => void) => {
+  client.query('SET search_path TO dypos, public;', (err?: Error) => done?.(err));
 });
 
 export async function initDatabaseSchema() {
@@ -961,6 +978,62 @@ export async function initDatabaseSchema() {
         metadata JSONB DEFAULT '{}',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // 13.1 Report Scheduling & Templates (Enterprise BI)
+    await client.query(`
+      -- Scheduled Reports
+      CREATE TABLE IF NOT EXISTS dypos.scheduled_reports (
+        id VARCHAR(64) PRIMARY KEY,
+        tenant_id VARCHAR(64) NOT NULL REFERENCES dypos.tenants(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(64) NOT NULL, -- sales, inventory, customers, suppliers, financials, payments, production, commissions
+        frequency VARCHAR(32) NOT NULL, -- daily, weekly, monthly
+        format VARCHAR(16) NOT NULL, -- pdf, csv, xlsx
+        recipients JSONB DEFAULT '[]'::jsonb, -- array of email addresses
+        filters JSONB DEFAULT '{}'::jsonb,
+        next_run TIMESTAMP WITH TIME ZONE,
+        last_run TIMESTAMP WITH TIME ZONE,
+        is_active BOOLEAN DEFAULT true,
+        created_by VARCHAR(128),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_scheduled_reports_tenant ON dypos.scheduled_reports(tenant_id);
+      CREATE INDEX IF NOT EXISTS idx_scheduled_reports_next_run ON dypos.scheduled_reports(next_run) WHERE is_active = true;
+
+      -- Report Templates
+      CREATE TABLE IF NOT EXISTS dypos.report_templates (
+        id VARCHAR(64) PRIMARY KEY,
+        tenant_id VARCHAR(64) NOT NULL REFERENCES dypos.tenants(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(64) NOT NULL,
+        filters JSONB DEFAULT '{}'::jsonb,
+        columns JSONB DEFAULT '[]'::jsonb,
+        group_by JSONB DEFAULT '[]'::jsonb,
+        sort_by JSONB DEFAULT '[]'::jsonb,
+        created_by VARCHAR(128),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_report_templates_tenant ON dypos.report_templates(tenant_id);
+
+      -- Report Export Jobs
+      CREATE TABLE IF NOT EXISTS dypos.report_exports (
+        id VARCHAR(64) PRIMARY KEY,
+        tenant_id VARCHAR(64) NOT NULL REFERENCES dypos.tenants(id) ON DELETE CASCADE,
+        type VARCHAR(64) NOT NULL,
+        format VARCHAR(16) NOT NULL, -- pdf, csv, xlsx
+        filters JSONB DEFAULT '{}'::jsonb,
+        date_from DATE,
+        date_to DATE,
+        status VARCHAR(32) DEFAULT 'pending', -- pending, processing, completed, failed
+        file_url TEXT,
+        error_message TEXT,
+        created_by VARCHAR(128),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP WITH TIME ZONE
+      );
+      CREATE INDEX IF NOT EXISTS idx_report_exports_tenant ON dypos.report_exports(tenant_id);
     `);
 
     // 14. Enterprise Triggers & Logic (SAP/Oracle Level)

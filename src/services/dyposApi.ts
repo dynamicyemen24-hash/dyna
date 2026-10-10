@@ -168,16 +168,24 @@ export function rememberTenant(id: string | null | undefined): void {
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /**
+   * Extra, machine-readable detail the server attached to a refusal. The
+   * password-policy endpoints use it to send every unmet rule at once, so a
+   * form can list them instead of showing only the first line. Never shown to
+   * the user without an accompanying human-readable `message`.
+   */
+  problems?: string[];
+  constructor(message: string, status: number, problems?: string[]) {
     super(message);
     this.status = status;
+    this.problems = problems;
   }
 }
 
 async function request<T>(
   path: string,
   init?: RequestInit,
-  opts?: { actor?: string; tenant?: boolean },
+  opts?: { actor?: string; tenant?: boolean; headers?: Record<string, string> },
 ): Promise<T> {
   let res: Response;
 
@@ -199,6 +207,14 @@ async function request<T>(
      * quietly serving a different scope than the operator selected.
      */
     ...(opts?.tenant === false ? {} : { 'x-tenant-id': tenantId() }),
+    /*
+     * Per-request headers, merged after the standard ones. The sale
+     * routes carry their idempotency key in the body, but the identity
+     * endpoints (`/api/identity/enroll`) read an `Idempotency-Key`
+     * HEADER — a caller that opts out of tenant scoping (`tenant:
+     * false`) still needs a way to add its own header.
+     */
+    ...(opts?.headers),
     ...(init?.headers as Record<string, string> | undefined),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -255,7 +271,12 @@ async function request<T>(
     const businessMessage = typeof json?.error === 'string' && json.error.trim()
       ? json.error
       : `تعذّر تنفيذ الطلب (${res.status})`;
-    throw new ApiError(businessMessage, res.status);
+    // Carry the server's structured rule list (password-policy 422s) so a form
+    // can show every unmet requirement, not just the first line.
+    const problems = Array.isArray(json?.problems)
+      ? json.problems.filter((p: unknown): p is string => typeof p === 'string')
+      : undefined;
+    throw new ApiError(businessMessage, res.status, problems);
   }
   return json as T;
 }
@@ -265,7 +286,7 @@ export const apiGet = <T>(path: string, opts?: { actor?: string; tenant?: boolea
 export const apiPost = <T>(
   path: string,
   body: unknown,
-  opts?: { actor?: string; tenant?: boolean },
+  opts?: { actor?: string; tenant?: boolean; headers?: Record<string, string> },
 ) => request<T>(path, { method: 'POST', body: JSON.stringify(body) }, opts);
 export const apiPut = <T>(path: string, body: unknown) =>
   request<T>(path, { method: 'PUT', body: JSON.stringify(body) });

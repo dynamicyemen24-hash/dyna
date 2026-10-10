@@ -25,15 +25,17 @@
  * NO DATA IS FABRICATED: the countries below carry each market's real ISO
  * currency and real standard VAT rate, and the sector list is the product's
  * own `industryProfiles` catalogue — the same source the server validates.
+ * The catalogue is exported (not duplicated inside the setup wizard) so the
+ * two onboarding paths can never drift apart.
  */
 import React, { useState } from 'react';
-import { apiPost, TOKEN_KEY, tenantId } from '../services/dyposApi';
+import { apiPost, ApiError, TOKEN_KEY, tenantId } from '../services/dyposApi';
 import { PrimaryButton, Field, Input, StandardProgress } from './ui/Primitives';
 import { Check, Loader2 } from 'lucide-react';
 import { industryProfiles } from '../config/industryProfiles';
 import type { BaseLoginUser, AuthedSession } from './LoginView';
 
-interface OnboardingCountry {
+export interface OnboardingCountry {
   /** ISO 3166-1 alpha-2. */
   code: string;
   nameAr: string;
@@ -43,7 +45,7 @@ interface OnboardingCountry {
   vat: number;
 }
 
-const COUNTRIES: OnboardingCountry[] = [
+export const COUNTRIES: OnboardingCountry[] = [
   { code: 'SA', nameAr: 'السعودية', currency: 'SAR', vat: 15 },
   { code: 'AE', nameAr: 'الإمارات', currency: 'AED', vat: 5 },
   { code: 'KW', nameAr: 'الكويت', currency: 'KWD', vat: 0 },
@@ -96,8 +98,16 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
       setError('تأكيد كلمة المرور غير متطابق');
       return;
     }
-    if (form.password.length < 12) {
-      setError('يجب أن تكون كلمة المرور 12 حرفاً أو أكثر');
+    /*
+     * Local check is intentionally MINIMAL — a hint only. The authoritative
+     * policy is `checkPasswordStrength` on the server (server/passwords.ts,
+     * mirrored in worker/index.ts), and the registration endpoint re-checks it
+     * and rejects with the exact remaining problems. A stricter mirror here
+     * once drifted from the server and silently blocked valid passwords, so
+     * this stays permissive and lets the server be the single judge.
+     */
+    if (form.password.length < 4) {
+      setError('الرمز يجب ألا يقل عن 4 خانات (حروف أو أرقام)');
       return;
     }
     setStep('onboard');
@@ -113,12 +123,33 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
     try {
       // 1 — create the owner inside the pinned tenant.
       setPhaseIndex(0);
-      await apiPost('/api/auth/register', {
-        name: form.name.trim(),
-        email: form.email.trim(),
-        username,
-        password: form.password,
-      });
+      try {
+        await apiPost('/api/auth/register', {
+          name: form.name.trim(),
+          email: form.email.trim(),
+          username,
+          password: form.password,
+        });
+      } catch (regErr: unknown) {
+        /*
+         * The registration endpoint validates the password with the SAME
+         * `checkPasswordStrength` the login screen will later demand, and on a
+         * 422 it returns every unmet rule in `problems` (the `error` field is
+         * only the first line). Surfacing the full list here turns a cryptic
+         * one-line refusal into an actionable checklist and stops the
+         * guess-and-retry loop that used to look like "registration is broken".
+         */
+        if (regErr instanceof ApiError && regErr.status === 422) {
+          const problems = (regErr as ApiError & { problems?: string[] }).problems;
+          if (Array.isArray(problems) && problems.length) {
+            setError(`كلمة المرور لا تستوفي الشروط:\n${problems.join('\n· ')}`);
+            setSaving(false);
+            setPhaseIndex(-1);
+            return;
+          }
+        }
+        throw regErr;
+      }
 
       // 2 — real sign-in; registration issues no token by itself.
       setPhaseIndex(1);
@@ -223,12 +254,13 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
               type="password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="يجب أن تكون 12 حرفاً أو أكثر"
+              placeholder="4 خانات على الأقل"
               autoComplete="new-password"
               required
             />
-            <p className="mt-1 text-[11px] text-faint">
-              الشروط: 12 حرفاً فأكبر، ثلاثة أنواع على الأقل، دائماً أفضل.
+            <p className="mt-1 text-[11px] text-faint leading-relaxed">
+              الشرط: 4 خانات على الأقل (حروف أو أرقام)، ولا تكون كلمة شائعة
+              أو تحتوي اسم المستخدم.
             </p>
           </Field>
 
@@ -332,7 +364,7 @@ export const RegistrationView: React.FC<Props> = ({ onLogin }) => {
           </p>
 
           {error && (
-            <p role="alert" className="text-sm text-err-strong">
+            <p role="alert" className="text-sm text-err-strong whitespace-pre-line leading-relaxed">
               {error}
             </p>
           )}

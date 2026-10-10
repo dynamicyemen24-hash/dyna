@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Settings, ShieldCheck, CheckCircle, RefreshCw, DollarSign, Globe2, Palette, Moon, Sun, Eye, Sparkles, Building2, Plus, Trash2, Star } from 'lucide-react';
+import { Settings, ShieldCheck, CheckCircle, RefreshCw, DollarSign, Globe2, Palette, Moon, Sun, Eye, Sparkles, Building2, Plus, Trash2, Star, ToggleRight, ToggleLeft, AlertCircle, Loader2 } from 'lucide-react';
 import { Currency } from '../types';
 import { DEFAULT_CURRENCIES, loadTenantCurrencies, saveTenantCurrencies } from '../services/currencyService';
 import { themeService, ThemeMode, THEME_CONFIGS } from '../services/themeService';
 import { useEntitlement } from '../contexts/EntitlementContext';
+import { useAuthz } from '../contexts/AuthzContext';
+import { apiGet, apiPatch, ApiError } from '../services/dyposApi';
 import { SettlementAccounts } from './SettlementAccounts';
 
 export const SettingsView: React.FC = () => {
@@ -23,6 +25,7 @@ export const SettingsView: React.FC = () => {
    * the screen says so rather than pretending to save a value it discarded.
    */
   const { identity } = useEntitlement();
+  const { can, isAdmin } = useAuthz();
   const [storeName, setStoreName] = useState(identity.ownerCompany);
   const [taxNumber, setTaxNumber] = useState(identity.taxNumber ?? '');
   const [baseCurrency, setBaseCurrency] = useState(
@@ -32,11 +35,117 @@ export const SettingsView: React.FC = () => {
   const [saved, setSaved] = useState(false);
   const [isUpdatingRates, setIsUpdatingRates] = useState(false);
 
+  // --- Server-backed tenant settings ---
+  const [savingTenant, setSavingTenant] = useState(false);
+  const [tenantError, setTenantError] = useState('');
+  const [commercialReg, setCommercialReg] = useState(identity.commercialReg ?? '');
+  const [brandName, setBrandName] = useState(identity.brandName ?? '');
+
+  // --- Capabilities management ---
+  const [capabilities, setCapabilities] = useState<Array<{
+    id: string;
+    name_ar: string;
+    name_en: string;
+    description: string | null;
+    icon: string | null;
+    category: string;
+    is_enabled: boolean;
+  }>>([]);
+  const [savingCapabilities, setSavingCapabilities] = useState(false);
+  const [capabilitiesError, setCapabilitiesError] = useState('');
+  const [capabilitiesLoaded, setCapabilitiesLoaded] = useState(false);
+
   useEffect(() => {
     loadTenantCurrencies().then((list) => {
       setCurrencies(list);
     });
   }, []);
+
+  // Load all available capabilities from server
+  const loadCapabilities = useCallback(async () => {
+    try {
+      const res = await apiGet<{ capabilities: Array<{
+        id: string;
+        name_ar: string;
+        name_en: string;
+        description: string | null;
+        icon: string | null;
+        category: string;
+        is_active: boolean;
+      }> }>('/api/capabilities');
+      setCapabilities(res.capabilities.map(c => ({
+        ...c,
+        is_enabled: false, // Will be overridden by tenant capabilities
+      })));
+    } catch (e) {
+      console.warn('[SettingsView] Failed to load capabilities:', e);
+    }
+  }, []);
+
+  // Load tenant-specific capabilities
+  const loadTenantCapabilities = useCallback(async () => {
+    try {
+      const res = await apiGet<{ capabilities: Array<{
+        capability_id: string;
+        is_enabled: boolean;
+      }> }>('/api/tenant/capabilities');
+      setCapabilities(prev => prev.map(c => ({
+        ...c,
+        is_enabled: res.capabilities.find(tc => tc.capability_id === c.id)?.is_enabled ?? false,
+      })));
+      setCapabilitiesLoaded(true);
+    } catch (e) {
+      console.warn('[SettingsView] Failed to load tenant capabilities:', e);
+      setCapabilitiesLoaded(true);
+    }
+  }, []);
+
+  // Save tenant capabilities to server
+  const saveCapabilities = async () => {
+    if (!isAdmin) return;
+    setSavingCapabilities(true);
+    setCapabilitiesError('');
+    try {
+      const capabilitiesMap: Record<string, boolean> = {};
+      capabilities.forEach(c => { capabilitiesMap[c.id] = c.is_enabled; });
+      await apiPatch('/api/tenant/capabilities', { capabilities: capabilitiesMap });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'تعذّر حفظ الصلاحيات';
+      setCapabilitiesError(msg);
+    } finally {
+      setSavingCapabilities(false);
+    }
+  };
+
+  // Load capabilities on mount
+  useEffect(() => {
+    loadCapabilities().then(loadTenantCapabilities);
+  }, [loadCapabilities, loadTenantCapabilities]);
+
+  // Save tenant basic info to server
+  const saveTenantSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingTenant(true);
+    setTenantError('');
+    try {
+      await apiPatch('/api/tenant', {
+        name: storeName.trim(),
+        owner_company: storeName.trim(),
+        tax_number: taxNumber.trim() || null,
+        commercial_reg: commercialReg.trim() || null,
+        brand_name: brandName.trim() || null,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'تعذّر حفظ بيانات المنشأة';
+      setTenantError(msg);
+    } finally {
+      setSavingTenant(false);
+    }
+  };
 
   const handleRateChange = (code: string, newRate: number) => {
     setCurrencies((prev) =>
@@ -166,7 +275,7 @@ export const SettingsView: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleSave} className="space-y-4">
+            <form onSubmit={saveTenantSettings} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">اسم المنشأة / الشركة:</label>
                 <input
@@ -174,6 +283,26 @@ export const SettingsView: React.FC = () => {
                   value={storeName}
                   onChange={(e) => setStoreName(e.target.value)}
                   className="w-full bg-surface border border-hairline rounded-xl px-4 py-2.5 text-xs text-ink focus:outline-none focus:border-brand"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">الاسم التجاري (العلامة التجارية):</label>
+                <input
+                  type="text"
+                  value={brandName}
+                  onChange={(e) => setBrandName(e.target.value)}
+                  className="w-full bg-surface border border-hairline rounded-xl px-4 py-2.5 text-xs text-ink focus:outline-none focus:border-brand"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-muted mb-1">السجل التجاري:</label>
+                <input
+                  type="text"
+                  value={commercialReg}
+                  onChange={(e) => setCommercialReg(e.target.value)}
+                  className="w-full bg-surface border border-hairline rounded-xl px-4 py-2.5 text-xs text-ink font-mono focus:outline-none focus:border-brand"
                 />
               </div>
 
@@ -197,11 +326,23 @@ export const SettingsView: React.FC = () => {
                 />
               </div>
 
+              {tenantError && (
+                <div className="bg-rose-950/60 border border-rose-500/40 text-rose-200 px-3 py-2 rounded-xl text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{tenantError}</span>
+                </div>
+              )}
+
               <button
                 type="submit"
-                className="w-full bg-brand-600 hover:bg-brand-500 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg shadow-brand-600/30 cursor-pointer"
+                disabled={savingTenant}
+                className="w-full bg-brand-600 hover:bg-brand-500 disabled:opacity-60 disabled:cursor-wait text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg shadow-brand-600/30 cursor-pointer"
               >
-                حفظ بيانات المنشأة
+                {savingTenant ? (
+                  <> <Loader2 className="w-4 h-4 animate-spin inline-block mr-2" /> جارٍ الحفظ… </ >
+                ) : (
+                  'حفظ بيانات المنشأة'
+                )}
               </button>
             </form>
           </div>
@@ -258,9 +399,97 @@ export const SettingsView: React.FC = () => {
               </p>
             </div>
           </div>
-        </div>
+</div>
 
-        {/* Daily Exchange Rates Management */}
+          {/* Policies & Capabilities — Admin only */}
+          {isAdmin && (
+            <div className="lg:col-span-3 surface-card rounded-2xl p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-hairline mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-ink flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-brand" />
+                    السياسات والصلاحية الوظيفية (Capabilities & Policies)
+                  </h3>
+                  <p className="text-[11px] text-faint mt-0.5">تفعيل أو تعطيل الوحدات الوظيفية للمؤسسة — يتم الحفظ في قاعدة البيانات</p>
+                </div>
+              </div>
+
+              {!capabilitiesLoaded && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-brand" />
+                  <span className="ml-2 text-muted">جاري تحميل الصلاحيات…</span>
+                </div>
+              )}
+
+              {capabilitiesLoaded && capabilities.length > 0 && (
+                <div className="space-y-4">
+                  {(() => {
+                    const byCategory = capabilities.reduce((acc, c) => {
+                      const cat = c.category || 'core';
+                      (acc[cat] ||= []).push(c);
+                      return acc;
+                    }, {} as Record<string, typeof capabilities>);
+                    return Object.entries(byCategory).map(([category, caps]) => (
+                      <div key={category} className="space-y-2">
+                        <h4 className="text-xs font-bold text-muted uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-brand"></span>
+                          {category === 'core' ? 'الأساسية (Core)' : category === 'specialized' ? 'المتخصصة' : category === 'industry' ? 'القطاعية' : category}
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {caps.map((cap) => (
+                            <label
+                              key={cap.id}
+                              className="flex items-center gap-3 p-3 rounded-xl border border-hairline bg-surface hover:bg-hairline/40 transition-colors cursor-pointer"
+                            >
+                              <div className="relative w-10 h-6 shrink-0">
+                                <input
+                                  type="checkbox"
+                                  checked={cap.is_enabled}
+                                  onChange={() => setCapabilities(prev => prev.map(c => c.id === cap.id ? { ...c, is_enabled: !c.is_enabled } : c))}
+                                  className="sr-only peer"
+                                />
+                                <div className="absolute inset-0 rounded-full border-2 bg-subtle peer-checked:bg-brand peer-checked:border-brand transition-colors" />
+                                <div className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-md peer-checked:translate-x-full transition-transform" />
+                              </div>
+                              <div className="flex-1 min-w-0 text-right">
+                                <p className="text-xs font-semibold text-ink truncate">{cap.name_ar}</p>
+                                {cap.description && <p className="text-[10px] text-faint truncate">{cap.description}</p>}
+                              </div>
+                              <span className="text-[10px] font-mono text-muted px-1.5 py-0.5 rounded bg-subtle">{cap.id}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              )}
+
+              {capabilitiesError && (
+                <div className="bg-rose-950/60 border border-rose-500/40 text-rose-200 px-3 py-2 rounded-xl text-xs flex items-center gap-2 mt-4">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{capabilitiesError}</span>
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-hairline flex justify-end">
+                <button
+                  type="button"
+                  onClick={saveCapabilities}
+                  disabled={savingCapabilities || !capabilitiesLoaded}
+                  className="bg-brand-600 hover:bg-brand-500 disabled:opacity-60 disabled:cursor-wait text-white px-6 py-2.5 rounded-xl text-xs font-bold transition-all shadow-lg shadow-brand-600/30 flex items-center gap-2"
+                >
+                  {savingCapabilities ? (
+                    <> <Loader2 className="w-4 h-4 animate-spin" /> جارٍ الحفظ… </ >
+                  ) : (
+                    <> <ShieldCheck className="w-4 h-4" /> حفظ الصلاحيات </ >
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Daily Exchange Rates Management */}
         <div className="lg:col-span-2 surface-card rounded-2xl p-6 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-hairline mb-4">
             <div>

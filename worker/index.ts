@@ -1,4 +1,4 @@
-/**
+﻿/**
  * دينا: منصة التجارة الذكية — Cloudflare Worker API.
  *
  * Runs on the Cloudflare edge and talks to Neon over the serverless HTTP
@@ -519,10 +519,10 @@ export function checkPasswordStrength(password: string, username?: string): Poli
   const problems: string[] = [];
   const p = password || '';
 
-  if (p.length < 10) problems.push('يجب أن تحتوي ١٠ أحرف على الأقل');
-  if (!/[A-Za-z]/.test(p)) problems.push('يجب أن تحتوي حرفاً');
-  if (!/\d/.test(p)) problems.push('يجب أن تحتوي رقماً');
-  if (!/[^A-Za-z0-9]/.test(p)) problems.push('يجب أن تحتوي رمزاً خاصاً');
+  // Short operator PINs are allowed: 4 characters of letters or digits. Only
+  // length is enforced here; the former character-class rules blocked a
+  // legitimate 4-digit PIN. Lockout and rate limits still protect login.
+  if (p.length < 4) problems.push('يجب ألا يقل الرمز عن 4 خانات (حروف أو أرقام)');
 
   const lower = p.toLowerCase();
   if (COMMON.some((c) => lower.includes(c))) {
@@ -533,8 +533,8 @@ export function checkPasswordStrength(password: string, username?: string): Poli
   }
 
   let score = 0;
-  if (p.length >= 10) score++;
-  if (p.length >= 14) score++;
+  if (p.length >= 4) score++;
+  if (p.length >= 6) score++;
   if (/[a-z]/.test(p) && /[A-Z]/.test(p)) score++;
   if (/\d/.test(p) && /[^A-Za-z0-9]/.test(p)) score++;
 
@@ -2929,6 +2929,95 @@ async function route(
       });
     }
 
+    case method === 'PATCH' && path === '/tenant': {
+      const name = body?.name ? String(body.name).trim() : '';
+      if (!name) return fail(400, 'اسم المؤسسة مطلوب', path, method, requestId);
+      if (name.length > 255) return fail(400, 'اسم المؤسسة لا يتجاوز 255 حرفًا', path, method, requestId);
+
+      const ownerCompany = body?.owner_company !== undefined && body?.owner_company !== null
+        ? String(body.owner_company).trim() : null;
+      if (ownerCompany !== null && ownerCompany.length > 255) {
+        return fail(400, 'اسم الشركة المالكة لا يتجاوز 255 حرفًا', path, method, requestId);
+      }
+
+      const taxNumber = body?.tax_number !== undefined && body?.tax_number !== null
+        ? String(body.tax_number).trim() : null;
+      if (taxNumber !== null && taxNumber.length > 64) {
+        return fail(400, 'الرقم الضريبي لا يتجاوز 64 حرفًا', path, method, requestId);
+      }
+
+      const commercialReg = body?.commercial_reg !== undefined && body?.commercial_reg !== null
+        ? String(body.commercial_reg).trim() : null;
+      if (commercialReg !== null && commercialReg.length > 64) {
+        return fail(400, 'السجل التجاري لا يتجاوز 64 حرفًا', path, method, requestId);
+      }
+
+      const brandName = body?.brand_name !== undefined && body?.brand_name !== null
+        ? String(body.brand_name).trim() : null;
+      if (brandName !== null && brandName.length > 255) {
+        return fail(400, 'الاسم التجاري لا يتجاوز 255 حرفًا', path, method, requestId);
+      }
+
+      const updated = await sql`
+        UPDATE dypos.tenants
+           SET name = ${name},
+               owner_company = COALESCE(${ownerCompany}, owner_company),
+               tax_number = COALESCE(${taxNumber}, tax_number),
+               commercial_reg = COALESCE(${commercialReg}, commercial_reg),
+               brand_name = COALESCE(${brandName}, brand_name),
+               updated_at = NOW()
+         WHERE id = ${tenant}
+         RETURNING id, name, owner_company, tax_number, commercial_reg, brand_name, updated_at`;
+
+      if (!updated.length) {
+        return fail(404, 'المؤسسة غير موجودة', path, method, requestId);
+      }
+
+      await audit(env, tenant, principal.username, 'tenant_updated', req);
+      return json({ tenant: updated[0] });
+    }
+
+    case method === 'PATCH' && path === '/tenant/capabilities': {
+      const capsInput = body?.capabilities;
+      if (!capsInput || typeof capsInput !== 'object' || Array.isArray(capsInput)) {
+        return fail(400, 'يجب تزويد حقل capabilities ككائن', path, method, requestId);
+      }
+
+      const capabilityIds = Object.keys(capsInput);
+      if (!capabilityIds.length) {
+        return fail(400, 'يجب تزويد صلاحية واحدة على الأقل', path, method, requestId);
+      }
+
+      // Validate all capability_ids exist in dypos.capabilities
+      const validCaps = await sql`
+        SELECT id FROM dypos.capabilities WHERE id = ANY(${capabilityIds}::varchar[])`;
+      const validIds = new Set(validCaps.map(r => r.id));
+      const invalid = capabilityIds.filter(id => !validIds.has(id));
+      if (invalid.length) {
+        return fail(400, `صلاحية غير صالحة: ${invalid.join(', ')}`, path, method, requestId);
+      }
+
+      // Upsert each capability
+      for (const capId of capabilityIds) {
+        const enabled = Boolean(capsInput[capId]);
+        await sql`
+          INSERT INTO dypos.tenant_capabilities (tenant_id, capability_id, is_enabled)
+          VALUES (${tenant}, ${capId}, ${enabled})
+          ON CONFLICT (tenant_id, capability_id)
+          DO UPDATE SET is_enabled = EXCLUDED.is_enabled`;
+      }
+
+      await audit(env, tenant, principal.username, 'tenant_capabilities_updated', req);
+
+      // Return updated capabilities list
+      const updatedCaps = await sql`
+        SELECT tc.capability_id, tc.is_enabled, c.name_ar, c.category
+        FROM dypos.tenant_capabilities tc
+        JOIN dypos.capabilities c ON tc.capability_id = c.id
+        WHERE tc.tenant_id = ${tenant}
+        ORDER BY c.category, c.name_ar`;
+      return json({ capabilities: updatedCaps });
+    }
     case method === 'POST' && path === '/settlement/accounts': {
       const iban = String(body.iban || '').trim().replace(/\s+/g, '').toUpperCase();
       if (!iban) return fail(400, 'IBAN is required', path, method, requestId);
@@ -3599,6 +3688,117 @@ async function route(
     case method === 'DELETE' && seg === 'deliveries':
       return json({ deleted: (await sql`DELETE FROM dypos.deliveries
         WHERE id = ${id} AND tenant_id = ${tenant} RETURNING id`)[0]?.id });
+
+    // ---- Scheduled Reports ----
+    case method === 'POST' && path === '/reports/schedule': {
+      const { name, type, frequency, format, recipients, filters, nextRun } = body || {};
+      if (!name || !type || !frequency || !format) {
+        return fail(400, 'الاسم، النوع، التكرار، والتنسيق مطلوبة', path, method, requestId);
+      }
+      if (!['daily', 'weekly', 'monthly'].includes(frequency)) {
+        return fail(400, 'التكرار يجب أن يكون: daily، weekly، أو monthly', path, method, requestId);
+      }
+      if (!['pdf', 'csv', 'xlsx'].includes(format)) {
+        return fail(400, 'التنسيق يجب أن يكون: pdf، csv، أو xlsx', path, method, requestId);
+      }
+      const validTypes = ['sales', 'inventory', 'customers', 'suppliers', 'financials', 'payments', 'production', 'commissions'];
+      if (!validTypes.includes(type)) {
+        return fail(400, `نوع التقرير غير معروف: ${type}`, path, method, requestId);
+      }
+      const id = makeId('rpt');
+      const scheduleId = await sql`INSERT INTO dypos.scheduled_reports
+        (id, tenant_id, name, type, frequency, format, recipients, filters, next_run, created_by, created_at)
+      VALUES (${id}, ${tenant}, ${name}, ${type}, ${frequency}, ${format},
+              ${recipients ? JSON.stringify(recipients) : '[]'}::jsonb,
+              ${filters ? JSON.stringify(filters) : '{}'}::jsonb,
+              ${nextRun ? nextRun : null}::timestamptz, ${principal.username}, NOW())
+      RETURNING id`;
+      await audit(env, tenant, principal.username, 'report_schedule_create', req, `النوع: ${type}، التكرار: ${frequency}`);
+      return json({ id: scheduleId[0].id, nextRun: nextRun || null }, 201);
+    }
+
+    case method === 'GET' && path === '/reports/scheduled': {
+      const reports = await sql`SELECT id, name, type, frequency, format, recipients, filters, next_run, is_active, last_run, created_at
+        FROM dypos.scheduled_reports WHERE tenant_id = ${tenant} ORDER BY next_run NULLS LAST`;
+      return json({ items: reports });
+    }
+
+    case method === 'PATCH' && seg === 'reports' && path.endsWith('/schedule'): {
+      const { name, type, frequency, format, recipients, filters, isActive } = body || {};
+      const sets: string[] = [];
+      if (name !== undefined) sets.push(`name = ${name}`);
+      if (type !== undefined) sets.push(`type = ${type}`);
+      if (frequency !== undefined) sets.push(`frequency = ${frequency}`);
+      if (format !== undefined) sets.push(`format = ${format}`);
+      if (recipients !== undefined) sets.push(`recipients = ${JSON.stringify(recipients)}::jsonb`);
+      if (filters !== undefined) sets.push(`filters = ${JSON.stringify(filters)}::jsonb`);
+      if (isActive !== undefined) sets.push(`is_active = ${isActive}`);
+      if (sets.length === 0) return fail(400, 'لا توجد حقول للتحديث', path, method, requestId);
+      sets.push('updated_at = NOW()');
+      const updated = await sql`UPDATE dypos.scheduled_reports SET ${sql.unsafe(sets.join(', '))} WHERE id = ${id} AND tenant_id = ${tenant} RETURNING id`;
+      if (!updated.length) return fail(404, 'التقرير المجدول غير موجود', path, method, requestId);
+      await audit(env, tenant, principal.username, 'report_schedule_update', req, `المعرف: ${id}`);
+      return json({ id: updated[0].id });
+    }
+
+    case method === 'DELETE' && seg === 'reports' && path.endsWith('/schedule'): {
+      const deleted = await sql`DELETE FROM dypos.scheduled_reports WHERE id = ${id} AND tenant_id = ${tenant} RETURNING id`;
+      if (!deleted.length) return fail(404, 'التقرير المجدول غير موجود', path, method, requestId);
+      await audit(env, tenant, principal.username, 'report_schedule_delete', req, `المعرف: ${id}`);
+      return json({ deleted: deleted[0].id });
+    }
+
+    // ---- Report Templates ----
+    case method === 'GET' && path === '/reports/templates': {
+      const templates = await sql`SELECT id, name, type, filters, columns, group_by, sort_by, created_at
+        FROM dypos.report_templates WHERE tenant_id = ${tenant} ORDER BY created_at DESC`;
+      return json({ items: templates });
+    }
+
+    case method === 'POST' && path === '/reports/templates': {
+      const { name, type, filters, columns, groupBy, sortBy } = body || {};
+      if (!name || !type) return fail(400, 'الاسم والنوع مطلوبان', path, method, requestId);
+      const id = makeId('tpl');
+      const created = await sql`INSERT INTO dypos.report_templates
+        (id, tenant_id, name, type, filters, columns, group_by, sort_by, created_by, created_at)
+      VALUES (${id}, ${tenant}, ${name}, ${type},
+              ${filters ? JSON.stringify(filters) : '{}'}::jsonb,
+              ${columns ? JSON.stringify(columns) : '[]'}::jsonb,
+              ${groupBy ? JSON.stringify(groupBy) : '[]'}::jsonb,
+              ${sortBy ? JSON.stringify(sortBy) : '[]'}::jsonb,
+              ${principal.username}, NOW())
+      RETURNING id`;
+      return json({ id: created[0].id }, 201);
+    }
+
+    // ---- Report Export (on-demand) ----
+    case method === 'POST' && path === '/reports/export': {
+      const { type, format, filters, dateFrom, dateTo } = body || {};
+      if (!type || !format) return fail(400, 'نوع التقرير والتنسيق مطلوبان', path, method, requestId);
+      if (!['pdf', 'csv', 'xlsx'].includes(format)) {
+        return fail(400, 'التنسيق يجب أن يكون: pdf، csv، أو xlsx', path, method, requestId);
+      }
+      const validTypes = ['sales', 'inventory', 'customers', 'suppliers', 'financials', 'payments', 'production', 'commissions'];
+      if (!validTypes.includes(type)) {
+        return fail(400, `نوع التقرير غير معروف: ${type}`, path, method, requestId);
+      }
+      // For now, return a job ID - actual generation would be async
+      const jobId = makeId('exp');
+      await sql`INSERT INTO dypos.report_exports
+        (id, tenant_id, type, format, filters, date_from, date_to, status, created_by, created_at)
+      VALUES (${jobId}, ${tenant}, ${type}, ${format},
+              ${filters ? JSON.stringify(filters) : '{}'}::jsonb,
+              ${dateFrom || null}::date, ${dateTo || null}::date,
+              'pending', ${principal.username}, NOW())`;
+      await audit(env, tenant, principal.username, 'report_export_request', req, `النوع: ${type}، التنسيق: ${format}`);
+      return json({ jobId, status: 'pending' }, 202);
+    }
+
+    case method === 'GET' && path === '/reports/exports': {
+      const exports = await sql`SELECT id, type, format, status, date_from, date_to, created_at, completed_at
+        FROM dypos.report_exports WHERE tenant_id = ${tenant} ORDER BY created_at DESC LIMIT 50`;
+      return json({ items: exports });
+    }
 
     // ---- AI Assistant ----
     case method === 'POST' && path === '/ai-assistant': {

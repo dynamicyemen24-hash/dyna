@@ -175,11 +175,24 @@ export async function enrollTenantSafely(input: EnrollmentInput): Promise<Enroll
           [branchId, targetTenantId, input.branchName || 'المركز الرئيسي', phone || null],
         );
       }
+      /*
+       * must_change_password = FALSE is set EXPLICITLY, not left to the column
+       * default. The column is `BOOLEAN NOT NULL DEFAULT TRUE` (migration v135),
+       * which is correct for a temporary seed credential but wrong for a
+       * self-registered owner: they just chose their own strong password. Left
+       * to the default, the account is created with the flag TRUE, the next
+       * sign-in returns mustChangePassword=true, and the SPA drops the freshly
+       * registered owner straight onto the forced-rotation screen instead of the
+       * main screen — the account and session are real, but the operator is told
+       * to change a password they just set. This mirrors the Worker's
+       * /auth/register, which already writes FALSE.
+       */
       await client.query(
         `INSERT INTO dypos.users (
            id, tenant_id, branch_id, username, password_hash, password_salt,
-           password_iterations, password_algo, name, role, is_active, created_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin', TRUE, NOW())
+           password_iterations, password_algo, name, role, is_active, created_at,
+           must_change_password
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin', TRUE, NOW(), FALSE)
          ON CONFLICT (id) DO NOTHING`,
         [userId, targetTenantId, branchId, username, credential.hash, credential.salt,
          credential.iterations, credential.algo, ownerName],
@@ -268,8 +281,9 @@ export async function enrollTenantSafely(input: EnrollmentInput): Promise<Enroll
     await client.query(
       `INSERT INTO dypos.users (
          id, tenant_id, branch_id, username, password_hash, password_salt,
-         password_iterations, password_algo, name, role, is_active, created_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin', TRUE, NOW())
+         password_iterations, password_algo, name, role, is_active, created_at,
+         must_change_password
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'admin', TRUE, NOW(), FALSE)
        ON CONFLICT (id) DO NOTHING`,
       [
         userId,

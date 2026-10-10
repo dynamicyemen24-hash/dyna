@@ -215,11 +215,12 @@ export function checkPasswordStrength(password: string, context: {
   const problems: string[] = [];
   const p = password || '';
 
-  if (p.length < 10) problems.push('يجب ألا تقل عن 10 أحرف');
-  if (!/[a-z]/.test(p)) problems.push('يجب أن تحتوي حرفاً لاتينياً صغيراً');
-  if (!/[A-Z]/.test(p)) problems.push('يجب أن تحتوي حرفاً لاتينياً كبيراً');
-  if (!/\d/.test(p)) problems.push('يجب أن تحتوي رقماً');
-  if (!/[^A-Za-z0-9]/.test(p)) problems.push('يجب أن تحتوي رمزاً خاصاً');
+  // Operator-set short PINs are allowed by request: a 4-character code of
+  // letters or digits is enough to set or change a credential. Length is the
+  // only structural rule; the character-class demands (upper/lower/digit/symbol)
+  // were what blocked a legitimate short PIN, so they are gone. The lockout and
+  // rate limits below still guard every guessing surface.
+  if (p.length < 4) problems.push('يجب ألا يقل الرمز عن 4 خانات (حروف أو أرقام)');
 
   const lower = p.toLowerCase();
   if (COMMON.some((c) => lower.includes(c))) {
@@ -237,8 +238,8 @@ export function checkPasswordStrength(password: string, context: {
 
   // 0..4 strength score, used for the meter in the change-password screen.
   let score = 0;
-  if (p.length >= 10) score++;
-  if (p.length >= 14) score++;
+  if (p.length >= 4) score++;
+  if (p.length >= 6) score++;
   if (/[a-z]/.test(p) && /[A-Z]/.test(p)) score++;
   if (/\d/.test(p) && /[^A-Za-z0-9]/.test(p)) score++;
 
