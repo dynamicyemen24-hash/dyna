@@ -170,14 +170,41 @@ export function registerTenantProfileRoutes(app: Express) {
         return fail(res, 400, `قطاع غير معروف: ${profileId || '(فارغ)'}`);
       }
 
+      // Optional onboarding profile (country + base currency + VAT). Each is
+      // written only when supplied, so a plain sector switch from settings
+      // leaves the country configuration exactly as it was.
+      const rawCountry = req.body?.countryCode;
+      const countryCode = rawCountry === undefined || rawCountry === null || rawCountry === ''
+        ? null : String(rawCountry).trim().toUpperCase();
+      if (countryCode !== null && !/^[A-Z]{2}$/.test(countryCode)) {
+        return fail(res, 400, 'رمز الدولة يجب أن يكون حرفين (مثال: SA)');
+      }
+      const rawCurrency = req.body?.baseCurrency;
+      const baseCurrency = rawCurrency === undefined || rawCurrency === null || rawCurrency === ''
+        ? null : String(rawCurrency).trim().toUpperCase();
+      if (baseCurrency !== null && !/^[A-Z]{3}$/.test(baseCurrency)) {
+        return fail(res, 400, 'رمز العملة يجب أن يكون 3 أحرف (مثال: SAR)');
+      }
+      const rawVat = req.body?.vatRate;
+      const vatRate = rawVat === undefined || rawVat === null || rawVat === ''
+        ? null : Number(rawVat);
+      if (vatRate !== null && (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100)) {
+        return fail(res, 400, 'نسبة الضريبة يجب أن تكون بين 0 و100');
+      }
+
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
 
         await client.query(
-          `UPDATE dypos.tenants SET industry_profile = $2, updated_at = NOW()
-           WHERE id = $1`,
-          [tenantId, profileId],
+          `UPDATE dypos.tenants
+              SET industry_profile = $2,
+                  country_code = COALESCE($3, country_code),
+                  base_currency = COALESCE($4, base_currency),
+                  vat_rate = COALESCE($5, vat_rate),
+                  updated_at = NOW()
+            WHERE id = $1`,
+          [tenantId, profileId, countryCode, baseCurrency, vatRate],
         );
 
         // Re-seed the grants from the sector's derived capability list. Only

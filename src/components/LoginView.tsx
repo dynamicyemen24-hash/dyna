@@ -66,7 +66,7 @@ import {
  *  SUB-MODELS (expert organization: each auth surface is isolated)
  * ------------------------------------------------------------------ */
 
-interface BaseLoginUser {
+export interface BaseLoginUser {
   name: string;
   role: string;
   /**
@@ -873,7 +873,7 @@ return (
                 />
               ) : authStep === 'register' ? (
                 <div>
-                  <RegistrationView />
+                  <RegistrationView onLogin={onLogin} />
                   <div className="mt-4 text-center">
                     <button
                       type="button"

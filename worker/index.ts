@@ -7,6 +7,7 @@
  */
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import { handleEdgeDataRoute } from './edgeDataRoutes.js';
+import { industryProfiles, capabilitiesForProfile, getProfileById } from '../src/config/industryProfiles.js';
 
 export interface Env {
   DATABASE_URL: string;
@@ -2870,6 +2871,64 @@ async function route(
      * stripped, upper-cased — so the two paths cannot disagree about what the
      * same account looks like.
      */
+    // Sector + country write. Mirrors Express `POST /api/db/tenant/profile`
+    // (entitlementRoutes). Without this case the POST fell through to the GET
+    // read case and answered 200 with the CURRENT profile — a silent no-op
+    // write that left a freshly onboarded tenant on the default sector.
+    // Capability grants follow the sector in the same statement, so the two
+    // can never disagree: a pharmacy that switches to workshops must not keep
+    // its prescription screens licensed.
+    case method === 'POST' && path === '/tenant/profile': {
+      const profileId = String(body?.profileId || '').trim();
+      if (!industryProfiles.some((p) => p.id === profileId)) {
+        return fail(400, `قطاع غير معروف: ${profileId || '(فارغ)'}`, path, method, requestId);
+      }
+      const rawCountry = body?.countryCode === undefined || body?.countryCode === null || body?.countryCode === ''
+        ? null : String(body.countryCode).trim().toUpperCase();
+      if (rawCountry !== null && !/^[A-Z]{2}$/.test(rawCountry)) {
+        return fail(400, 'رمز الدولة يجب أن يكون حرفين (مثال: SA)', path, method, requestId);
+      }
+      const rawCurrency = body?.baseCurrency === undefined || body?.baseCurrency === null || body?.baseCurrency === ''
+        ? null : String(body.baseCurrency).trim().toUpperCase();
+      if (rawCurrency !== null && !/^[A-Z]{3}$/.test(rawCurrency)) {
+        return fail(400, 'رمز العملة يجب أن يكون 3 أحرف (مثال: SAR)', path, method, requestId);
+      }
+      const rawVat = body?.vatRate;
+      const vatRate = rawVat === undefined || rawVat === null || rawVat === '' ? null : Number(rawVat);
+      if (vatRate !== null && (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100)) {
+        return fail(400, 'نسبة الضريبة يجب أن تكون بين 0 و100', path, method, requestId);
+      }
+      const derived = capabilitiesForProfile(profileId);
+      // One statement so the sector and its grants commit together (all
+      // data-modifying CTEs execute to completion regardless of reference).
+      const profileRows = await sql`
+        WITH upd AS (
+          UPDATE dypos.tenants
+             SET industry_profile = ${profileId},
+                 country_code = COALESCE(${rawCountry}::text, country_code),
+                 base_currency = COALESCE(${rawCurrency}::text, base_currency),
+                 vat_rate = COALESCE(${vatRate}::numeric, vat_rate),
+                 updated_at = NOW()
+           WHERE id = ${tenant}
+           RETURNING id
+        )
+        INSERT INTO dypos.tenant_capabilities (tenant_id, capability_id, is_enabled)
+        SELECT u.id, c.id, (c.id = ANY(${derived}::varchar[]))
+          FROM upd u
+          CROSS JOIN dypos.capabilities c
+        ON CONFLICT (tenant_id, capability_id)
+          DO UPDATE SET is_enabled = EXCLUDED.is_enabled
+        RETURNING tenant_id`;
+      if (!profileRows.length) {
+        return fail(404, 'المؤسسة غير موجودة أو غير مفعّلة', path, method, requestId);
+      }
+      return json({
+        profileId,
+        nameAr: getProfileById(profileId).name_ar,
+        enabledCapabilities: derived,
+      });
+    }
+
     case method === 'POST' && path === '/settlement/accounts': {
       const iban = String(body.iban || '').trim().replace(/\s+/g, '').toUpperCase();
       if (!iban) return fail(400, 'IBAN is required', path, method, requestId);
